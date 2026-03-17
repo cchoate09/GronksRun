@@ -89,9 +89,8 @@ window.addEventListener('orientationchange', debouncedResize);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && typeof G !== 'undefined' && G.phase === 'PLAYING') G.phase = 'PAUSED';
 });
-window.addEventListener('blur', () => {
-  if (typeof G !== 'undefined' && G.phase === 'PLAYING') G.phase = 'PAUSED';
-});
+// blur handler removed — Android WebView fires spurious blur events
+// visibilitychange (above) already covers the real use case
 
 // ============================================================
 // UTILS
@@ -1467,10 +1466,7 @@ canvas.addEventListener('mousedown',e=>{
 });
 canvas.addEventListener('mouseup',jUp);
 
-// Auto-pause on tab hidden
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && G.phase === 'PLAYING') G.phase = 'PAUSED';
-});
+// (visibilitychange listener is at top of file, no duplicate needed)
 
 // ============================================================
 // GAME STATE
@@ -4195,7 +4191,8 @@ function loop(ts){
       if(G.levelDef.enemies.length){
         enemySpawnCD-=DT;
         if(enemySpawnCD<=0){
-          enemySpawnCD=Math.max(4,9-prog*4);
+          const spawnProg=clamp(G.time/G.levelDef.targetTime,0,1);
+          enemySpawnCD=Math.max(4,9-spawnProg*4);
           spawnEnemy(G.levelDef);
         }
       }
@@ -4397,7 +4394,17 @@ function loop(ts){
   // Screen transition fade overlay
   updateFade(DT);
   drawFade();
-  }catch(e){console.error('Game loop error:',e);}
+  }catch(e){
+    console.error('Game loop error:',e);
+    // DEBUG: show error overlay so user can report it
+    if(!window._errDiv){
+      window._errDiv=document.createElement('div');
+      window._errDiv.style.cssText='position:fixed;top:0;left:0;right:0;padding:12px;background:red;color:white;font:14px monospace;z-index:9999;white-space:pre-wrap;word-break:break-all';
+      document.body.appendChild(window._errDiv);
+    }
+    window._errDiv.textContent='GAME ERROR ('+G.phase+'): '+e.message+'\\n'+((e.stack||'').split('\\n').slice(0,4).join('\\n'));
+    window._lastGameError=e;
+  }
   requestAnimationFrame(loop);
 }
 

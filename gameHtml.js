@@ -100,6 +100,34 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smooth = t => t * t * (3 - 2 * t);
 const PI2   = Math.PI * 2;
 
+// Rounded rectangle path (uses arcTo for WebView compat)
+function rrPath(x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+}
+function fillRR(x,y,w,h,r,fill,stroke,lw){
+  rrPath(x,y,w,h,r);
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||2;ctx.stroke();}
+}
+function drawButton(x,y,w,h,label,opts){
+  opts=opts||{};
+  const r=opts.radius||UNIT*0.3;
+  const pressed=inp.pressing&&inp.tapX>=x&&inp.tapX<=x+w&&inp.tapY>=y&&inp.tapY<=y+h;
+  const cx=x+w/2,cy=y+h/2;
+  if(pressed){ctx.save();ctx.translate(cx,cy);ctx.scale(0.95,0.95);ctx.translate(-cx,-cy);}
+  fillRR(x,y,w,h,r,opts.fill||'rgba(30,60,90,0.8)',opts.stroke||'rgba(255,255,255,0.4)',opts.lw||2);
+  if(pressed){fillRR(x,y,w,h,r,'rgba(0,0,0,0.2)',null,0);}
+  ctx.font=opts.font||FONTS['b1']||('bold '+UNIT+'px monospace');
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=opts.textColor||'#FFF';
+  ctx.fillText(label,cx,cy);
+  if(pressed)ctx.restore();
+  return{x,y,w,h,pressed};
+}
+
 // ============================================================
 // RNG (Park-Miller)
 // ============================================================
@@ -866,12 +894,22 @@ function updateWorld(dt,diff,speed,rng,theme){
 const activeEnemies = [];
 let enemySpawnCD = 0;
 
+const ENEMY_HP = {TROLL:40,CHARGER:30,DIVER:20,WITCH:25,GOLEM:60,BOMBER:15,SERPENT:35};
 class Enemy {
   constructor(type) {
     this.type = type; this.alive = true; this.phase = Math.random()*PI2;
     this.projectiles = [];
     this.screenX = 0; this.worldX = 0; this.y = 0;
     this.state = 'IDLE'; this.timer = 0; this.fireCD = 0;
+    // HP system
+    this.maxHP = ENEMY_HP[type] || 30;
+    this.hp = this.maxHP;
+    this.hpFlash = 0;
+    this.dying = false;
+    this.deathTimer = 0;
+    // Telegraph system
+    this.telegraphing = false;
+    this.telegraphTimer = 0;
     // Type-specific
     if (type==='TROLL') {
       this.worldX = worldOffset + W*1.4 + Math.random()*W*.5;
@@ -910,6 +948,19 @@ class Enemy {
   }
 
   update(dt, player, speed) {
+    if(this.hpFlash>0) this.hpFlash-=dt;
+    // Dying animation
+    if(this.dying){
+      this.deathTimer-=dt;
+      if(this.deathTimer<=0){
+        this.alive=false;
+        const sx=this.sx,sy=this.sy;
+        for(let i=0;i<12;i++)spawnParticle(sx,sy,{
+          vx:(Math.random()-.5)*400,vy:-(Math.random()*300+50),
+          color:'#FFAA44',r:UNIT*(.15+Math.random()*.15),decay:1.2,grav:500});
+      }
+      return; // Skip AI while dying
+    }
     this.phase += dt*3;
     const psx = player.screenX, py = player.y;
 
@@ -920,9 +971,14 @@ class Enemy {
         if (sx < W+UNIT*2) {
           this.fireCD += dt;
           if (this.fireCD >= this.fireInterval && sx < W*.88) {
-            this.fireCD = 0; this.fireInterval = 2+Math.random()*2;
-            this.projectiles.push({ x:sx-UNIT*1.2, y:this.sy-UNIT*1.5,
-              vx:-260, vy:-50-Math.random()*30, grav:180, life:4, type:'ROCK_P' });
+            if(!this.telegraphing){this.telegraphing=true;this.telegraphTimer=0.5;break;}
+            this.telegraphTimer-=dt;
+            if(this.telegraphTimer<=0){
+              this.telegraphing=false;
+              this.fireCD = 0; this.fireInterval = 2+Math.random()*2;
+              this.projectiles.push({ x:sx-UNIT*1.2, y:this.sy-UNIT*1.5,
+                vx:-260, vy:-50-Math.random()*30, grav:180, life:4, type:'ROCK_P' });
+            }
           }
         }
         break;
@@ -970,9 +1026,14 @@ class Enemy {
         if (sx < W+UNIT*2) {
           this.fireCD += dt;
           if (this.fireCD >= this.fireInterval && sx < W*.85) {
-            this.fireCD = 0; this.fireInterval = 1.8+Math.random()*1.5;
-            this.projectiles.push({ x:sx, y:this.sy,
-              vx:-160, vy:0, life:5, type:'SKULL', homing:true });
+            if(!this.telegraphing){this.telegraphing=true;this.telegraphTimer=0.6;break;}
+            this.telegraphTimer-=dt;
+            if(this.telegraphTimer<=0){
+              this.telegraphing=false;
+              this.fireCD = 0; this.fireInterval = 1.8+Math.random()*1.5;
+              this.projectiles.push({ x:sx, y:this.sy,
+                vx:-160, vy:0, life:5, type:'SKULL', homing:true });
+            }
           }
         }
         break;
@@ -1055,6 +1116,18 @@ class Enemy {
       case 'SERPENT':  return{x:this.screenX-u*1.5,y:this.y-u*.8,w:u*3,h:u*.8};
     }
     return{x:0,y:0,w:0,h:0};
+  }
+
+  takeDamage(amt) {
+    if(this.dying||!this.alive) return;
+    this.hp -= amt;
+    this.hpFlash = 0.3;
+    if(this.hp <= 0) {
+      this.dying=true; this.deathTimer=0.4;
+      comboAction(50,'enemy_kill');
+      G.score+=50; G.runScore+=50;
+      G.announce={text:'ENEMY DOWN! +50',life:0.6};
+    }
   }
 }
 
@@ -1173,7 +1246,7 @@ class Player {
           if(!en.alive) continue;
           const dx=en.screenX-this.screenX, dy=(en.y||0)-(this.y-UNIT);
           if(dx>-UNIT && dx<UNIT*4 && Math.abs(dy)<UNIT*2){
-            en.alive=false; comboAction(50,'quake_kill');
+            en.takeDamage(en.maxHP); comboAction(50,'quake_kill');
             for(let j=0;j<10;j++)spawnParticle(en.screenX,en.y||this.y-UNIT,{
               vx:(Math.random()-.5)*400,vy:-(Math.random()*300+50),
               color:'#FFAA44',r:UNIT*(.15+Math.random()*.1),decay:1.8,grav:500});
@@ -1257,6 +1330,16 @@ class Player {
           }
         }
       }
+      // Normal dash damages nearby enemies
+      if(!this._quakeRush){
+        for(const en of activeEnemies){
+          if(!en.alive||en.dying) continue;
+          const dx=en.sx-this.screenX, dy=(en.sy||en.y)-(this.y-UNIT);
+          if(dx>-UNIT*2 && dx<UNIT*4 && Math.abs(dy)<UNIT*3){
+            en.takeDamage(15);
+          }
+        }
+      }
       G.lastAction={type:'dash',time:G.time};
       inp.dash=false;
     }
@@ -1294,6 +1377,14 @@ class Player {
           comboAction(25, 'pound_smash');
           if(save.stats) save.stats.obstaclesSmashed++;
         }
+      }
+    }
+    // Damage nearby enemies with pound
+    for(const en of activeEnemies){
+      if(!en.alive||en.dying) continue;
+      const dx=en.sx-this.screenX, dy=(en.sy||en.y)-(this.y);
+      if(Math.abs(dx)<smashRange && Math.abs(dy)<UNIT*3){
+        en.takeDamage(20);
       }
     }
   }
@@ -1348,7 +1439,7 @@ class Player {
 // ============================================================
 // INPUT
 // ============================================================
-const inp = { jp:false, jh:false, tapX:0, tapY:0, tapped:false, down:false, dash:false, parry:false };
+const inp = { jp:false, jh:false, tapX:0, tapY:0, tapped:false, down:false, dash:false, parry:false, pressing:false };
 function jDown(){ inp.jp=true; inp.jh=true; }
 function jUp(){ inp.jh=false; }
 function dDown(){ inp.down=true; }
@@ -1374,7 +1465,7 @@ canvas.addEventListener('touchstart',e=>{
     touchSX=e.touches[0].clientX; touchSY=e.touches[0].clientY;
     touchST=Date.now(); touchActive=true;
     inp.tapX=touchSX; inp.tapY=touchSY;
-    inp.jh=true; // hold state for variable jump height
+    inp.jh=true; inp.pressing=true; // hold state for variable jump height
     ensureAudio();
     // Pause icon tap check (top-right area, enlarged touch target, offset left for Android nav)
     if(G.phase==='PLAYING' && touchSX > W - UNIT*6.5 && touchSX < W - UNIT*0.5 && touchSY < UNIT*3.5) {
@@ -1435,6 +1526,7 @@ canvas.addEventListener('touchmove',e=>{
 
 canvas.addEventListener('touchend',e=>{
   e.preventDefault();
+  inp.pressing=false;
   const dt=Date.now()-touchST;
   // Level map: only register tap if not scrolling
   if(G.phase==='LEVEL_MAP'){
@@ -1797,7 +1889,7 @@ function checkCollisions(dt) {
           G.announce={text:'DEFLECT! +100',life:0.8};
           addTrauma(0.15);
           // Damage the enemy
-          if(en.alive){en.alive=false; comboAction(50,'parry_kill');}
+          if(en.alive&&!en.dying){en.takeDamage(en.maxHP); comboAction(50,'parry_kill');}
           spawnParts(pr.x,pr.y,8,{color:'#FFFF44',r:UNIT*.2,decay:2,grav:300});
           continue;
         }
@@ -2183,6 +2275,43 @@ function drawEnemies(){
       }
     }
     ctx.restore();
+
+    // HP flash overlay
+    if(en.hpFlash>0){
+      ctx.globalAlpha=en.hpFlash*2;
+      ctx.fillStyle='#FFF';
+      const hb=en.hitbox;
+      ctx.fillRect(hb.x,hb.y,hb.w,hb.h);
+      ctx.globalAlpha=1;
+    }
+    // Dying fade
+    if(en.dying){
+      ctx.globalAlpha=en.deathTimer/0.4;
+    }
+
+    // HP bar (show when damaged)
+    if(en.hp<en.maxHP && !en.dying){
+      const barW=u*2, barH=u*0.2;
+      const barX=sx-barW/2, barY=sy-u*3.2;
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(barX-1,barY-1,barW+2,barH+2);
+      ctx.fillStyle='#444';ctx.fillRect(barX,barY,barW,barH);
+      const hpFrac=clamp(en.hp/en.maxHP,0,1);
+      ctx.fillStyle=hpFrac>0.5?'#4CAF50':hpFrac>0.25?'#FF9800':'#F44336';
+      ctx.fillRect(barX,barY,barW*hpFrac,barH);
+    }
+
+    // Telegraph warning indicator
+    if(en.telegraphing){
+      const tPulse=Math.sin(G.time*16)*0.5+0.5;
+      ctx.globalAlpha=0.4+tPulse*0.5;
+      ctx.fillStyle='#FF4444';
+      ctx.font='bold '+Math.round(u*1.2)+'px monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('!',sx,sy-u*3.5);
+      ctx.globalAlpha=1;
+    }
+
+    ctx.globalAlpha=1;
     // Projectiles
     for(const pr of en.projectiles){
       ctx.save();ctx.translate(pr.x,pr.y);

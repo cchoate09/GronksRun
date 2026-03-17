@@ -186,6 +186,8 @@ function loadSave() {
     // Daily challenge migration
     save.challengeBest = Number(save.challengeBest) || 0;
     save.lastChallengeDate = save.lastChallengeDate || '';
+    // Missions migration
+    if (!save.missions) save.missions = { daily: [], weekly: [], lastDailyReset: '', lastWeeklyReset: '' };
     // Audio settings migration
     if (save.musicVolume !== undefined) musicVolume = Number(save.musicVolume);
     if (save.sfxVolume !== undefined) sfxVolume = Number(save.sfxVolume);
@@ -690,6 +692,8 @@ function comboAction(points, type) {
   const bonus = points * G.comboMult;
   G.score += bonus; G.runScore += bonus;
   G.comboPulse = 0.3;
+  updateMissionProgress('scoreEarned', bonus);
+  updateMissionProgress('maxCombo', G.combo);
   return bonus;
 }
 function comboBreak() {
@@ -763,6 +767,214 @@ function updateStatsEndRun() {
   save.stats.longestRun = Math.max(save.stats.longestRun, Math.floor(G.time));
   persistSave();
   checkAchievements();
+  updateMissionProgress('runsCompleted', 1);
+}
+
+// ============================================================
+// MISSIONS SYSTEM
+// ============================================================
+const MISSION_TEMPLATES = {
+  daily: [
+    { id:'collect_gems', desc:'Collect {n} gems', targets:[30,50,75], reward:[10,15,25], stat:'gemsCollected' },
+    { id:'dash_count', desc:'Dash {n} times', targets:[15,25,40], reward:[10,15,20], stat:'dashesUsed' },
+    { id:'kill_enemies', desc:'Defeat {n} enemies', targets:[5,10,15], reward:[15,20,30], stat:'enemiesKilled' },
+    { id:'score_points', desc:'Score {n} points', targets:[2000,5000,10000], reward:[10,20,35], stat:'scoreEarned' },
+    { id:'complete_levels', desc:'Complete {n} levels', targets:[2,3,5], reward:[15,25,40], stat:'levelsCompleted' },
+    { id:'smash_obstacles', desc:'Smash {n} obstacles', targets:[10,20,30], reward:[10,15,20], stat:'obstaclesSmashed' },
+  ],
+  weekly: [
+    { id:'w_gems', desc:'Collect {n} gems this week', targets:[200,400], reward:[50,100], stat:'gemsCollected' },
+    { id:'w_kills', desc:'Defeat {n} enemies this week', targets:[30,60], reward:[60,120], stat:'enemiesKilled' },
+    { id:'w_levels', desc:'Complete {n} levels this week', targets:[10,20], reward:[50,100], stat:'levelsCompleted' },
+    { id:'w_runs', desc:'Complete {n} runs this week', targets:[5,10], reward:[40,80], stat:'runsCompleted' },
+    { id:'w_combo', desc:'Reach a {n}x combo', targets:[10,20], reward:[50,80], stat:'maxCombo' },
+  ],
+};
+
+function getWeekId() {
+  const d = new Date();
+  const dayNum = d.getDay() || 7;
+  d.setDate(d.getDate() + 4 - dayNum);
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return d.getFullYear() + '-W' + weekNo;
+}
+
+function generateMissions(type, count, seed) {
+  const templates = MISSION_TEMPLATES[type];
+  const picked = [];
+  let s = seed;
+  const used = new Set();
+  for (let i = 0; i < count && i < templates.length; i++) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    let idx = s % templates.length;
+    while (used.has(idx)) idx = (idx + 1) % templates.length;
+    used.add(idx);
+    const t = templates[idx];
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const diffIdx = s % t.targets.length;
+    const target = t.targets[diffIdx];
+    const reward = t.reward[diffIdx];
+    picked.push({ id: t.id, desc: t.desc.replace('{n}', target), target, reward, stat: t.stat, progress: 0, claimed: false });
+  }
+  return picked;
+}
+
+function checkMissionResets() {
+  const today = localDateStr(new Date());
+  if (!save.missions) save.missions = { daily: [], weekly: [], lastDailyReset: '', lastWeeklyReset: '' };
+  if (save.missions.lastDailyReset !== today) {
+    let seed = 0;
+    for (let i = 0; i < today.length; i++) seed = ((seed << 5) - seed + today.charCodeAt(i)) | 0;
+    save.missions.daily = generateMissions('daily', 3, Math.abs(seed));
+    save.missions.lastDailyReset = today;
+    persistSave();
+  }
+  const weekId = getWeekId();
+  if (save.missions.lastWeeklyReset !== weekId) {
+    let seed = 0;
+    for (let i = 0; i < weekId.length; i++) seed = ((seed << 5) - seed + weekId.charCodeAt(i)) | 0;
+    save.missions.weekly = generateMissions('weekly', 3, Math.abs(seed));
+    save.missions.lastWeeklyReset = weekId;
+    persistSave();
+  }
+}
+
+function updateMissionProgress(stat, amount) {
+  if (!save.missions) return;
+  const allMissions = [].concat(save.missions.daily || [], save.missions.weekly || []);
+  for (const m of allMissions) {
+    if (m.stat === stat && !m.claimed) {
+      if (stat === 'maxCombo') {
+        m.progress = Math.max(m.progress || 0, amount);
+      } else {
+        m.progress = Math.min((m.progress || 0) + amount, m.target);
+      }
+    }
+  }
+  persistSave();
+}
+
+function claimMissionReward(mission) {
+  if (mission.claimed || (mission.progress || 0) < mission.target) return false;
+  mission.claimed = true;
+  save.totalGems += mission.reward;
+  persistSave();
+  return true;
+}
+
+// MISSIONS SCREEN
+function drawMissionsScreen(dt) {
+  const u = UNIT;
+  ctx.fillStyle = '#0a1628'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = FONTS['b2'] || ('bold ' + Math.round(u*2) + 'px monospace');
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText('MISSIONS', W/2, H * 0.06);
+  checkMissionResets();
+
+  const panelX = W * 0.05, panelW = W * 0.9;
+  let y = H * 0.13;
+
+  // Daily header
+  ctx.textAlign = 'left';
+  ctx.font = FONTS['b0.6'] || ('bold ' + Math.round(u*0.6) + 'px monospace');
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText('Daily Missions', panelX + u * 0.3, y);
+  y += u * 0.7;
+  const daily = save.missions && save.missions.daily || [];
+  for (const m of daily) {
+    drawMissionCard(panelX, y, panelW, u * 1.1, m, u);
+    y += u * 1.3;
+  }
+  if (!daily.length) { ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.fillText('No missions yet',W/2,y); y+=u*0.7; }
+
+  y += u * 0.3;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#88CCFF';
+  ctx.fillText('Weekly Missions', panelX + u * 0.3, y);
+  y += u * 0.7;
+  const weekly = save.missions && save.missions.weekly || [];
+  for (const m of weekly) {
+    drawMissionCard(panelX, y, panelW, u * 1.1, m, u);
+    y += u * 1.3;
+  }
+
+  drawButton(W/2 - u*2.5, H * 0.9, u * 5, u * 1, 'BACK', {
+    fill: 'rgba(60,60,80,0.7)', stroke: 'rgba(255,255,255,0.3)',
+    font: FONTS['b0.65'] || ('bold ' + Math.round(u*0.65) + 'px monospace')
+  });
+}
+
+function drawMissionCard(x, y, w, h, mission, u) {
+  const done = mission.claimed;
+  const ready = !done && (mission.progress || 0) >= mission.target;
+  fillRR(x, y, w, h, u * 0.25,
+    done ? 'rgba(40,80,40,0.5)' : ready ? 'rgba(80,60,20,0.6)' : 'rgba(7,14,26,0.6)',
+    done ? 'rgba(100,200,100,0.3)' : ready ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.12)', 1);
+
+  ctx.textAlign = 'left';
+  ctx.font = FONTS['n0.4'] || (Math.round(u*0.4) + 'px monospace');
+  ctx.fillStyle = done ? 'rgba(150,200,150,0.6)' : '#FFF';
+  ctx.fillText(mission.desc, x + u * 0.3, y + u * 0.3);
+
+  // Progress bar
+  const barX = x + u * 0.3, barY = y + h - u * 0.35, barW = w * 0.45, barH = u * 0.15;
+  fillRR(barX, barY, barW, barH, barH/2, 'rgba(255,255,255,0.1)', null, 0);
+  const prog = clamp((mission.progress || 0) / mission.target, 0, 1);
+  if (prog > 0) fillRR(barX, barY, barW * prog, barH, barH/2, done ? '#4caf50' : ready ? '#FFD700' : '#2196F3', null, 0);
+
+  ctx.font = FONTS['n0.4'] || (Math.round(u*0.35) + 'px monospace');
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillText(Math.min(mission.progress || 0, mission.target) + '/' + mission.target, barX + barW + u * 0.2, barY + barH * 0.7);
+
+  // Reward / Claim
+  const btnX = x + w - u * 2.8;
+  if (done) {
+    ctx.textAlign = 'center'; ctx.fillStyle = '#4caf50';
+    ctx.fillText('\\u2713 DONE', btnX + u * 1.2, y + h / 2);
+  } else if (ready) {
+    drawButton(btnX, y + u * 0.15, u * 2.5, h - u * 0.3, '+' + mission.reward + 'g', {
+      fill: 'rgba(255,215,0,0.3)', stroke: '#FFD700', textColor: '#FFD700',
+      font: FONTS['b0.4'] || ('bold ' + Math.round(u*0.4) + 'px monospace')
+    });
+  } else {
+    ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,215,0,0.4)';
+    ctx.fillText(mission.reward + 'g', btnX + u * 1.2, y + h / 2);
+  }
+}
+
+function handleMissionsTap() {
+  const tx = inp.tapX, ty = inp.tapY, u = UNIT;
+  const panelX = W * 0.05, panelW = W * 0.9;
+
+  // Check daily claim buttons
+  let y = H * 0.13 + u * 0.7;
+  const daily = save.missions && save.missions.daily || [];
+  for (const m of daily) {
+    const btnX = panelX + panelW - u * 2.8;
+    if (!m.claimed && (m.progress || 0) >= m.target && tx >= btnX && tx <= btnX + u * 2.5 && ty >= y && ty <= y + u * 1.1) {
+      claimMissionReward(m); sfxGem(); return;
+    }
+    y += u * 1.3;
+  }
+  if (!daily.length) y += u * 0.7;
+
+  // Check weekly claim buttons
+  y += u * 1;
+  const weekly = save.missions && save.missions.weekly || [];
+  for (const m of weekly) {
+    const btnX = panelX + panelW - u * 2.8;
+    if (!m.claimed && (m.progress || 0) >= m.target && tx >= btnX && tx <= btnX + u * 2.5 && ty >= y && ty <= y + u * 1.1) {
+      claimMissionReward(m); sfxGem(); return;
+    }
+    y += u * 1.3;
+  }
+
+  // Back button
+  if (tx > W/2 - u*2.5 && tx < W/2 + u*2.5 && ty > H*0.9 && ty < H*0.9 + u) {
+    G.phase = 'LEVEL_MAP'; sfxUITap();
+  }
 }
 
 // ============================================================
@@ -1314,6 +1526,7 @@ class Enemy {
       comboAction(50,'enemy_kill');
       G.score+=50; G.runScore+=50;
       G.announce={text:'ENEMY DOWN! +50',life:0.6};
+      updateMissionProgress('enemiesKilled', 1);
     }
   }
 }
@@ -1461,6 +1674,7 @@ class Player {
       sfxSlide();
       G.lastAction={type:'slide',time:G.time};
       if(save.stats) save.stats.slidesUsed++;
+      updateMissionProgress('slidesUsed', 1);
       inp.down=false;
     }
     // Ground pound (down while airborne — also check buffer)
@@ -1505,6 +1719,7 @@ class Player {
       addTrauma(this._quakeRush ? 0.3 : 0.15);
       sfxDash();
       if(save.stats) save.stats.dashesUsed++;
+      updateMissionProgress('dashesUsed', 1);
       // Destroy nearby enemy projectiles on dash start
       for(const en of activeEnemies){
         for(let i=en.projectiles.length-1;i>=0;i--){
@@ -1563,6 +1778,7 @@ class Player {
           chunk.obstacles.splice(i,1);
           comboAction(25, 'pound_smash');
           if(save.stats) save.stats.obstaclesSmashed++;
+          updateMissionProgress('obstaclesSmashed', 1);
         }
       }
     }
@@ -2046,6 +2262,7 @@ function checkCollisions(dt) {
       const sy=gem.ly+Math.sin(G.time*3+gem.lx*.01)*UNIT*.18;
       if(aabb(phb,{x:sx-UNIT*.55,y:sy-UNIT*.55,w:UNIT*1.1,h:UNIT*1.1})){
         gem.collected=true; G.gems++; G.runGems++; G.levelGemsCollected++;
+        updateMissionProgress('gemsCollected', 1);
         G.timeLeft=Math.min(G.timeLeft+(G.endless?3:5),99);
         comboAction(50, 'gem');
         sfxGem();
@@ -4101,8 +4318,13 @@ function drawLevelMap(dt) {
   ctx.font=\`bold \${u*.4}px monospace\`;ctx.fillStyle=dcDone?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)';ctx.textAlign='center';
   ctx.fillText(dcDone?\`DAILY DONE (\${save.challengeBest})\`:'DAILY CHALLENGE',W/2,dcY+dcH/2);
 
-  // Settings gear (top-left, right of speaker)
-  const geX=u*2, geY=u*.3, geW=u*1.3, geH=u*1;
+  // Missions button (top-left, right of speaker)
+  const miW=u*3.8, miH=u*1, miX=u*2, miY=u*.3;
+  const unclaimedN = (save.missions&&save.missions.daily||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length + (save.missions&&save.missions.weekly||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length;
+  drawButton(miX,miY,miW,miH,'MISSIONS'+(unclaimedN>0?' !':''),{fill:unclaimedN>0?'rgba(255,180,0,0.35)':'rgba(100,180,100,0.3)',stroke:unclaimedN>0?'rgba(255,200,50,0.6)':'rgba(100,180,100,0.5)',lw:1,textColor:unclaimedN>0?'#FFD700':'rgba(200,255,200,0.8)',font:FONTS['b0.4']||('bold '+Math.round(u*0.4)+'px monospace')});
+
+  // Settings gear (top-left, right of missions)
+  const geX=miX+miW+u*0.3, geY=u*.3, geW=u*1.3, geH=u*1;
   drawButton(geX,geY,geW,geH,'\\u2699',{fill:'rgba(255,255,255,0.1)',stroke:'rgba(255,255,255,0.25)',font:Math.round(u*.8)+'px sans-serif',textColor:'rgba(255,255,255,0.7)',radius:u*0.3});
 
   // Speaker icon
@@ -4128,8 +4350,13 @@ function handleLevelMapTap() {
   if(tx>stX&&tx<stX+stW&&ty>stY&&ty<stY+stH){
     G.phase='STATS'; G.statsScrollY=0; G.statsTargetScrollY=0; sfxUITap(); return;
   }
+  // Missions button
+  const miW=u*3.8, miH=u*1, miX=u*2, miY=u*.3;
+  if(tx>miX&&tx<miX+miW&&ty>miY&&ty<miY+miH){
+    G.phase='MISSIONS'; sfxUITap(); return;
+  }
   // Settings gear
-  const geX=u*2, geY=u*.3, geW=u*1.3, geH=u*1;
+  const geX=miX+miW+u*0.3, geY=u*.3, geW=u*1.3, geH=u*1;
   if(tx>geX&&tx<geX+geW&&ty>geY&&ty<geY+geH){
     G._settingsReturnPhase='LEVEL_MAP'; G.phase='SETTINGS'; sfxUITap(); return;
   }
@@ -4496,6 +4723,7 @@ function loop(ts){
         G.levelCompleteTimer=0;
         calculateLevelStars();
         sfxLevelComplete();
+        updateMissionProgress('levelsCompleted', 1);
         const timeBonus=Math.floor(G.timeLeft*10);
         G.score+=timeBonus; G.runScore+=timeBonus;
         if(G.levelNum>save.highestLevel){save.highestLevel=G.levelNum;persistSave();}
@@ -4689,6 +4917,11 @@ function loop(ts){
       if(inp.tapped){inp.tapped=false;handleSettingsTap();}
       break;
 
+    case 'MISSIONS':
+      drawMissionsScreen(DT);
+      if(inp.tapped){inp.tapped=false;handleMissionsTap();}
+      break;
+
     case 'LEVEL_COMPLETE':
       // Keep rendering world in bg
       drawBg(G.theme);
@@ -4751,6 +4984,7 @@ function loop(ts){
 // INIT
 // ============================================================
 loadSave();
+checkMissionResets();
 G.selectedChar=safeSelectedChar();
 resize();
 initBg();

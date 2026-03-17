@@ -2022,6 +2022,41 @@ function drawBg(theme){
   sk.addColorStop(0,theme.sky[0]);sk.addColorStop(.55,theme.sky[1]);sk.addColorStop(1,theme.sky[2]);
   ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
 
+  // Atmosphere pass by biome
+  if(G&&G.levelDef){
+    const th=G.levelDef.theme;
+    if(th==='JUNGLE'){
+      const haze=ctx.createLinearGradient(0,0,0,H);
+      haze.addColorStop(0,'rgba(255,220,120,0.06)');
+      haze.addColorStop(0.45,'rgba(80,160,90,0.08)');
+      haze.addColorStop(1,'rgba(20,60,20,0.14)');
+      ctx.fillStyle=haze;ctx.fillRect(0,0,W,H);
+    } else if(th==='VOLCANO'){
+      const lavaGlow=ctx.createLinearGradient(0,H*0.45,0,H);
+      lavaGlow.addColorStop(0,'rgba(0,0,0,0)');
+      lavaGlow.addColorStop(1,'rgba(255,90,0,0.16)');
+      ctx.fillStyle=lavaGlow;ctx.fillRect(0,0,W,H);
+    } else if(th==='GLACIER'){
+      const frost=ctx.createLinearGradient(0,0,0,H);
+      frost.addColorStop(0,'rgba(220,245,255,0.12)');
+      frost.addColorStop(0.5,'rgba(150,220,255,0.05)');
+      frost.addColorStop(1,'rgba(80,140,200,0.08)');
+      ctx.fillStyle=frost;ctx.fillRect(0,0,W,H);
+    } else if(th==='SWAMP'){
+      const murk=ctx.createLinearGradient(0,0,0,H);
+      murk.addColorStop(0,'rgba(40,60,20,0.05)');
+      murk.addColorStop(0.55,'rgba(30,55,15,0.1)');
+      murk.addColorStop(1,'rgba(10,25,10,0.18)');
+      ctx.fillStyle=murk;ctx.fillRect(0,0,W,H);
+    } else if(th==='SKY'){
+      const bloom=ctx.createLinearGradient(0,0,0,H);
+      bloom.addColorStop(0,'rgba(255,255,255,0.12)');
+      bloom.addColorStop(0.35,'rgba(255,255,255,0.06)');
+      bloom.addColorStop(1,'rgba(120,200,255,0.04)');
+      ctx.fillStyle=bloom;ctx.fillRect(0,0,W,H);
+    }
+  }
+
   // Stars (only for dark themes)
   if(theme!==THEMES.SKY){
     ctx.fillStyle='rgba(255,255,255,0.5)';
@@ -2150,6 +2185,15 @@ function drawObstacles(theme){
     }
   }
 }
+function drawHazardHalo(x,y,r,col){
+  ctx.save();
+  const g=ctx.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,col);
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(x,y,r,0,PI2);ctx.fill();
+  ctx.restore();
+}
 function drawPteros(theme){
   for(const chunk of chunks){
     const cx=chunk.worldX-worldOffset;
@@ -2189,6 +2233,7 @@ function drawObs(obs,sx,sy,theme){
       // Main spike with gradient feel
       const spkCol=theme===THEMES.GLACIER?'#a0d0f0':theme===THEMES.VOLCANO?'#cc4400':'#888';
       const spkDk=theme===THEMES.GLACIER?'#6098b8':theme===THEMES.VOLCANO?'#882200':'#555';
+      drawHazardHalo(sx,sy-u*.6,u*.85,theme===THEMES.VOLCANO?'rgba(255,90,0,0.16)':theme===THEMES.GLACIER?'rgba(180,240,255,0.14)':'rgba(255,255,255,0.08)');
       // Back spike (cluster of 3)
       ctx.fillStyle=spkDk;
       ctx.beginPath();ctx.moveTo(-u*.45,0);ctx.lineTo(-u*.15,0);ctx.lineTo(-u*.35,-u*.85);ctx.closePath();ctx.fill();
@@ -2237,6 +2282,7 @@ function drawObs(obs,sx,sy,theme){
       ctx.fillStyle='#5a3a18';ctx.fillRect(-u*.9,-u*.15,u*1.8,u*.15);
       break;}
     case'FIRE_GEYSER':{
+      drawHazardHalo(sx,sy-u*.8,u*1.25,'rgba(255,100,0,0.18)');
       // Vent hole
       ctx.fillStyle='#3a1a08';ctx.beginPath();ctx.ellipse(0,-u*.1,u*.5,u*.2,0,0,PI2);ctx.fill();
       // Erupting fire (animated)
@@ -2299,6 +2345,7 @@ function drawEnemies(){
   for(const en of activeEnemies){
     if(!en.alive)continue;
     const sx=en.sx, sy=en.sy, u=UNIT;
+    const outlineCol='rgba(10,12,20,0.72)';
     ctx.save();
     // Dying fade-out and shrink
     if(en.dying){
@@ -2314,6 +2361,8 @@ function drawEnemies(){
     switch(en.type){
       case 'TROLL':{
         ctx.translate(sx,sy);
+        // Outline silhouette
+        ctx.fillStyle=outlineCol;ctx.beginPath();ctx.ellipse(0,-u*1.28,u*1.2,u*1.5,0,0,PI2);ctx.fill();
         // Body (big green blob)
         ctx.fillStyle='#3a7a3a';ctx.beginPath();ctx.ellipse(0,-u*1.3,u*1.1,u*1.4,0,0,PI2);ctx.fill();
         // Belly
@@ -2335,6 +2384,7 @@ function drawEnemies(){
           // Warning indicator on right edge
           const blink=Math.sin(G.time*12)>.2;
           if(blink){
+            drawHazardHalo(W-u*2,GROUND_BASE-u*3,u*1.2,'rgba(255,80,80,0.22)');
             ctx.fillStyle='#FF4444';ctx.font=`bold ${u*2}px monospace`;
             ctx.textAlign='center';ctx.textBaseline='middle';
             ctx.fillText('!',W-u*2,GROUND_BASE-u*3);
@@ -2342,6 +2392,8 @@ function drawEnemies(){
           break;
         }
         ctx.translate(en.screenX,en.y);
+        // Outline silhouette
+        ctx.fillStyle=outlineCol;ctx.beginPath();ctx.ellipse(0,-u*.9,u*1.42,u*.95,0,0,PI2);ctx.fill();
         // Sabertooth body
         ctx.fillStyle='#CC8833';ctx.beginPath();ctx.ellipse(0,-u*.9,u*1.3,u*.85,0,0,PI2);ctx.fill();
         // Head
@@ -2366,6 +2418,8 @@ function drawEnemies(){
       case 'DIVER':{
         ctx.translate(en.screenX,en.y);
         const wf=Math.sin(G.time*5)*.6;
+        // Outline silhouette
+        ctx.fillStyle=outlineCol;ctx.beginPath();ctx.ellipse(0,0,u*.82,u*.54,0,0,PI2);ctx.fill();
         // Body
         ctx.fillStyle='#6a3a20';ctx.beginPath();ctx.ellipse(0,0,u*.7,u*.45,0,0,PI2);ctx.fill();
         // Wings
@@ -2385,6 +2439,10 @@ function drawEnemies(){
       }
       case 'WITCH':{
         ctx.translate(sx,sy);
+        // Outline silhouette
+        ctx.fillStyle=outlineCol;ctx.beginPath();
+        ctx.moveTo(-u*.6,0);ctx.lineTo(-u*.82,u*.62);ctx.lineTo(u*.82,u*.62);ctx.lineTo(u*.6,0);
+        ctx.lineTo(u*.36,-u*1.35);ctx.lineTo(-u*.36,-u*1.35);ctx.closePath();ctx.fill();
         // Robe
         ctx.fillStyle='#2a0a3a';ctx.beginPath();
         ctx.moveTo(-u*.5,0);ctx.lineTo(-u*.7,u*.5);ctx.lineTo(u*.7,u*.5);ctx.lineTo(u*.5,0);
@@ -2406,6 +2464,8 @@ function drawEnemies(){
       }
       case 'GOLEM':{
         ctx.translate(sx,sy);
+        // Outline silhouette
+        ctx.fillStyle=outlineCol;ctx.beginPath();ctx.ellipse(0,-u*1.58,u*1.42,u*1.82,0,0,PI2);ctx.fill();
         // Massive stone body
         ctx.fillStyle='#5a5a5a';ctx.beginPath();ctx.ellipse(0,-u*1.6,u*1.3,u*1.7,0,0,PI2);ctx.fill();
         // Cracks
@@ -2429,6 +2489,8 @@ function drawEnemies(){
       }
       case 'BOMBER':{
         ctx.translate(en.screenX,en.y);
+        // Outline silhouette
+        ctx.fillStyle=outlineCol;ctx.beginPath();ctx.ellipse(0,0,u*1.02,u*.6,0,0,PI2);ctx.fill();
         // Body (mechanical bird)
         ctx.fillStyle='#8a4a2a';ctx.beginPath();ctx.ellipse(0,0,u*.9,u*.5,0,0,PI2);ctx.fill();
         // Wings (wide)
@@ -2449,6 +2511,8 @@ function drawEnemies(){
       }
       case 'SERPENT':{
         ctx.translate(en.screenX,en.y);
+        // Head outline for readability
+        ctx.fillStyle=outlineCol;ctx.beginPath();ctx.ellipse(-u*.3,-u*.4,u*.55,u*.42,.2,0,PI2);ctx.fill();
         // Serpent body — wavy segments
         ctx.fillStyle='#2a8a3a';
         const segCount=6;
@@ -2479,6 +2543,8 @@ function drawEnemies(){
           ctx.translate(sx,sy);
           ctx.fillStyle=`rgba(255,50,50,${0.25+tPulse*0.3})`;
           ctx.beginPath();ctx.arc(0,-UNIT*1.3,UNIT*1.6,0,PI2);ctx.fill();
+          ctx.strokeStyle=`rgba(255,210,90,${0.2+tPulse*0.35})`;ctx.lineWidth=2;
+          ctx.beginPath();ctx.arc(0,-UNIT*1.3,UNIT*1.95,0,PI2);ctx.stroke();
           break;
         }
         case 'DIVER':{
@@ -2486,12 +2552,14 @@ function drawEnemies(){
           ctx.strokeStyle=`rgba(255,60,60,${0.3+tPulse*0.4})`;ctx.lineWidth=2;ctx.setLineDash([8,6]);
           ctx.beginPath();ctx.moveTo(en.screenX,en.y+UNIT*.5);ctx.lineTo(en.screenX,GROUND_BASE);ctx.stroke();
           ctx.setLineDash([]);
+          ctx.fillStyle=`rgba(255,230,120,${0.18+tPulse*0.3})`;ctx.beginPath();ctx.arc(en.screenX,GROUND_BASE,UNIT*.55,0,PI2);ctx.fill();
           break;
         }
         case 'WITCH':{
           // Purple pulsing ring around witch
           ctx.strokeStyle=`rgba(170,0,255,${0.3+tPulse*0.4})`;ctx.lineWidth=3;
           ctx.beginPath();ctx.arc(sx,sy-UNIT*.6,UNIT*1.5,0,PI2);ctx.stroke();
+          ctx.fillStyle=`rgba(220,120,255,${0.12+tPulse*0.18})`;ctx.beginPath();ctx.arc(sx,sy-UNIT*.6,UNIT*1.05,0,PI2);ctx.fill();
           break;
         }
         case 'GOLEM':{
@@ -2500,6 +2568,7 @@ function drawEnemies(){
           const gx=sx,gy=GROUND_BASE;
           ctx.beginPath();ctx.moveTo(gx-UNIT*2,gy);ctx.lineTo(gx-UNIT,gy-UNIT*.3);ctx.lineTo(gx,gy);
           ctx.lineTo(gx+UNIT,gy-UNIT*.2);ctx.lineTo(gx+UNIT*2,gy);ctx.stroke();
+          ctx.fillStyle=`rgba(255,140,0,${0.08+tPulse*0.14})`;ctx.beginPath();ctx.ellipse(gx,gy-UNIT*.15,UNIT*2.2,UNIT*.45,0,0,PI2);ctx.fill();
           break;
         }
         case 'BOMBER':{
@@ -2509,6 +2578,7 @@ function drawEnemies(){
           ctx.beginPath();ctx.arc(bx,by2-UNIT*.3,UNIT*1.2,0,PI2);ctx.stroke();
           ctx.beginPath();ctx.moveTo(bx-UNIT*1.5,by2-UNIT*.3);ctx.lineTo(bx+UNIT*1.5,by2-UNIT*.3);
           ctx.moveTo(bx,by2-UNIT*1.5);ctx.lineTo(bx,by2+UNIT*.9);ctx.stroke();
+          ctx.fillStyle=`rgba(255,220,0,${0.08+tPulse*0.15})`;ctx.beginPath();ctx.arc(bx,by2-UNIT*.3,UNIT*.75,0,PI2);ctx.fill();
           break;
         }
         case 'SERPENT':{
@@ -2561,6 +2631,7 @@ function drawEnemies(){
       if(pr.type==='SKULL'||pr.type==='SHOCKWAVE'){ctx.globalCompositeOperation='lighter';}
       if(pr.type==='ROCK_P'){
         ctx.fillStyle='#6a5a3a';ctx.beginPath();ctx.arc(0,0,UNIT*.35,0,PI2);ctx.fill();
+        ctx.strokeStyle='rgba(255,255,255,0.18)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(-UNIT*.08,-UNIT*.08,UNIT*.12,0,PI2);ctx.stroke();
       } else if(pr.type==='SKULL'){
         ctx.fillStyle='#aa88ff';ctx.shadowColor='#aa00ff';ctx.shadowBlur=10;
         ctx.beginPath();ctx.arc(0,0,UNIT*.3,0,PI2);ctx.fill();
@@ -2577,6 +2648,7 @@ function drawEnemies(){
         // Falling bomb
         ctx.fillStyle='#333';ctx.beginPath();ctx.arc(0,0,UNIT*.3,0,PI2);ctx.fill();
         ctx.fillStyle='#ff4400';ctx.beginPath();ctx.arc(0,-UNIT*.3,UNIT*.1,0,PI2);ctx.fill();
+        ctx.strokeStyle='rgba(255,220,120,0.55)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,0,UNIT*.42,0,PI2);ctx.stroke();
       } else if(pr.type==='VENOM'){
         // Green venom glob
         ctx.fillStyle='rgba(80,220,50,0.8)';ctx.beginPath();ctx.arc(0,0,UNIT*.28,0,PI2);ctx.fill();
@@ -2585,6 +2657,7 @@ function drawEnemies(){
         // Sharp feather dart
         ctx.fillStyle='#aa7744';ctx.beginPath();
         ctx.moveTo(-UNIT*.25,0);ctx.lineTo(UNIT*.25,0);ctx.lineTo(UNIT*.05,-UNIT*.15);ctx.lineTo(-UNIT*.15,-UNIT*.1);ctx.closePath();ctx.fill();
+        ctx.strokeStyle='#ffeeaa';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(UNIT*.05,-UNIT*.12);ctx.lineTo(UNIT*.18,-UNIT*.02);ctx.stroke();
         ctx.strokeStyle='#664422';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-UNIT*.2,0);ctx.lineTo(UNIT*.2,0);ctx.stroke();
       } else if(pr.type==='DEBRIS'){
         // Kicked dirt/rock chunk
@@ -2817,13 +2890,15 @@ function drawHUD(dt){
   ctx.fillStyle='rgba(255,255,255,0.6)';
   ctx.fillText(`${Math.floor(prog*100)}%`,W/2,barY+barH+2);
 
-  // Score (top-left)
+  // Score panel (top-left)
+  fillRR(pad-u*.35,pad-u*.18,u*3.7,u*1.05,u*.22,'rgba(8,15,28,0.42)','rgba(255,255,255,0.08)',1);
   ctx.font=`bold ${u*.9}px monospace`;ctx.textAlign='left';ctx.textBaseline='top';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(`${G.runScore}`,pad+2,pad+2);
   ctx.fillStyle='#FFD700';ctx.fillText(`${G.runScore}`,pad,pad);
 
-  // HP Bar (below score)
+  // HP panel (below score)
   const hpBarW=u*5, hpBarH=u*.35, hpBarX=pad, hpBarY=pad+u*1.2;
+  fillRR(hpBarX-u*.35,hpBarY-u*.18,u*5.7,u*1.02,u*.22,'rgba(8,15,28,0.42)','rgba(255,255,255,0.08)',1);
   const hpPct=clamp(p.hp/p.maxHP,0,1);
   // Background
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(hpBarX,hpBarY,hpBarW,hpBarH);
@@ -2838,7 +2913,8 @@ function drawHUD(dt){
   ctx.font=`bold ${u*.45}px monospace`;ctx.fillStyle='white';ctx.textAlign='center';ctx.textBaseline='top';
   ctx.fillText(`${p.hp}/${p.maxHP}`,hpBarX+hpBarW/2,hpBarY+hpBarH+u*.1);
 
-  // Gems (top-right)
+  // Gems panel (top-right)
+  fillRR(W-pad-u*3.2,pad-u*.18,u*3.55,u*1.05,u*.22,'rgba(8,15,28,0.42)','rgba(255,255,255,0.08)',1);
   ctx.font=`bold ${u*.9}px monospace`;ctx.textAlign='right';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(`\u25C6 ${G.runGems}`,W-pad+2,pad+2);
   ctx.fillStyle=`hsl(${G.theme.gemH},100%,65%)`;ctx.fillText(`\u25C6 ${G.runGems}`,W-pad,pad);

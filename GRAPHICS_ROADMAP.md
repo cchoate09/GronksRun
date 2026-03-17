@@ -85,7 +85,7 @@ Primary code:
 - `drawChar(p, mini)`
 
 ### Task 1.3 — Enemy Readability Pass
-Status: TODO
+Status: PARTIAL DONE
 Priority: P1
 Focus areas:
 - unique silhouettes per enemy archetype
@@ -98,7 +98,7 @@ Primary code:
 - enemy projectile rendering blocks
 
 ### Task 1.4 — Obstacle + Projectile Clarity Pass
-Status: TODO
+Status: PARTIAL DONE
 Priority: P1
 Focus areas:
 - hazards should read as hazards instantly
@@ -110,7 +110,7 @@ Primary code:
 - projectile rendering blocks in `drawEnemies()` and `drawBoss()`
 
 ### Task 1.5 — Biome Atmosphere Pass
-Status: TODO
+Status: PARTIAL DONE
 Priority: P1
 Focus areas:
 - better sky mood
@@ -125,7 +125,7 @@ Primary code:
 - `drawAmbient(type)`
 
 ### Task 1.6 — HUD/Menu Polish Pass
-Status: TODO
+Status: PARTIAL DONE
 Priority: P2
 Focus areas:
 - cleaner HUD hierarchy
@@ -208,8 +208,18 @@ Push the game toward release-quality visual presentation.
 - Prefer changes that improve readability and perceived quality without harming performance
 - Avoid large rendering rewrites until Phase 1 wins are validated
 
+# Current Phase 1 Progress Notes
+Completed / partially completed so far:
+- Initial visual rules established
+- Player readability pass started
+- Enemy silhouette and telegraph readability pass started
+- Hazard / projectile clarity improvements started
+- Biome atmosphere overlays started
+- HUD framing polish started
+
 # Next Recommended Step
-Start with Phase 1 Task 1.1 + Task 1.2:
-1. define visual rules
-2. improve player readability first
-3. then move enemy-by-enemy
+Continue Phase 1 with:
+1. finish enemy-by-enemy readability polish
+2. deepen hazard differentiation by biome
+3. improve menus / title / buttons to reduce prototype feel
+4. do a dedicated boss readability pass

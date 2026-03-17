@@ -186,6 +186,10 @@ function loadSave() {
     // Daily challenge migration
     save.challengeBest = Number(save.challengeBest) || 0;
     save.lastChallengeDate = save.lastChallengeDate || '';
+    // Audio settings migration
+    if (save.musicVolume !== undefined) musicVolume = Number(save.musicVolume);
+    if (save.sfxVolume !== undefined) sfxVolume = Number(save.sfxVolume);
+    if (save.screenShake === undefined) save.screenShake = true;
     // Character unlock migration
     if (!Array.isArray(save.unlockedChars)) save.unlockedChars = [0];
     if (!save.unlockedChars.includes(0)) save.unlockedChars.unshift(0);
@@ -346,7 +350,7 @@ function spawnDustFX(x,y) {
 // SCREEN SHAKE
 // ============================================================
 let trauma=0, shX=0, shY=0;
-function addTrauma(v) { trauma=Math.min(trauma+v,1); }
+function addTrauma(v) { if(save.screenShake===false) return; trauma=Math.min(trauma+v,1); }
 function updateShake(dt) {
   trauma=Math.max(0,trauma-1.8*dt);
   const s=trauma*trauma, m=UNIT*1.8;
@@ -361,9 +365,11 @@ let soundMuted = false;
 function ensureAudio() {
   if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  if (audioCtx) initAudioRouting();
 }
+function sfxDest() { return sfxGain || (audioCtx && audioCtx.destination); }
 function sfxJump() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(200,audioCtx.currentTime);
   o.frequency.linearRampToValueAtTime(600,audioCtx.currentTime+0.1);
@@ -373,7 +379,7 @@ function sfxJump() {
   o.start(); o.stop(audioCtx.currentTime+0.12);
 }
 function sfxLand() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(80,audioCtx.currentTime);
   g.gain.setValueAtTime(0.2,audioCtx.currentTime);
@@ -382,7 +388,7 @@ function sfxLand() {
   o.start(); o.stop(audioCtx.currentTime+0.06);
 }
 function sfxGem() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(880,audioCtx.currentTime);
   o.frequency.linearRampToValueAtTime(1200,audioCtx.currentTime+0.15);
@@ -392,7 +398,7 @@ function sfxGem() {
   o.start(); o.stop(audioCtx.currentTime+0.18);
 }
 function sfxHit() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sawtooth'; o.frequency.setValueAtTime(100,audioCtx.currentTime);
   g.gain.setValueAtTime(0.2,audioCtx.currentTime);
@@ -401,7 +407,7 @@ function sfxHit() {
   o.start(); o.stop(audioCtx.currentTime+0.2);
 }
 function sfxDeath() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sawtooth'; o.frequency.setValueAtTime(400,audioCtx.currentTime);
   o.frequency.linearRampToValueAtTime(80,audioCtx.currentTime+0.5);
@@ -411,7 +417,7 @@ function sfxDeath() {
   o.start(); o.stop(audioCtx.currentTime+0.55);
 }
 function sfxDash() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const bufSize = audioCtx.sampleRate * 0.15;
   const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
   const data = buf.getChannelData(0);
@@ -425,7 +431,7 @@ function sfxDash() {
   src.start(); src.stop(audioCtx.currentTime+0.15);
 }
 function sfxSlide() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const bufSize = audioCtx.sampleRate * 0.3;
   const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
   const data = buf.getChannelData(0);
@@ -441,7 +447,7 @@ function sfxSlide() {
   src.start(); src.stop(audioCtx.currentTime+0.3);
 }
 function sfxShield() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='triangle'; o.frequency.setValueAtTime(600,audioCtx.currentTime);
   g.gain.setValueAtTime(0.12,audioCtx.currentTime);
@@ -450,7 +456,7 @@ function sfxShield() {
   o.start(); o.stop(audioCtx.currentTime+0.3);
 }
 function sfxLevelComplete() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const notes = [261.6, 329.6, 392.0, 523.3]; // C E G C
   notes.forEach((freq, i) => {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -463,7 +469,7 @@ function sfxLevelComplete() {
   });
 }
 function sfxSpin() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='square'; o.frequency.setValueAtTime(2000,audioCtx.currentTime);
   g.gain.setValueAtTime(0.06,audioCtx.currentTime);
@@ -472,13 +478,194 @@ function sfxSpin() {
   o.start(); o.stop(audioCtx.currentTime+0.03);
 }
 function sfxUITap() {
-  if (soundMuted || !audioCtx) return;
+  if (soundMuted || sfxVolume<=0 || !audioCtx) return;
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(1200,audioCtx.currentTime);
   g.gain.setValueAtTime(0.08,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.05);
   o.connect(g); g.connect(audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.06);
+}
+
+// ============================================================
+// MUSIC SYSTEM (Procedural Web Audio)
+// ============================================================
+let musicVolume = 0.35;
+let sfxVolume = 0.7;
+let musicNodes = null;
+let currentMusicTheme = null;
+let sfxGain = null;
+let musicGain = null;
+
+function initAudioRouting() {
+  if (!audioCtx || musicGain) return;
+  musicGain = audioCtx.createGain();
+  musicGain.gain.value = musicVolume;
+  musicGain.connect(audioCtx.destination);
+  sfxGain = audioCtx.createGain();
+  sfxGain.gain.value = sfxVolume;
+  sfxGain.connect(audioCtx.destination);
+}
+
+const MUSIC_PATTERNS = {
+  JUNGLE: { scale:[262,294,330,392,440], tempo:0.25, type:'sine' },
+  VOLCANO: { scale:[220,247,262,330,370], tempo:0.35, type:'triangle' },
+  GLACIER: { scale:[330,392,440,494,523], tempo:0.4, type:'sine' },
+  SWAMP: { scale:[196,220,262,294,330], tempo:0.3, type:'triangle' },
+  SKY: { scale:[392,440,494,523,587], tempo:0.2, type:'sine' },
+};
+
+function startMusic(themeName) {
+  if (!audioCtx || musicVolume <= 0) return;
+  stopMusic();
+  initAudioRouting();
+  const pat = MUSIC_PATTERNS[themeName] || MUSIC_PATTERNS.JUNGLE;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0, audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 2);
+  gain.connect(musicGain);
+
+  // Bass drone
+  const bass = audioCtx.createOscillator();
+  bass.type = 'sine';
+  bass.frequency.value = pat.scale[0] * 0.5;
+  const bassG = audioCtx.createGain();
+  bassG.gain.value = 0.15;
+  bass.connect(bassG);
+  bassG.connect(gain);
+  bass.start();
+
+  // Melody arpeggio
+  const mel = audioCtx.createOscillator();
+  mel.type = pat.type;
+  mel.frequency.value = pat.scale[0];
+  const melG = audioCtx.createGain();
+  melG.gain.value = 0.06;
+  mel.connect(melG);
+  melG.connect(gain);
+  mel.start();
+
+  // Schedule note changes
+  let noteIdx = 0;
+  const interval = setInterval(() => {
+    if (!musicNodes) { clearInterval(interval); return; }
+    noteIdx = (noteIdx + 1) % pat.scale.length;
+    try { mel.frequency.setValueAtTime(pat.scale[noteIdx], audioCtx.currentTime); } catch(e) {}
+  }, pat.tempo * 1000);
+
+  musicNodes = { bass, mel, gain, interval };
+  currentMusicTheme = themeName;
+}
+
+function stopMusic() {
+  if (!musicNodes) return;
+  clearInterval(musicNodes.interval);
+  try {
+    musicNodes.gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+    setTimeout(() => {
+      try { musicNodes.bass.stop(); } catch(e) {}
+      try { musicNodes.mel.stop(); } catch(e) {}
+      musicNodes = null;
+    }, 600);
+  } catch(e) { musicNodes = null; }
+  currentMusicTheme = null;
+}
+
+// ============================================================
+// SETTINGS SCREEN
+// ============================================================
+function drawSettingsScreen(dt) {
+  const u = UNIT;
+  ctx.fillStyle = '#0a1628'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = FONTS['b2'] || ('bold ' + Math.round(u*2) + 'px monospace');
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText('SETTINGS', W/2, H * 0.08);
+
+  let y = H * 0.18;
+  const sliderW = W * 0.5, sliderH = u * 0.3, sliderX = W * 0.35;
+
+  // Music Volume
+  ctx.textAlign = 'left'; ctx.font = FONTS['b0.6'] || ('bold ' + Math.round(u*0.6) + 'px monospace');
+  ctx.fillStyle = '#FFF';
+  ctx.fillText('Music Volume', W * 0.08, y);
+  fillRR(sliderX, y - sliderH/2, sliderW, sliderH, sliderH/2, 'rgba(255,255,255,0.15)', null, 0);
+  fillRR(sliderX, y - sliderH/2, sliderW * musicVolume, sliderH, sliderH/2, '#4CAF50', null, 0);
+  ctx.beginPath(); ctx.arc(sliderX + sliderW * musicVolume, y, u * 0.35, 0, PI2);
+  ctx.fillStyle = '#FFF'; ctx.fill();
+  ctx.textAlign = 'right'; ctx.fillText(Math.round(musicVolume * 100) + '%', W * 0.93, y);
+  y += u * 1.5;
+
+  // SFX Volume
+  ctx.textAlign = 'left'; ctx.fillStyle = '#FFF';
+  ctx.fillText('SFX Volume', W * 0.08, y);
+  fillRR(sliderX, y - sliderH/2, sliderW, sliderH, sliderH/2, 'rgba(255,255,255,0.15)', null, 0);
+  fillRR(sliderX, y - sliderH/2, sliderW * sfxVolume, sliderH, sliderH/2, '#2196F3', null, 0);
+  ctx.beginPath(); ctx.arc(sliderX + sliderW * sfxVolume, y, u * 0.35, 0, PI2);
+  ctx.fillStyle = '#FFF'; ctx.fill();
+  ctx.textAlign = 'right'; ctx.fillText(Math.round(sfxVolume * 100) + '%', W * 0.93, y);
+  y += u * 1.5;
+
+  // Screen Shake toggle
+  ctx.textAlign = 'left'; ctx.fillStyle = '#FFF';
+  ctx.fillText('Screen Shake', W * 0.08, y);
+  const shakeOn = save.screenShake !== false;
+  drawButton(sliderX, y - u * 0.4, u * 3, u * 0.8, shakeOn ? 'ON' : 'OFF', {
+    fill: shakeOn ? 'rgba(76,175,80,0.4)' : 'rgba(100,100,100,0.3)',
+    stroke: shakeOn ? '#4CAF50' : 'rgba(150,150,150,0.4)',
+    font: FONTS['b0.5'] || ('bold ' + Math.round(u*0.5) + 'px monospace'),
+    textColor: shakeOn ? '#4CAF50' : 'rgba(150,150,150,0.6)'
+  });
+  y += u * 2;
+
+  // Version
+  ctx.textAlign = 'center'; ctx.font = FONTS['n0.4'] || (Math.round(u*0.4) + 'px monospace');
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillText('Gronk\'s Run v1.2', W/2, y);
+
+  // Back button
+  drawButton(W/2 - u*2.5, H * 0.88, u * 5, u * 1, 'BACK', {
+    fill: 'rgba(60,60,80,0.7)', stroke: 'rgba(255,255,255,0.3)',
+    font: FONTS['b0.65'] || ('bold ' + Math.round(u*0.65) + 'px monospace')
+  });
+
+  // Store layout for tap handling
+  G._settingsLayout = { sliderX, sliderW, sliderH, baseY: H * 0.18, spacing: u * 1.5 };
+}
+
+function handleSettingsTap() {
+  const tx = inp.tapX, ty = inp.tapY, u = UNIT;
+  const L = G._settingsLayout;
+  if (!L) return;
+
+  // Music slider
+  if (Math.abs(ty - L.baseY) < u * 0.6 && tx >= L.sliderX - u && tx <= L.sliderX + L.sliderW + u) {
+    musicVolume = clamp((tx - L.sliderX) / L.sliderW, 0, 1);
+    if (musicGain) musicGain.gain.value = musicVolume;
+    save.musicVolume = musicVolume; persistSave();
+    return;
+  }
+  // SFX slider
+  const sfxY = L.baseY + L.spacing;
+  if (Math.abs(ty - sfxY) < u * 0.6 && tx >= L.sliderX - u && tx <= L.sliderX + L.sliderW + u) {
+    sfxVolume = clamp((tx - L.sliderX) / L.sliderW, 0, 1);
+    if (sfxGain) sfxGain.gain.value = sfxVolume;
+    save.sfxVolume = sfxVolume; persistSave();
+    sfxUITap(); // test sound
+    return;
+  }
+  // Screen shake toggle
+  const shakeY = L.baseY + L.spacing * 2;
+  if (tx >= L.sliderX && tx <= L.sliderX + u * 3 && Math.abs(ty - shakeY) < u * 0.6) {
+    save.screenShake = save.screenShake === false ? true : false;
+    persistSave(); sfxUITap();
+    return;
+  }
+  // Back button
+  if (tx > W/2 - u*2.5 && tx < W/2 + u*2.5 && ty > H*0.88 && ty < H*0.88 + u) {
+    G.phase = G._settingsReturnPhase || 'LEVEL_MAP'; sfxUITap();
+    return;
+  }
 }
 
 function drawSpeakerIcon(x, y, size) {
@@ -1642,6 +1829,7 @@ function startLevel(levelNum) {
   G.phase='LEVEL_INTRO'; G.levelNum=levelNum;
   G.levelDef=getLevelDef(levelNum);
   G.theme=THEMES[G.levelDef.theme];
+  startMusic(G.levelDef.theme);
   G.introTimer=0;
   G.time=0; G.timeLeft=28; G.deathDelay=0;
   G.diff=getDiff(0,levelDiffMult(levelNum));
@@ -3913,6 +4101,10 @@ function drawLevelMap(dt) {
   ctx.font=`bold ${u*.4}px monospace`;ctx.fillStyle=dcDone?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)';ctx.textAlign='center';
   ctx.fillText(dcDone?`DAILY DONE (${save.challengeBest})`:'DAILY CHALLENGE',W/2,dcY+dcH/2);
 
+  // Settings gear (top-left, right of speaker)
+  const geX=u*2, geY=u*.3, geW=u*1.3, geH=u*1;
+  drawButton(geX,geY,geW,geH,'\u2699',{fill:'rgba(255,255,255,0.1)',stroke:'rgba(255,255,255,0.25)',font:Math.round(u*.8)+'px sans-serif',textColor:'rgba(255,255,255,0.7)',radius:u*0.3});
+
   // Speaker icon
   drawSpeakerIcon(u*.3, u*.3, u*1);
 }
@@ -3935,6 +4127,11 @@ function handleLevelMapTap() {
   const stW=u*3.5, stH=u*1, stX=W-stW-u*.5, stY=u*.3;
   if(tx>stX&&tx<stX+stW&&ty>stY&&ty<stY+stH){
     G.phase='STATS'; G.statsScrollY=0; G.statsTargetScrollY=0; sfxUITap(); return;
+  }
+  // Settings gear
+  const geX=u*2, geY=u*.3, geW=u*1.3, geH=u*1;
+  if(tx>geX&&tx<geX+geW&&ty>geY&&ty<geY+geH){
+    G._settingsReturnPhase='LEVEL_MAP'; G.phase='SETTINGS'; sfxUITap(); return;
   }
   // Speaker toggle
   if(checkSpeakerTap(tx,ty,u*.3,u*.3,u*1)){
@@ -4191,7 +4388,7 @@ function loop(ts){
       ctx.fillStyle = '#888';
       ctx.fillText('Loading...', W/2, barY + barH + UNIT);
       ctx.globalAlpha = 1;
-      if (lt >= 1.5) { G.phase = 'MENU'; G.fadeAlpha = 0; }
+      if (lt >= 1.5) { G.phase = 'MENU'; G.fadeAlpha = 0; startMusic('JUNGLE'); }
       break;
     }
     case 'MENU':
@@ -4487,6 +4684,11 @@ function loop(ts){
       if(inp.tapped){inp.tapped=false;handleShopTap();}
       break;
 
+    case 'SETTINGS':
+      drawSettingsScreen(DT);
+      if(inp.tapped){inp.tapped=false;handleSettingsTap();}
+      break;
+
     case 'LEVEL_COMPLETE':
       // Keep rendering world in bg
       drawBg(G.theme);
@@ -4518,6 +4720,7 @@ function loop(ts){
       break;
 
     case 'DEAD':
+      if(currentMusicTheme) stopMusic();
       drawBg(G.theme);drawDeathScreen();
       if(inp.tapped){inp.tapped=false;handleDeadTap();}
       break;

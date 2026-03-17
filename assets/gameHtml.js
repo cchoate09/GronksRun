@@ -5824,7 +5824,7 @@ function loop(ts){
             else if(_skin.trail==='spark')_tc='#FFFF44';
             else if(_skin.trail==='leaf')_tc=Math.random()>.5?'#44AA22':'#88CC44';
             else if(_skin.trail==='dust')_tc='#AA9988';
-            spawnParticle(_px,_py,(Math.random()-.5)*30-20,(Math.random()-.5)*40,_tc,0.4+Math.random()*0.3,UNIT*0.15);
+            spawnParticle(_px,_py,{vx:(Math.random()-.5)*30-20,vy:(Math.random()-.5)*40,color:_tc,decay:0.4+Math.random()*0.3,r:UNIT*0.15});
           }
         }
       }

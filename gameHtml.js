@@ -286,6 +286,9 @@ const save = {
   endlessBest: 0,      // endless mode high score
   challengeBest: 0,    // daily challenge best score
   lastChallengeDate: '', // YYYY-MM-DD of last daily challenge played
+  musicVolume: 0.35,
+  sfxVolume: 0.7,
+  screenShake: true,
 };
 function loadSave() {
   try {
@@ -313,9 +316,22 @@ function loadSave() {
     // Daily challenge migration
     save.challengeBest = Number(save.challengeBest) || 0;
     save.lastChallengeDate = save.lastChallengeDate || '';
+    // Audio volume migration
+    save.musicVolume = save.musicVolume !== undefined ? Number(save.musicVolume) : 0.35;
+    save.sfxVolume = save.sfxVolume !== undefined ? Number(save.sfxVolume) : 0.7;
+    if (save.screenShake === undefined) save.screenShake = true;
+    musicVolume = save.musicVolume;
+    sfxVolume = save.sfxVolume;
     // Character unlock migration
     if (!Array.isArray(save.unlockedChars)) save.unlockedChars = [0];
     if (!save.unlockedChars.includes(0)) save.unlockedChars.unshift(0);
+    // Skins migration
+    if (!save.ownedSkins) save.ownedSkins = [];
+    if (!save.activeSkins) save.activeSkins = {};
+    // Missions migration
+    if (!save.missions) save.missions = { daily: [], weekly: [], lastDailyReset: '', lastWeeklyReset: '' };
+    // Tutorial stage migration
+    if (save.tutorialStage === undefined) save.tutorialStage = save.tutorialSeen ? 5 : 0;
   } catch(e) { /* corrupted save — defaults remain */ }
 }
 function persistSave() {
@@ -348,6 +364,76 @@ const CHARS = [
     col:'#44BBAA', dk:'#228877', jumpV:-780, jumpV2:-630, grav:1900,
     spdM:0.97, hitM:1, startShield:false, startGems:0, sc:1.05, startMagnet:true, maxHP:90 },
 ];
+
+// ============================================================
+// SKINS DATA
+// ============================================================
+const SKINS = {
+  gronk: [
+    { id:'default', name:'Classic', col:'#7EC8EC', dk:'#4A9ABE', cost:0 },
+    { id:'fire', name:'Flame Gronk', col:'#FF6633', dk:'#CC3300', cost:50, trail:'fire' },
+    { id:'ice', name:'Frost Gronk', col:'#88DDFF', dk:'#44AADD', cost:75, trail:'ice' },
+    { id:'gold', name:'Golden Gronk', col:'#FFD700', dk:'#CC9900', cost:150, trail:'sparkle' },
+    { id:'shadow', name:'Shadow Gronk', col:'#554466', dk:'#332244', cost:200, trail:'shadow' },
+  ],
+  pip: [
+    { id:'default', name:'Classic', col:'#F4C542', dk:'#B89020', cost:0 },
+    { id:'electric', name:'Electric Pip', col:'#FFFF44', dk:'#CCCC00', cost:50, trail:'spark' },
+    { id:'nature', name:'Forest Pip', col:'#66CC44', dk:'#338822', cost:75, trail:'leaf' },
+    { id:'royal', name:'Royal Pip', col:'#AA44FF', dk:'#7722CC', cost:150, trail:'sparkle' },
+  ],
+  bruk: [
+    { id:'default', name:'Classic', col:'#A06840', dk:'#6A4020', cost:0 },
+    { id:'stone', name:'Stone Bruk', col:'#8899AA', dk:'#556677', cost:50, trail:'dust' },
+    { id:'magma', name:'Magma Bruk', col:'#FF4400', dk:'#AA2200', cost:75, trail:'fire' },
+    { id:'crystal', name:'Crystal Bruk', col:'#44DDFF', dk:'#22AACC', cost:200, trail:'ice' },
+  ],
+  zara: [
+    { id:'default', name:'Classic', col:'#CC55DD', dk:'#882299', cost:0 },
+    { id:'neon', name:'Neon Zara', col:'#FF44FF', dk:'#CC00CC', cost:50, trail:'spark' },
+    { id:'cosmic', name:'Cosmic Zara', col:'#4466FF', dk:'#2233CC', cost:75, trail:'sparkle' },
+    { id:'toxic', name:'Toxic Zara', col:'#44FF44', dk:'#22BB22', cost:150, trail:'shadow' },
+  ],
+  rex: [
+    { id:'default', name:'Classic', col:'#FF5544', dk:'#BB2211', cost:0 },
+    { id:'blaze', name:'Blaze Rex', col:'#FF8800', dk:'#CC5500', cost:50, trail:'fire' },
+    { id:'arctic', name:'Arctic Rex', col:'#AAEEFF', dk:'#77BBDD', cost:75, trail:'ice' },
+    { id:'phantom', name:'Phantom Rex', col:'#667788', dk:'#334455', cost:200, trail:'shadow' },
+  ],
+  mog: [
+    { id:'default', name:'Classic', col:'#44BBAA', dk:'#228877', cost:0 },
+    { id:'mystic', name:'Arcane Mog', col:'#8844FF', dk:'#5522CC', cost:50, trail:'sparkle' },
+    { id:'nature', name:'Druid Mog', col:'#558833', dk:'#335522', cost:75, trail:'leaf' },
+    { id:'void', name:'Void Mog', col:'#222244', dk:'#111133', cost:200, trail:'shadow' },
+  ],
+};
+
+function getActiveSkin(charIdx) {
+  const ch = CHARS[charIdx];
+  const skinId = save.activeSkins && save.activeSkins[ch.id] || 'default';
+  const skins = SKINS[ch.id] || [];
+  return skins.find(s => s.id === skinId) || skins[0];
+}
+
+function isSkinOwned(charId, skinId) {
+  if (skinId === 'default') return true;
+  return save.ownedSkins && save.ownedSkins.includes(charId + ':' + skinId);
+}
+
+function buySkin(charId, skinId, cost) {
+  if (save.totalGems < cost) return false;
+  if (!save.ownedSkins) save.ownedSkins = [];
+  save.ownedSkins.push(charId + ':' + skinId);
+  save.totalGems -= cost;
+  persistSave();
+  return true;
+}
+
+function equipSkin(charId, skinId) {
+  if (!save.activeSkins) save.activeSkins = {};
+  save.activeSkins[charId] = skinId;
+  persistSave();
+}
 
 // ============================================================
 // LEVEL DATA  (5 unique themes, then repeat harder)
@@ -473,7 +559,7 @@ function spawnDustFX(x,y) {
 // SCREEN SHAKE
 // ============================================================
 let trauma=0, shX=0, shY=0;
-function addTrauma(v) { trauma=Math.min(trauma+v,1); }
+function addTrauma(v) { if(save.screenShake === false) return; trauma=Math.min(trauma+v,1); }
 function updateShake(dt) {
   trauma=Math.max(0,trauma-1.8*dt);
   const s=trauma*trauma, m=UNIT*1.8;
@@ -490,55 +576,61 @@ function ensureAudio() {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
 }
 function sfxJump() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(200,audioCtx.currentTime);
   o.frequency.linearRampToValueAtTime(600,audioCtx.currentTime+0.1);
   g.gain.setValueAtTime(0.15,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.12);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.12);
 }
 function sfxLand() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(80,audioCtx.currentTime);
   g.gain.setValueAtTime(0.2,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.06);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.06);
 }
 function sfxGem() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(880,audioCtx.currentTime);
   o.frequency.linearRampToValueAtTime(1200,audioCtx.currentTime+0.15);
   g.gain.setValueAtTime(0.12,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.18);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.18);
 }
 function sfxHit() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sawtooth'; o.frequency.setValueAtTime(100,audioCtx.currentTime);
   g.gain.setValueAtTime(0.2,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.2);
 }
 function sfxDeath() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sawtooth'; o.frequency.setValueAtTime(400,audioCtx.currentTime);
   o.frequency.linearRampToValueAtTime(80,audioCtx.currentTime+0.5);
   g.gain.setValueAtTime(0.2,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.55);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.55);
 }
 function sfxDash() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const bufSize = audioCtx.sampleRate * 0.15;
   const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
   const data = buf.getChannelData(0);
@@ -548,11 +640,12 @@ function sfxDash() {
   const g = audioCtx.createGain();
   g.gain.setValueAtTime(0.15,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.15);
-  src.connect(g); g.connect(audioCtx.destination);
+  src.connect(g); g.connect(sfxGain || audioCtx.destination);
   src.start(); src.stop(audioCtx.currentTime+0.15);
 }
 function sfxSlide() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const bufSize = audioCtx.sampleRate * 0.3;
   const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
   const data = buf.getChannelData(0);
@@ -564,20 +657,22 @@ function sfxSlide() {
   const g = audioCtx.createGain();
   g.gain.setValueAtTime(0.12,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.3);
-  src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  src.connect(f); f.connect(g); g.connect(sfxGain || audioCtx.destination);
   src.start(); src.stop(audioCtx.currentTime+0.3);
 }
 function sfxShield() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='triangle'; o.frequency.setValueAtTime(600,audioCtx.currentTime);
   g.gain.setValueAtTime(0.12,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.3);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.3);
 }
 function sfxLevelComplete() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const notes = [261.6, 329.6, 392.0, 523.3]; // C E G C
   notes.forEach((freq, i) => {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -585,27 +680,225 @@ function sfxLevelComplete() {
     g.gain.setValueAtTime(0,audioCtx.currentTime);
     g.gain.linearRampToValueAtTime(0.12,audioCtx.currentTime+i*0.15);
     g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+i*0.15+0.2);
-    o.connect(g); g.connect(audioCtx.destination);
+    o.connect(g); g.connect(sfxGain || audioCtx.destination);
     o.start(audioCtx.currentTime+i*0.15); o.stop(audioCtx.currentTime+i*0.15+0.2);
   });
 }
 function sfxSpin() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='square'; o.frequency.setValueAtTime(2000,audioCtx.currentTime);
   g.gain.setValueAtTime(0.06,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.02);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.03);
 }
 function sfxUITap() {
-  if (soundMuted || !audioCtx) return;
+  if (sfxVolume <= 0 || !audioCtx) return;
+  initAudioRouting();
   const o = audioCtx.createOscillator(), g = audioCtx.createGain();
   o.type='sine'; o.frequency.setValueAtTime(1200,audioCtx.currentTime);
   g.gain.setValueAtTime(0.08,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.05);
-  o.connect(g); g.connect(audioCtx.destination);
+  o.connect(g); g.connect(sfxGain || audioCtx.destination);
   o.start(); o.stop(audioCtx.currentTime+0.06);
+}
+
+// ============================================================
+// MUSIC SYSTEM (Procedural Web Audio)
+// ============================================================
+let musicMuted = false;
+let musicVolume = 0.35;
+let sfxVolume = 0.7;
+let musicNodes = null;
+let currentMusicTheme = null;
+
+let musicGain = null;
+let sfxGain = null;
+
+function initAudioRouting() {
+  if (!audioCtx) return;
+  if (!musicGain) {
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = musicVolume;
+    musicGain.connect(audioCtx.destination);
+  }
+  if (!sfxGain) {
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = sfxVolume;
+    sfxGain.connect(audioCtx.destination);
+  }
+}
+
+function startMusic(themeName) {
+  if (!audioCtx || currentMusicTheme === themeName) return;
+  stopMusic();
+  initAudioRouting();
+  if (musicVolume <= 0) return;
+  currentMusicTheme = themeName;
+
+  const now = audioCtx.currentTime;
+  const nodes = [];
+  const masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0;
+  masterGain.gain.linearRampToValueAtTime(1, now + 2);
+  masterGain.connect(musicGain);
+
+  switch(themeName) {
+    case 'JUNGLE': {
+      const bass = audioCtx.createOscillator();
+      bass.type = 'sine'; bass.frequency.value = 65;
+      const bassG = audioCtx.createGain(); bassG.gain.value = 0.3;
+      bass.connect(bassG); bassG.connect(masterGain);
+      bass.start(); nodes.push(bass);
+
+      const melody = audioCtx.createOscillator();
+      melody.type = 'triangle';
+      const melG = audioCtx.createGain(); melG.gain.value = 0.08;
+      melody.connect(melG); melG.connect(masterGain);
+      const pentatonic = [261.6, 329.6, 392, 440, 523.3, 440, 392, 329.6];
+      const noteLen = 0.8;
+      for (let rep = 0; rep < 50; rep++) {
+        for (let i = 0; i < pentatonic.length; i++) {
+          const t = now + rep * pentatonic.length * noteLen + i * noteLen;
+          melody.frequency.setValueAtTime(pentatonic[i], t);
+        }
+      }
+      melody.start(); nodes.push(melody);
+
+      const pulse = audioCtx.createOscillator();
+      pulse.type = 'sine'; pulse.frequency.value = 130;
+      const pulseG = audioCtx.createGain(); pulseG.gain.value = 0;
+      pulse.connect(pulseG); pulseG.connect(masterGain);
+      for (let rep = 0; rep < 200; rep++) {
+        const t = now + rep * 0.5;
+        pulseG.gain.setValueAtTime(0.06, t);
+        pulseG.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      }
+      pulse.start(); nodes.push(pulse);
+      break;
+    }
+    case 'VOLCANO': {
+      const drone = audioCtx.createOscillator();
+      drone.type = 'sawtooth'; drone.frequency.value = 40;
+      const droneF = audioCtx.createBiquadFilter();
+      droneF.type = 'lowpass'; droneF.frequency.value = 120;
+      const droneG = audioCtx.createGain(); droneG.gain.value = 0.25;
+      drone.connect(droneF); droneF.connect(droneG); droneG.connect(masterGain);
+      drone.start(); nodes.push(drone);
+
+      const tension = audioCtx.createOscillator();
+      tension.type = 'square'; tension.frequency.value = 110;
+      const tensF = audioCtx.createBiquadFilter();
+      tensF.type = 'lowpass'; tensF.frequency.value = 200;
+      const tensG = audioCtx.createGain(); tensG.gain.value = 0.04;
+      for (let rep = 0; rep < 100; rep++) {
+        const t = now + rep * 2;
+        tension.frequency.setValueAtTime(110, t);
+        tension.frequency.linearRampToValueAtTime(130, t + 1);
+        tension.frequency.linearRampToValueAtTime(110, t + 2);
+      }
+      tension.connect(tensF); tensF.connect(tensG); tensG.connect(masterGain);
+      tension.start(); nodes.push(tension);
+      break;
+    }
+    case 'GLACIER': {
+      [523.3, 659.3, 784].forEach(function(freq) {
+        const o = audioCtx.createOscillator();
+        o.type = 'sine'; o.frequency.value = freq;
+        const g = audioCtx.createGain(); g.gain.value = 0.07;
+        o.connect(g); g.connect(masterGain);
+        o.start(); nodes.push(o);
+      });
+      const bell = audioCtx.createOscillator();
+      bell.type = 'triangle'; bell.frequency.value = 1047;
+      const bellG = audioCtx.createGain(); bellG.gain.value = 0;
+      bell.connect(bellG); bellG.connect(masterGain);
+      const bellFreqs = [1047, 1319, 1568];
+      for (let rep = 0; rep < 100; rep++) {
+        const t = now + rep * 3;
+        bellG.gain.setValueAtTime(0.05, t);
+        bellG.gain.exponentialRampToValueAtTime(0.001, t + 2);
+        bell.frequency.setValueAtTime(bellFreqs[rep % 3], t);
+      }
+      bell.start(); nodes.push(bell);
+      break;
+    }
+    case 'SWAMP': {
+      const drone = audioCtx.createOscillator();
+      drone.type = 'triangle'; drone.frequency.value = 55;
+      const droneG = audioCtx.createGain(); droneG.gain.value = 0.2;
+      drone.connect(droneG); droneG.connect(masterGain);
+      drone.start(); nodes.push(drone);
+
+      const eerie = audioCtx.createOscillator();
+      eerie.type = 'sine';
+      const eerieG = audioCtx.createGain(); eerieG.gain.value = 0.06;
+      const eerieF = audioCtx.createBiquadFilter();
+      eerieF.type = 'lowpass'; eerieF.frequency.value = 600;
+      eerie.connect(eerieF); eerieF.connect(eerieG); eerieG.connect(masterGain);
+      const wholeTone = [220, 246.9, 277.2, 311.1, 349.2, 392];
+      for (let rep = 0; rep < 60; rep++) {
+        for (let i = 0; i < wholeTone.length; i++) {
+          eerie.frequency.setValueAtTime(wholeTone[i], now + rep * wholeTone.length * 1.2 + i * 1.2);
+        }
+      }
+      eerie.start(); nodes.push(eerie);
+      break;
+    }
+    case 'SKY': {
+      [392, 493.9, 587.3, 784].forEach(function(freq) {
+        const o = audioCtx.createOscillator();
+        o.type = 'sine'; o.frequency.value = freq;
+        const g = audioCtx.createGain(); g.gain.value = 0.06;
+        o.connect(g); g.connect(masterGain);
+        o.start(); nodes.push(o);
+      });
+      const arp = audioCtx.createOscillator();
+      arp.type = 'triangle';
+      const arpG = audioCtx.createGain(); arpG.gain.value = 0;
+      arp.connect(arpG); arpG.connect(masterGain);
+      const arpNotes = [784, 988, 1175, 1568, 1175, 988];
+      for (let rep = 0; rep < 80; rep++) {
+        for (let i = 0; i < arpNotes.length; i++) {
+          const t = now + rep * arpNotes.length * 0.25 + i * 0.25;
+          arp.frequency.setValueAtTime(arpNotes[i], t);
+          arpG.gain.setValueAtTime(0.04, t);
+          arpG.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        }
+      }
+      arp.start(); nodes.push(arp);
+      break;
+    }
+  }
+
+  musicNodes = { nodes: nodes, masterGain: masterGain };
+}
+
+function stopMusic() {
+  if (musicNodes) {
+    const fadeTime = audioCtx ? audioCtx.currentTime + 0.5 : 0;
+    try {
+      musicNodes.masterGain.gain.linearRampToValueAtTime(0, fadeTime);
+      var capturedNodes = musicNodes;
+      setTimeout(function() {
+        if (capturedNodes) {
+          capturedNodes.nodes.forEach(function(n) { try { n.stop(); } catch(e) {} });
+        }
+      }, 600);
+      musicNodes = null;
+    } catch(e) {
+      musicNodes.nodes.forEach(function(n) { try { n.stop(); } catch(e2) {} });
+      musicNodes = null;
+    }
+  }
+  currentMusicTheme = null;
+}
+
+function updateMusicVolume() {
+  if (musicGain) musicGain.gain.value = musicVolume;
+  if (sfxGain) sfxGain.gain.value = sfxVolume;
 }
 
 function drawSpeakerIcon(x, y, size) {
@@ -630,6 +923,8 @@ function comboAction(points, type) {
   const bonus = points * G.comboMult;
   G.score += bonus; G.runScore += bonus;
   G.comboPulse = 0.3;
+  updateMissionProgress('scoreEarned', bonus);
+  updateMissionProgress('maxCombo', G.combo);
   return bonus;
 }
 function comboBreak() {
@@ -703,6 +998,193 @@ function updateStatsEndRun() {
   save.stats.longestRun = Math.max(save.stats.longestRun, Math.floor(G.time));
   persistSave();
   checkAchievements();
+  updateMissionProgress('runsCompleted', 1);
+}
+
+// ============================================================
+// MISSIONS SYSTEM
+// ============================================================
+const MISSION_TEMPLATES = {
+  daily: [
+    { id:'collect_gems', desc:'Collect {n} gems', targets:[30,50,75], reward:[10,15,25], stat:'gemsCollected' },
+    { id:'dash_count', desc:'Dash {n} times', targets:[15,25,40], reward:[10,15,20], stat:'dashesUsed' },
+    { id:'kill_enemies', desc:'Defeat {n} enemies', targets:[5,10,15], reward:[15,20,30], stat:'enemiesKilled' },
+    { id:'score_points', desc:'Score {n} points', targets:[2000,5000,10000], reward:[10,20,35], stat:'scoreEarned' },
+    { id:'complete_levels', desc:'Complete {n} levels', targets:[2,3,5], reward:[15,25,40], stat:'levelsCompleted' },
+    { id:'combo_reach', desc:'Reach {n}x combo', targets:[5,10,20], reward:[10,20,35], stat:'maxCombo' },
+    { id:'smash_obstacles', desc:'Smash {n} obstacles', targets:[10,20,30], reward:[10,15,25], stat:'obstaclesSmashed' },
+    { id:'slide_count', desc:'Slide {n} times', targets:[10,20,30], reward:[8,12,18], stat:'slidesUsed' },
+  ],
+  weekly: [
+    { id:'w_collect_gems', desc:'Collect {n} gems', targets:[200,350,500], reward:[50,75,120], stat:'gemsCollected' },
+    { id:'w_complete_levels', desc:'Complete {n} levels', targets:[10,15,25], reward:[60,90,150], stat:'levelsCompleted' },
+    { id:'w_score_points', desc:'Score {n} points', targets:[20000,50000,100000], reward:[50,100,175], stat:'scoreEarned' },
+    { id:'w_kill_enemies', desc:'Defeat {n} enemies', targets:[30,50,75], reward:[40,70,100], stat:'enemiesKilled' },
+    { id:'w_play_runs', desc:'Complete {n} runs', targets:[5,10,15], reward:[30,50,80], stat:'runsCompleted' },
+    { id:'w_stars', desc:'Earn {n} stars', targets:[5,10,20], reward:[40,75,125], stat:'starsEarned' },
+  ]
+};
+
+const missionProgress = {
+  gemsCollected: 0, dashesUsed: 0, enemiesKilled: 0, scoreEarned: 0,
+  levelsCompleted: 0, maxCombo: 0, obstaclesSmashed: 0, slidesUsed: 0,
+  runsCompleted: 0, starsEarned: 0
+};
+
+function _missionRng(seed) {
+  // Simple seeded RNG for mission generation
+  let s = seed;
+  return function(min, max) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return min + (s % (max - min + 1));
+  };
+}
+
+function generateMissions(type, count, seed) {
+  const rng = _missionRng(seed);
+  const templates = MISSION_TEMPLATES[type];
+  const picked = [];
+  const used = new Set();
+  for (let i = 0; i < count && i < templates.length; i++) {
+    let idx;
+    do { idx = rng(0, templates.length - 1); } while (used.has(idx) && used.size < templates.length);
+    used.add(idx);
+    const t = templates[idx];
+    const diff = rng(0, 2);
+    picked.push({
+      templateId: t.id,
+      desc: t.desc.replace('{n}', t.targets[diff]),
+      target: t.targets[diff],
+      reward: t.reward[diff],
+      stat: t.stat,
+      progress: 0,
+      claimed: false
+    });
+  }
+  return picked;
+}
+
+function checkMissionResets() {
+  const today = localDateStr(new Date());
+  if (!save.missions) save.missions = { daily: [], weekly: [], lastDailyReset: '', lastWeeklyReset: '' };
+
+  // Daily reset
+  if (save.missions.lastDailyReset !== today) {
+    let seed = 0;
+    for (let i = 0; i < today.length; i++) seed = ((seed << 5) - seed + today.charCodeAt(i)) | 0;
+    save.missions.daily = generateMissions('daily', 3, Math.abs(seed));
+    save.missions.lastDailyReset = today;
+    for (const k in missionProgress) missionProgress[k] = 0;
+    persistSave();
+  }
+
+  // Weekly reset (Monday)
+  const weekId = getWeekId();
+  if (save.missions.lastWeeklyReset !== weekId) {
+    let seed = 0;
+    for (let i = 0; i < weekId.length; i++) seed = ((seed << 5) - seed + weekId.charCodeAt(i)) | 0;
+    save.missions.weekly = generateMissions('weekly', 3, Math.abs(seed));
+    save.missions.lastWeeklyReset = weekId;
+    persistSave();
+  }
+
+  // Ensure progress fields exist
+  if (save.missions.daily) {
+    for (const m of save.missions.daily) { if (m.progress === undefined) m.progress = 0; }
+  }
+  if (save.missions.weekly) {
+    for (const m of save.missions.weekly) { if (m.progress === undefined) m.progress = 0; }
+  }
+}
+
+function getWeekId() {
+  const d = new Date();
+  const dayNum = d.getDay() || 7;
+  d.setDate(d.getDate() + 4 - dayNum);
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return d.getFullYear() + '-W' + weekNo;
+}
+
+function updateMissionProgress(stat, amount) {
+  if (!save.missions) return;
+  const allMissions = [...(save.missions.daily || []), ...(save.missions.weekly || [])];
+  for (const m of allMissions) {
+    if (m.stat === stat && !m.claimed) {
+      if (stat === 'maxCombo') {
+        // maxCombo is a high-water mark, not cumulative
+        m.progress = Math.max(m.progress || 0, amount);
+      } else {
+        m.progress = Math.min((m.progress || 0) + amount, m.target);
+      }
+    }
+  }
+  persistSave();
+}
+
+function claimMissionReward(mission) {
+  if (mission.claimed || mission.progress < mission.target) return false;
+  mission.claimed = true;
+  save.totalGems += mission.reward;
+  persistSave();
+  return true;
+}
+
+// ============================================================
+// TOOLTIP SYSTEM (Progressive onboarding)
+// ============================================================
+let activeTooltip = null;
+
+const TUTORIAL_TIPS = [
+  null,
+  { trigger: 'levelStart', text: 'Swipe UP to jump!', duration: 5 },
+  { trigger: 'levelStart', text: 'Swipe RIGHT to dash through enemies!', duration: 5 },
+  { trigger: 'levelStart', text: 'Swipe DOWN (air) to ground pound!', duration: 5 },
+  { trigger: 'levelStart', text: 'Chain Jump+Dash for LAUNCHER combo!', duration: 5 },
+  { trigger: 'bossStart', text: 'Boss fight! Dodge attacks & dash to damage!', duration: 5 },
+];
+
+function showTooltip(text, duration) {
+  activeTooltip = { text, life: duration || 4, maxLife: duration || 4 };
+}
+
+function updateTooltip(dt) {
+  if (!activeTooltip) return;
+  activeTooltip.life -= dt;
+  if (activeTooltip.life <= 0) activeTooltip = null;
+}
+
+function drawTooltip() {
+  if (!activeTooltip) return;
+  const u = UNIT;
+  const t = activeTooltip;
+  const alpha = t.life < 0.5 ? t.life * 2 : t.life > t.maxLife - 0.5 ? (t.maxLife - t.life) * 2 : 1;
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold ' + (u * 0.65) + 'px monospace';
+  const textW = ctx.measureText(t.text).width;
+  const padX = u * 0.8;
+  const bx = W / 2 - textW / 2 - padX;
+  const by = H * 0.12;
+  drawPanel(bx, by, textW + padX * 2, u * 1.2, {radius: u * 0.3, fill: 'rgba(0,0,0,0.8)', stroke: 'rgba(255,215,0,0.5)'});
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold ' + (u * 0.65) + 'px monospace'; ctx.fillStyle = '#FFD700';
+  ctx.fillText(t.text, W / 2, by + u * 0.6);
+  ctx.font = (u * 0.35) + 'px monospace'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('tap to dismiss', W / 2, by + u * 1.05);
+  ctx.globalAlpha = 1;
+}
+
+function triggerTutorialTip(level) {
+  if (!save.tutorialStage) save.tutorialStage = 0;
+  if (save.tutorialStage >= 5) return;
+  if (level <= 5 && save.tutorialStage < level) {
+    const tip = TUTORIAL_TIPS[level];
+    if (tip) {
+      showTooltip(tip.text, tip.duration);
+      save.tutorialStage = level;
+      persistSave();
+    }
+  }
 }
 
 // ============================================================
@@ -1282,6 +1764,7 @@ class Enemy {
       comboAction(50,'enemy_kill');
       G.score+=50; G.runScore+=50;
       G.announce={text:'ENEMY DOWN! +50',life:0.6};
+      updateMissionProgress('enemiesKilled', 1);
     }
   }
 
@@ -1452,6 +1935,7 @@ class Player {
       sfxSlide();
       G.lastAction={type:'slide',time:G.time};
       if(save.stats) save.stats.slidesUsed++;
+      updateMissionProgress('slidesUsed', 1);
       inp.down=false;
     }
     // Ground pound (down while airborne — also check buffer)
@@ -1496,6 +1980,7 @@ class Player {
       addTrauma(this._quakeRush ? 0.3 : 0.15);
       sfxDash();
       if(save.stats) save.stats.dashesUsed++;
+      updateMissionProgress('dashesUsed', 1);
       // Destroy nearby enemy projectiles on dash start
       for(const en of activeEnemies){
         for(let i=en.projectiles.length-1;i>=0;i--){
@@ -1544,6 +2029,7 @@ class Player {
           chunk.obstacles.splice(i,1);
           comboAction(25, 'pound_smash');
           if(save.stats) save.stats.obstaclesSmashed++;
+          updateMissionProgress('obstaclesSmashed', 1);
         }
       }
     }
@@ -1808,6 +2294,8 @@ function startLevel(levelNum) {
   G.phase='LEVEL_INTRO'; G.levelNum=levelNum;
   G.levelDef=getLevelDef(levelNum);
   G.theme=THEMES[G.levelDef.theme];
+  startMusic(G.levelDef.theme);
+  triggerTutorialTip(levelNum);
   G.introTimer=0;
   G.time=0; G.timeLeft=28; G.deathDelay=0;
   G.diff=getDiff(0,levelDiffMult(levelNum));
@@ -2027,6 +2515,7 @@ function checkCollisions(dt) {
         G.timeLeft=Math.min(G.timeLeft+(G.endless?3:5),99);
         comboAction(50, 'gem');
         sfxGem();
+        updateMissionProgress('gemsCollected', 1);
         // Heal 5 HP per gem
         if(p.hp<p.maxHP){p.hp=Math.min(p.hp+5,p.maxHP);}
         spawnGemFX(sx,sy,G.theme.gemH); addTrauma(.06);
@@ -2827,9 +3316,12 @@ function drawChar(p, mini) {
   const u = mini ? UNIT*.8 : UNIT;
   const ch = p.ch || CHARS[p.charIdx||0];
   const sc = ch.sc || 1;
+  const skin = getActiveSkin(p.charIdx !== undefined ? p.charIdx : (G.selectedChar || 0));
+  const skinCol = skin.col;
+  const skinDk = skin.dk;
   const dmgFlash = (p.hpFlash > 0 && Math.sin(p.hpFlash*30)>0);
-  const bodyCol = dmgFlash ? '#FF4444' : p.starTimer > 0 ? \`hsl(\${p.starHue},90%,62%)\` : ch.col;
-  const darkCol = dmgFlash ? '#CC2222' : p.starTimer > 0 ? \`hsl(\${p.starHue+20},85%,48%)\` : ch.dk;
+  const bodyCol = dmgFlash ? '#FF4444' : p.starTimer > 0 ? \`hsl(\${p.starHue},90%,62%)\` : skinCol;
+  const darkCol = dmgFlash ? '#CC2222' : p.starTimer > 0 ? \`hsl(\${p.starHue+20},85%,48%)\` : skinDk;
   const lightCol = dmgFlash ? '#FF8888' : p.starTimer > 0 ? \`hsl(\${p.starHue-10},95%,78%)\` : 'rgba(255,255,255,0.28)';
   const outlineCol = dmgFlash ? 'rgba(120,0,0,0.9)' : 'rgba(8,18,30,0.75)';
   const heroGlow = p.starTimer > 0 ? \`hsla(\${p.starHue},100%,70%,0.45)\` : 'rgba(120,220,255,0.18)';
@@ -3183,6 +3675,8 @@ function drawMenu(){
 
   // Speaker icon
   drawSpeakerIcon(UNIT*.35, UNIT*.35, UNIT*1.2);
+  // Settings gear (top-right of menu)
+  drawButton(W-u*2.5, u*0.3, u*2, u*1.5, '\\u2699',{fill:'rgba(255,255,255,0.08)',stroke:'rgba(255,255,255,0.2)',font:\`\${u*1}px sans-serif\`,textColor:'rgba(255,255,255,0.6)',radius:u*0.3});
 }
 
 function drawCharSelect(){
@@ -3384,7 +3878,13 @@ function drawDeathScreen(){
 
   // Progress saved notice
   ctx.font=\`\${u*.6}px monospace\`;ctx.fillStyle='rgba(255,170,0,0.8)';
-  ctx.fillText(\`Progress saved at Level \${G.levelNum}\`,W/2,H*.62);
+  ctx.fillText(\`Progress saved at Level \${G.levelNum}\`,W/2,H*.59);
+
+  // Watch Ad for 2x gems
+  if(adAvailable && G.runGems > 0 && !G._adGemsClaimed){
+    const adBtnW=u*7, adBtnH=u*1;
+    drawButton(W/2-adBtnW/2, H*.63, adBtnW, adBtnH, '\\u25B6 WATCH AD: 2x GEMS',{fill:'rgba(255,180,0,0.25)',stroke:'rgba(255,200,50,0.5)',textColor:'#FFD700',font:\`bold \${u*0.5}px monospace\`});
+  }
 
   // Cooldown timer or retry button
   const cdRemain = save.cooldownEnd - Date.now();
@@ -3430,11 +3930,12 @@ function drawPausedScreen(){
   drawButton(W/2-btnW/2,resY,btnW,btnH,'RESUME',{fill:'#22AA44',stroke:'#44DD66',font:\`bold \${u*1}px monospace\`});
 
   // Quit button (red)
-  const quitY=H*.62;
+  const quitY=H*.6;
   drawButton(W/2-btnW/2,quitY,btnW,btnH,'QUIT',{fill:'rgba(200,50,50,0.8)',stroke:'#FF4444',font:\`bold \${u*1}px monospace\`});
 
-  // Speaker icon
-  drawSpeakerIcon(W/2-u*.6, H*.78, u*1.2);
+  // Settings button
+  const setY=H*.76;
+  drawButton(W/2-btnW/2,setY,btnW,btnH*0.7,'\\u2699 SETTINGS',{fill:'rgba(100,100,130,0.5)',stroke:'rgba(255,255,255,0.3)',font:\`bold \${u*.65}px monospace\`,textColor:'rgba(255,255,255,0.7)'});
 }
 function handlePausedTap(){
   const tx=inp.tapX, ty=inp.tapY, u=UNIT;
@@ -3444,12 +3945,13 @@ function handlePausedTap(){
     G.phase='PLAYING'; sfxUITap(); return;
   }
   // Quit
-  if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>H*.62&&ty<H*.62+btnH){
+  if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>H*.6&&ty<H*.6+btnH){
     G.phase='LEVEL_MAP'; sfxUITap(); return;
   }
-  // Speaker toggle
-  if(checkSpeakerTap(tx,ty,W/2-u*.6,H*.78,u*1.2)){
-    soundMuted=!soundMuted; sfxUITap();
+  // Settings
+  const setY=H*.76;
+  if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>setY&&ty<setY+btnH*0.7){
+    G._settingsReturnPhase='PAUSED'; G.phase='SETTINGS'; sfxUITap(); return;
   }
 }
 
@@ -4071,9 +4573,15 @@ function drawContinuePrompt(dt){
   ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='white';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('CONTINUE',0,0);ctx.restore();
 
+  // Watch Ad for free continue (when out of continues, show ad option)
+  if(adAvailable && G.continuesLeft <= 1){
+    const adY=H*.65;
+    drawButton(W/2-btnW/2,adY,btnW,btnH*0.8,'\\u25B6 AD: +1 CONTINUE',{fill:'rgba(255,180,0,0.2)',stroke:'rgba(255,200,50,0.45)',textColor:'#FFD700',font:\`bold \${u*0.55}px monospace\`});
+  }
+
   // Give up button
-  const noY=H*.7;
-  drawButton(W/2-btnW/2,noY,btnW,btnH,'GIVE UP',{fill:'rgba(255,60,60,0.3)',stroke:'rgba(255,60,60,0.5)',lw:1,textColor:'rgba(255,255,255,0.7)',font:\`bold \${u*.8}px monospace\`});
+  const noY=H*.78;
+  drawButton(W/2-btnW/2,noY,btnW,btnH*0.8,'GIVE UP',{fill:'rgba(255,60,60,0.3)',stroke:'rgba(255,60,60,0.5)',lw:1,textColor:'rgba(255,255,255,0.7)',font:\`bold \${u*.7}px monospace\`});
 }
 function handleContinueTap(){
   const tx=inp.tapX, ty=inp.tapY, u=UNIT;
@@ -4100,12 +4608,263 @@ function handleContinueTap(){
     initBg();
     return;
   }
+  // Watch Ad for free continue
+  if(adAvailable && G.continuesLeft <= 1){
+    const adY=H*.65;
+    if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>adY&&ty<adY+btnH*0.8){
+      showRewardedAd('free_continue', function(){
+        G.continuesLeft++;
+        sfxGem();
+      });
+      return;
+    }
+  }
   // Give up button
-  const noY=H*.7;
-  if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>noY&&ty<noY+btnH){
+  const noY=H*.78;
+  if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>noY&&ty<noY+btnH*0.8){
     G.phase='DEAD';
   }
 }
+
+// ============================================================
+// SETTINGS SCREEN
+// ============================================================
+function drawSettingsScreen(dt) {
+  var u = UNIT;
+  ctx.fillStyle = '#0a1628'; ctx.fillRect(0, 0, W, H);
+  drawScreenFrame('SETTINGS', 'Customize your experience', {top: H * 0.04});
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  var panelX = W * 0.15, panelW = W * 0.7;
+  var startY = H * 0.18;
+  drawPanel(panelX, startY, panelW, H * 0.7, {radius: u * 0.5, fill: 'rgba(7,14,26,0.7)', stroke: 'rgba(255,255,255,0.12)'});
+
+  var sliderW = panelW * 0.5, sliderH = u * 0.35;
+  var sliderX = W * 0.48;
+
+  var musicY = startY + u * 1.5;
+  ctx.font = 'bold ' + (u * 0.6) + 'px monospace'; ctx.fillStyle = '#88CCFF'; ctx.textAlign = 'right';
+  ctx.fillText('Music', sliderX - u * 0.5, musicY);
+  fillRR(sliderX, musicY - sliderH / 2, sliderW, sliderH, sliderH / 2, 'rgba(255,255,255,0.15)', null, 0);
+  fillRR(sliderX, musicY - sliderH / 2, sliderW * musicVolume, sliderH, sliderH / 2, '#4caf50', null, 0);
+  var musicKnobX = sliderX + sliderW * musicVolume;
+  ctx.fillStyle = '#FFF'; ctx.beginPath(); ctx.arc(musicKnobX, musicY, u * 0.3, 0, PI2); ctx.fill();
+  ctx.textAlign = 'left'; ctx.font = (u * 0.5) + 'px monospace'; ctx.fillStyle = '#FFF';
+  ctx.fillText(Math.round(musicVolume * 100) + '%', sliderX + sliderW + u * 0.4, musicY);
+
+  var sfxY = musicY + u * 1.8;
+  ctx.font = 'bold ' + (u * 0.6) + 'px monospace'; ctx.fillStyle = '#88CCFF'; ctx.textAlign = 'right';
+  ctx.fillText('SFX', sliderX - u * 0.5, sfxY);
+  fillRR(sliderX, sfxY - sliderH / 2, sliderW, sliderH, sliderH / 2, 'rgba(255,255,255,0.15)', null, 0);
+  fillRR(sliderX, sfxY - sliderH / 2, sliderW * sfxVolume, sliderH, sliderH / 2, '#FF9800', null, 0);
+  var sfxKnobX = sliderX + sliderW * sfxVolume;
+  ctx.fillStyle = '#FFF'; ctx.beginPath(); ctx.arc(sfxKnobX, sfxY, u * 0.3, 0, PI2); ctx.fill();
+  ctx.textAlign = 'left'; ctx.font = (u * 0.5) + 'px monospace'; ctx.fillStyle = '#FFF';
+  ctx.fillText(Math.round(sfxVolume * 100) + '%', sliderX + sliderW + u * 0.4, sfxY);
+
+  var shakeY = sfxY + u * 1.8;
+  ctx.font = 'bold ' + (u * 0.6) + 'px monospace'; ctx.fillStyle = '#88CCFF'; ctx.textAlign = 'right';
+  ctx.fillText('Screen Shake', sliderX - u * 0.5, shakeY);
+  var togW = u * 2, togH = u * 0.7;
+  var togX = sliderX;
+  var shakeOn = save.screenShake !== false;
+  fillRR(togX, shakeY - togH / 2, togW, togH, togH / 2, shakeOn ? '#4caf50' : 'rgba(255,255,255,0.15)', null, 0);
+  var knobXS = shakeOn ? togX + togW - togH / 2 - u * 0.05 : togX + togH / 2 + u * 0.05;
+  ctx.fillStyle = '#FFF'; ctx.beginPath(); ctx.arc(knobXS, shakeY, togH / 2 - u * 0.05, 0, PI2); ctx.fill();
+  ctx.textAlign = 'left'; ctx.font = (u * 0.5) + 'px monospace'; ctx.fillStyle = '#FFF';
+  ctx.fillText(shakeOn ? 'ON' : 'OFF', togX + togW + u * 0.4, shakeY);
+
+  var privY = shakeY + u * 2.2;
+  ctx.textAlign = 'center'; ctx.font = (u * 0.5) + 'px monospace'; ctx.fillStyle = 'rgba(130,180,255,0.7)';
+  ctx.fillText('Privacy Policy', W / 2, privY);
+  var tw = ctx.measureText('Privacy Policy').width;
+  ctx.strokeStyle = 'rgba(130,180,255,0.4)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(W / 2 - tw / 2, privY + u * 0.2); ctx.lineTo(W / 2 + tw / 2, privY + u * 0.2); ctx.stroke();
+
+  ctx.font = (u * 0.4) + 'px monospace'; ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillText('v1.1.0', W / 2, privY + u * 1);
+
+  drawButton(W / 2 - u * 2.5, H * 0.88, u * 5, u * 1.2, 'BACK', {fill: 'rgba(60,60,80,0.7)', stroke: 'rgba(255,255,255,0.3)', font: 'bold ' + (u * 0.7) + 'px monospace'});
+
+  G._settingsSliders = {
+    musicY: musicY, sfxY: sfxY, shakeY: shakeY, sliderX: sliderX, sliderW: sliderW, sliderH: sliderH, togX: togX, togW: togW, togH: togH, privY: privY
+  };
+}
+
+function handleSettingsTap() {
+  var tx = inp.tapX, ty = inp.tapY, u = UNIT;
+  var s = G._settingsSliders;
+  if (!s) return;
+
+  if (Math.abs(ty - s.musicY) < u * 0.8 && tx >= s.sliderX && tx <= s.sliderX + s.sliderW) {
+    musicVolume = clamp((tx - s.sliderX) / s.sliderW, 0, 1);
+    save.musicVolume = musicVolume;
+    updateMusicVolume();
+    persistSave();
+    return;
+  }
+  if (Math.abs(ty - s.sfxY) < u * 0.8 && tx >= s.sliderX && tx <= s.sliderX + s.sliderW) {
+    sfxVolume = clamp((tx - s.sliderX) / s.sliderW, 0, 1);
+    save.sfxVolume = sfxVolume;
+    updateMusicVolume();
+    sfxUITap();
+    persistSave();
+    return;
+  }
+  if (Math.abs(ty - s.shakeY) < u * 0.6 && tx >= s.togX && tx <= s.togX + s.togW) {
+    save.screenShake = save.screenShake === false ? true : false;
+    persistSave();
+    sfxUITap();
+    return;
+  }
+  if (tx > W / 2 - u * 2.5 && tx < W / 2 + u * 2.5 && ty > H * 0.88 && ty < H * 0.88 + u * 1.2) {
+    G.phase = G._settingsReturnPhase || 'MENU';
+    sfxUITap();
+    return;
+  }
+}
+
+// ============================================================
+// MISSIONS SCREEN
+// ============================================================
+function drawMissionsScreen(dt) {
+  const u = UNIT;
+  ctx.fillStyle = '#0a1628'; ctx.fillRect(0, 0, W, H);
+  drawScreenFrame('MISSIONS', 'Complete missions for gem rewards!', {top: H * 0.02});
+  checkMissionResets();
+  const panelX = W * 0.05, panelW = W * 0.9;
+  let y = H * 0.14;
+
+  // Daily missions header
+  ctx.textAlign = 'left'; ctx.font = \`bold \${u * 0.65}px monospace\`; ctx.fillStyle = '#FFD700';
+  ctx.fillText('Daily Missions', panelX + u * 0.3, y + u * 0.4);
+  y += u * 0.8;
+  const daily = save.missions && save.missions.daily || [];
+  for (const m of daily) {
+    drawMissionCard(panelX, y, panelW, u * 1.2, m, u);
+    y += u * 1.4;
+  }
+  if (daily.length === 0) {
+    ctx.textAlign = 'center'; ctx.font = \`\${u * 0.5}px monospace\`; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText('No daily missions yet', W / 2, y + u * 0.3);
+    y += u * 0.8;
+  }
+
+  y += u * 0.3;
+  ctx.textAlign = 'left'; ctx.font = \`bold \${u * 0.65}px monospace\`; ctx.fillStyle = '#88CCFF';
+  ctx.fillText('Weekly Missions', panelX + u * 0.3, y + u * 0.4);
+  y += u * 0.8;
+  const weekly = save.missions && save.missions.weekly || [];
+  for (const m of weekly) {
+    drawMissionCard(panelX, y, panelW, u * 1.2, m, u);
+    y += u * 1.4;
+  }
+
+  // Back button
+  drawButton(W / 2 - u * 2.5, H * 0.9, u * 5, u * 1, 'BACK', {fill: 'rgba(60,60,80,0.7)', stroke: 'rgba(255,255,255,0.3)', font: \`bold \${u * 0.65}px monospace\`});
+  G._missionsLayout = { daily, weekly, panelX, panelW };
+}
+
+function drawMissionCard(x, y, w, h, mission, u) {
+  const done = mission.claimed;
+  const ready = !done && mission.progress >= mission.target;
+  drawPanel(x, y, w, h, {radius: u * 0.3,
+    fill: done ? 'rgba(40,80,40,0.5)' : ready ? 'rgba(80,60,20,0.6)' : 'rgba(7,14,26,0.6)',
+    stroke: done ? 'rgba(100,200,100,0.3)' : ready ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.12)'});
+
+  ctx.textAlign = 'left'; ctx.font = \`\${u * 0.45}px monospace\`;
+  ctx.fillStyle = done ? 'rgba(150,200,150,0.6)' : '#FFF';
+  ctx.fillText(mission.desc, x + u * 0.4, y + u * 0.35);
+
+  // Progress bar
+  const barX = x + u * 0.4, barY = y + h - u * 0.4, barW = w * 0.45, barH = u * 0.2;
+  fillRR(barX, barY, barW, barH, barH / 2, 'rgba(255,255,255,0.1)', null, 0);
+  const prog = clamp((mission.progress||0) / mission.target, 0, 1);
+  if (prog > 0) fillRR(barX, barY, barW * prog, barH, barH / 2, done ? '#4caf50' : ready ? '#FFD700' : '#2196F3', null, 0);
+
+  ctx.font = \`\${u * 0.32}px monospace\`; ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillText(\`\${Math.min(mission.progress||0, mission.target)}/\${mission.target}\`, barX + barW + u * 0.3, barY + barH * 0.8);
+
+  // Reward / Claim
+  const btnX = x + w - u * 3.2, btnW = u * 2.8, btnH = h - u * 0.4;
+  if (done) {
+    ctx.textAlign = 'center'; ctx.font = \`bold \${u * 0.45}px monospace\`; ctx.fillStyle = '#4caf50';
+    ctx.fillText('\\u2713 DONE', btnX + btnW / 2, y + h / 2);
+  } else if (ready) {
+    drawButton(btnX, y + u * 0.2, btnW, btnH, \`+\${mission.reward}g\`, {fill: 'rgba(255,215,0,0.3)', stroke: '#FFD700', font: \`bold \${u * 0.45}px monospace\`, textColor: '#FFD700'});
+  } else {
+    ctx.textAlign = 'center'; ctx.font = \`\${u * 0.4}px monospace\`; ctx.fillStyle = 'rgba(255,215,0,0.4)';
+    ctx.fillText(\`\${mission.reward}g\`, btnX + btnW / 2, y + h / 2);
+  }
+}
+
+function handleMissionsTap() {
+  const tx = inp.tapX, ty = inp.tapY, u = UNIT;
+  const panelX = W * 0.05, panelW = W * 0.9;
+
+  // Check daily claim buttons
+  let y = H * 0.14 + u * 0.8;
+  const daily = save.missions && save.missions.daily || [];
+  for (const m of daily) {
+    const btnX = panelX + panelW - u * 3.2;
+    if (!m.claimed && (m.progress||0) >= m.target && tx >= btnX && tx <= btnX + u * 2.8 && ty >= y && ty <= y + u * 1.2) {
+      claimMissionReward(m);
+      sfxGem();
+      return;
+    }
+    y += u * 1.4;
+  }
+  if (daily.length === 0) y += u * 0.8;
+
+  // Check weekly claim buttons
+  y += u * 1.1;
+  const weekly = save.missions && save.missions.weekly || [];
+  for (const m of weekly) {
+    const btnX = panelX + panelW - u * 3.2;
+    if (!m.claimed && (m.progress||0) >= m.target && tx >= btnX && tx <= btnX + u * 2.8 && ty >= y && ty <= y + u * 1.2) {
+      claimMissionReward(m);
+      sfxGem();
+      return;
+    }
+    y += u * 1.4;
+  }
+
+  // Back button
+  if (tx > W / 2 - u * 2.5 && tx < W / 2 + u * 2.5 && ty > H * 0.9 && ty < H * 0.9 + u * 1) {
+    G.phase = 'LEVEL_MAP'; sfxUITap();
+  }
+}
+
+// ============================================================
+// AD SYSTEM (WebView <-> React Native bridge)
+// ============================================================
+let adRewardPending = null;
+let adAvailable = true;
+
+function showRewardedAd(rewardType, callback) {
+  adRewardPending = { type: rewardType, callback };
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SHOW_REWARDED_AD', rewardType }));
+  } else {
+    // Dev fallback: auto-grant reward after brief delay
+    setTimeout(function() { grantAdReward(rewardType); }, 500);
+  }
+}
+
+function grantAdReward(rewardType) {
+  if (!adRewardPending) return;
+  const cb = adRewardPending.callback;
+  adRewardPending = null;
+  if (cb) cb();
+}
+
+window.addEventListener('message', function(e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (data.type === 'AD_REWARD_GRANTED') grantAdReward(data.rewardType);
+    else if (data.type === 'AD_NOT_AVAILABLE') { adAvailable = false; adRewardPending = null; }
+  } catch(ex) {}
+});
 
 // ============================================================
 // SPIN WHEEL
@@ -4582,6 +5341,15 @@ function drawLevelMap(dt) {
   const dcW=u*6, dcH=u*0.9, dcX=W/2-dcW/2, dcY=u*2.25;
   drawButton(dcX,dcY,dcW,dcH,dcDone?\`DAILY DONE (\${save.challengeBest})\`:'DAILY CHALLENGE',{fill:dcDone?'rgba(60,60,80,0.3)':'rgba(255,100,50,0.3)',stroke:dcDone?'rgba(80,80,100,0.3)':'rgba(255,120,60,0.6)',lw:1,textColor:dcDone?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)',font:\`bold \${u*.4}px monospace\`});
 
+  // Missions button (top-left, right of speaker)
+  const miW=u*4, miH=u*1, miX=u*2, miY=u*.3;
+  const unclaimedCount = (save.missions&&save.missions.daily||[]).filter(m=>!m.claimed&&m.progress>=m.target).length + (save.missions&&save.missions.weekly||[]).filter(m=>!m.claimed&&m.progress>=m.target).length;
+  drawButton(miX,miY,miW,miH,'MISSIONS'+(unclaimedCount>0?' !':''),{fill:unclaimedCount>0?'rgba(255,180,0,0.35)':'rgba(100,180,100,0.3)',stroke:unclaimedCount>0?'rgba(255,200,50,0.6)':'rgba(100,180,100,0.5)',lw:1,textColor:unclaimedCount>0?'#FFD700':'rgba(200,255,200,0.8)',font:\`bold \${u*.45}px monospace\`});
+
+  // Settings gear (top-left area)
+  const geX=u*6.5, geY=u*.3, geW=u*1.3, geH=u*1;
+  drawButton(geX,geY,geW,geH,'\\u2699',{fill:'rgba(255,255,255,0.1)',stroke:'rgba(255,255,255,0.25)',font:\`\${u*.8}px sans-serif\`,textColor:'rgba(255,255,255,0.7)',radius:u*0.3});
+
   // Speaker icon
   drawSpeakerIcon(u*.3, u*.3, u*1);
 }
@@ -4604,6 +5372,16 @@ function handleLevelMapTap() {
   const stW=u*3.5, stH=u*1, stX=W-stW-u*.5, stY=u*.3;
   if(tx>stX&&tx<stX+stW&&ty>stY&&ty<stY+stH){
     G.phase='STATS'; G.statsScrollY=0; G.statsTargetScrollY=0; sfxUITap(); return;
+  }
+  // Missions button
+  const miW=u*4, miH=u*1, miX=u*2, miY=u*.3;
+  if(tx>miX&&tx<miX+miW&&ty>miY&&ty<miY+miH){
+    G.phase='MISSIONS'; sfxUITap(); return;
+  }
+  // Settings gear
+  const geX=u*6.5, geY=u*.3, geW=u*1.3, geH=u*1;
+  if(tx>geX&&tx<geX+geW&&ty>geY&&ty<geY+geH){
+    G._settingsReturnPhase='LEVEL_MAP'; G.phase='SETTINGS'; sfxUITap(); return;
   }
   // Speaker toggle
   if(checkSpeakerTap(tx,ty,u*.3,u*.3,u*1)){
@@ -4705,6 +5483,20 @@ function handleDeadTap() {
   const tx=inp.tapX, ty=inp.tapY, u=UNIT;
   const btnW=u*8, btnH=u*1.4;
   const cdRemain = save.cooldownEnd - Date.now();
+
+  // Watch Ad for 2x gems
+  if(adAvailable && G.runGems > 0 && !G._adGemsClaimed){
+    const adBtnW=u*7, adBtnH=u*1;
+    if(tx>W/2-adBtnW/2&&tx<W/2+adBtnW/2&&ty>H*.63&&ty<H*.63+adBtnH){
+      showRewardedAd('double_gems', function(){
+        save.totalGems += G.runGems; // add another copy of runGems
+        G._adGemsClaimed = true;
+        persistSave();
+        sfxGem();
+      });
+      return;
+    }
+  }
 
   if (cdRemain > 0) {
     // "LEVEL MAP" button during cooldown
@@ -4860,7 +5652,7 @@ function loop(ts){
       ctx.fillStyle = '#888';
       ctx.fillText('Loading...', W/2, barY + barH + UNIT);
       ctx.globalAlpha = 1;
-      if (lt >= 1.5) { G.phase = 'MENU'; G.fadeAlpha = 0; }
+      if (lt >= 1.5) { G.phase = 'MENU'; G.fadeAlpha = 0; startMusic('JUNGLE'); }
       break;
     }
     case 'MENU':
@@ -4875,7 +5667,15 @@ function loop(ts){
           if (debugTapTimer > 0) { debugTapCount++; } else { debugTapCount = 1; }
           debugTapTimer = 0.5;
           if (debugTapCount >= 3) { debugMode = true; debugTapCount = 0; break; }
+          // Check settings gear in top-right even in title area
+          if(inp.tapX > W-UNIT*2.5 && inp.tapX < W-UNIT*0.5 && inp.tapY < UNIT*1.8){
+            G._settingsReturnPhase='MENU'; G.phase='SETTINGS'; sfxUITap(); break;
+          }
           break; // don't proceed to menu action on title taps
+        }
+        // Settings gear (top-right)
+        if(inp.tapX > W-UNIT*2.5 && inp.tapX < W-UNIT*0.5 && inp.tapY > UNIT*0.3 && inp.tapY < UNIT*1.8){
+          G._settingsReturnPhase='MENU'; G.phase='SETTINGS'; sfxUITap(); break;
         }
         // Check daily reward first
         if(checkDailyReward()){
@@ -4968,6 +5768,8 @@ function loop(ts){
         G.levelCompleteTimer=0;
         calculateLevelStars();
         sfxLevelComplete();
+        updateMissionProgress('levelsCompleted', 1);
+        updateMissionProgress('starsEarned', G._levelStarsEarned || 1);
         const timeBonus=Math.floor(G.timeLeft*10);
         G.score+=timeBonus; G.runScore+=timeBonus;
         if(G.levelNum>save.highestLevel){save.highestLevel=G.levelNum;persistSave();}
@@ -5005,6 +5807,27 @@ function loop(ts){
       }
 
       p.update(DT);
+      // Skin trail particles
+      if(p.alive){
+        const _skin = getActiveSkin(p.charIdx !== undefined ? p.charIdx : G.selectedChar);
+        if(_skin.trail){
+          p._skinTrailT = (p._skinTrailT||0)+DT;
+          if(p._skinTrailT>0.06){
+            p._skinTrailT=0;
+            const hb=p.hitbox;
+            const _px=hb.x+hb.w*0.3,_py=hb.y+hb.h*0.5;
+            let _tc='#FFF';
+            if(_skin.trail==='fire')_tc=Math.random()>.5?'#FF6600':'#FFAA00';
+            else if(_skin.trail==='ice')_tc=Math.random()>.5?'#88DDFF':'#FFFFFF';
+            else if(_skin.trail==='sparkle')_tc=Math.random()>.5?'#FFD700':'#FFFFFF';
+            else if(_skin.trail==='shadow')_tc=Math.random()>.5?'#554466':'#332244';
+            else if(_skin.trail==='spark')_tc='#FFFF44';
+            else if(_skin.trail==='leaf')_tc=Math.random()>.5?'#44AA22':'#88CC44';
+            else if(_skin.trail==='dust')_tc='#AA9988';
+            spawnParticle(_px,_py,(Math.random()-.5)*30-20,(Math.random()-.5)*40,_tc,0.4+Math.random()*0.3,UNIT*0.15);
+          }
+        }
+      }
       if(p.alive) checkCollisions(DT);
       for(let i=particles.length-1;i>=0;i--){particles[i].update(DT);if(!particles[i].alive){_particlePool.push(particles[i]);particles.splice(i,1);}}
 
@@ -5054,6 +5877,8 @@ function loop(ts){
       drawForeground();
       if(G.flashLife>0){G.flashLife-=DT;ctx.fillStyle=G.flashColor;ctx.globalAlpha=clamp(G.flashLife/.35,0,1);ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
       if(p.alive||G.deathDelay<1.9) drawHUD(DT);
+      updateTooltip(DT);
+      drawTooltip();
       if(G.phase==='DEAD') drawDeathScreen();
       break;
     }
@@ -5159,6 +5984,16 @@ function loop(ts){
       if(inp.tapped){inp.tapped=false;handleShopTap();}
       break;
 
+    case 'SETTINGS':
+      drawSettingsScreen(DT);
+      if(inp.tapped){inp.tapped=false;handleSettingsTap();}
+      break;
+
+    case 'MISSIONS':
+      drawMissionsScreen(DT);
+      if(inp.tapped){inp.tapped=false;handleMissionsTap();}
+      break;
+
     case 'LEVEL_COMPLETE':
       // Keep rendering world in bg
       drawBg(G.theme);
@@ -5190,6 +6025,7 @@ function loop(ts){
       break;
 
     case 'DEAD':
+      if(currentMusicTheme) stopMusic();
       drawBg(G.theme);drawDeathScreen();
       if(inp.tapped){inp.tapped=false;handleDeadTap();}
       break;
@@ -5220,6 +6056,7 @@ function loop(ts){
 // INIT
 // ============================================================
 loadSave();
+checkMissionResets();
 G.selectedChar=safeSelectedChar();
 resize();
 initBg();

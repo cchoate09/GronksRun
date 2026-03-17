@@ -746,6 +746,7 @@ class Boss {
     this.y = this.baseY + Math.sin(this.bobPhase) * UNIT * 0.5;
     this.bossTimer -= dt;
     if (this.flashTimer > 0) this.flashTimer -= dt;
+    if (this.lastAttackTimer > 0) this.lastAttackTimer -= dt;
 
     // Phase tracking based on HP percentage
     const hpPct = this.hp / this.maxHP;
@@ -807,6 +808,8 @@ class Boss {
     if(!atk) atk = this.attacks[this.attackIdx % this.attacks.length];
     const px = player.screenX, py = player.y;
     const sm = this.speedMult; // projectile speed scaling
+    this.lastAttack = atk;
+    this.lastAttackTimer = 1.1;
     switch (atk) {
       case 'ROCK_CLUSTER':
         for (let i = 0; i < 3; i++) this.projectiles.push({ x: this.x - UNIT, y: this.y + UNIT * (i - 1), vx: (-280 - i * 40)*sm, vy: (-80 + i * 30)*sm, grav: 300, life: 4, type: 'ROCK_P', trail:[] });
@@ -1094,6 +1097,7 @@ class Enemy {
             this.telegraphTimer -= dt;
             if (this.telegraphTimer <= 0) {
               this.telegraphing = false;
+              this.telegraphLabel='';
               this.projectiles.push({ x:sx-UNIT*1.2, y:this.sy-UNIT*1.5,
                 vx:-260, vy:-50-Math.random()*30, grav:180, life:4, type:'ROCK_P', trail:[] });
             }
@@ -1101,7 +1105,7 @@ class Enemy {
             this.fireCD += dt;
             if (this.fireCD >= this.fireInterval && sx < W*.88) {
               this.fireCD = 0; this.fireInterval = 2+Math.random()*2;
-              this.telegraphing = true; this.telegraphTimer = 0.5;
+              this.telegraphing = true; this.telegraphTimer = 0.5; this.telegraphLabel='ROCK THROW';
             }
           }
         }
@@ -1109,8 +1113,9 @@ class Enemy {
       }
       case 'CHARGER': {
         if (this.state==='WARN') {
+          this.telegraphLabel='STAMPEDE';
           this.timer+=dt;
-          if (this.timer>1.2) { this.state='CHARGE'; this.screenX=W+UNIT*2; this.fireCD=0; }
+          if (this.timer>1.2) { this.state='CHARGE'; this.screenX=W+UNIT*2; this.fireCD=0; this.telegraphLabel=''; }
         } else {
           this.screenX -= (speed+380)*dt;
           this.y = getGroundAt(this.screenX+worldOffset);
@@ -1136,6 +1141,7 @@ class Enemy {
           this.telegraphTimer -= dt;
           if (this.telegraphTimer <= 0) {
             this.telegraphing = false;
+            this.telegraphLabel='';
             const dx = psx - this.screenX, dy = (py-UNIT) - this.y;
             const d = Math.sqrt(dx*dx+dy*dy);
             const spd = 280;
@@ -1147,7 +1153,7 @@ class Enemy {
           this.fireCD = (this.fireCD||0) + dt;
           if (this.fireCD >= 0.9 && this.screenX < W*.9 && this.screenX > UNIT*2) {
             this.fireCD = 0;
-            this.telegraphing = true; this.telegraphTimer = 0.4;
+            this.telegraphing = true; this.telegraphTimer = 0.4; this.telegraphLabel='FEATHER SHOT';
           }
         }
         break;
@@ -1160,6 +1166,7 @@ class Enemy {
             this.telegraphTimer -= dt;
             if (this.telegraphTimer <= 0) {
               this.telegraphing = false;
+              this.telegraphLabel='';
               this.projectiles.push({ x:sx, y:this.sy,
                 vx:-160, vy:0, life:5, type:'SKULL', homing:true, trail:[] });
             }
@@ -1167,7 +1174,7 @@ class Enemy {
             this.fireCD += dt;
             if (this.fireCD >= this.fireInterval && sx < W*.85) {
               this.fireCD = 0; this.fireInterval = 1.8+Math.random()*1.5;
-              this.telegraphing = true; this.telegraphTimer = 0.6;
+              this.telegraphing = true; this.telegraphTimer = 0.6; this.telegraphLabel='CURSED SKULL';
             }
           }
         }
@@ -1181,6 +1188,7 @@ class Enemy {
             this.telegraphTimer -= dt;
             if (this.telegraphTimer <= 0) {
               this.telegraphing = false;
+              this.telegraphLabel='';
               if (this._golemAttackType === 'shockwave') {
                 this.projectiles.push({ x:sx-UNIT*1.5, y:GROUND_BASE-UNIT*.3,
                   vx:-420, vy:0, life:3, type:'SHOCKWAVE', grav:0, trail:[] });
@@ -1194,7 +1202,7 @@ class Enemy {
             if (this.fireCD >= this.fireInterval && sx < W*.9) {
               this.fireCD = 0; this.fireInterval = 2.5+Math.random()*1.5;
               this._golemAttackType = Math.random() < 0.5 ? 'shockwave' : 'boulder';
-              this.telegraphing = true; this.telegraphTimer = 0.8;
+              this.telegraphing = true; this.telegraphTimer = 0.8; this.telegraphLabel=this._golemAttackType === 'shockwave' ? 'GROUND BREAK' : 'BOULDER LOB';
             }
           }
         }
@@ -1207,6 +1215,7 @@ class Enemy {
           this.telegraphTimer -= dt;
           if (this.telegraphTimer <= 0) {
             this.telegraphing = false;
+            this.telegraphLabel='';
             this.projectiles.push({ x:this.screenX, y:this.y+UNIT*.5,
               vx:-30, vy:60, life:4, type:'BOMB', grav:500, trail:[] });
           }
@@ -1214,7 +1223,7 @@ class Enemy {
           this.fireCD += dt;
           if (this.fireCD >= this.fireInterval && this.screenX < W*.9 && this.screenX > UNIT*2) {
             this.fireCD = 0; this.fireInterval = 1.2+Math.random()*1;
-            this.telegraphing = true; this.telegraphTimer = 0.4;
+            this.telegraphing = true; this.telegraphTimer = 0.4; this.telegraphLabel='BOMB DROP';
           }
         }
         break;
@@ -1229,6 +1238,7 @@ class Enemy {
           this.telegraphTimer -= dt;
           if (this.telegraphTimer <= 0) {
             this.telegraphing = false;
+            this.telegraphLabel='';
             this.projectiles.push({ x:this.screenX-UNIT, y:this.y-UNIT*.5,
               vx:-200, vy:-120, life:3, type:'VENOM', grav:250, trail:[] });
           }
@@ -1237,7 +1247,7 @@ class Enemy {
           if (!this.fireInterval) this.fireInterval = 2+Math.random()*2;
           if (this.fireCD >= this.fireInterval && this.screenX < W*.85 && this.screenX > 0) {
             this.fireCD = 0; this.fireInterval = 2+Math.random()*1.5;
-            this.telegraphing = true; this.telegraphTimer = 0.5;
+            this.telegraphing = true; this.telegraphTimer = 0.5; this.telegraphLabel='VENOM SPIT';
           }
         }
         break;
@@ -2465,6 +2475,9 @@ function drawEnemies(){
         // Eyebrows (angry V)
         ctx.strokeStyle='#2a4a2a';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-u*.55,-u*2.1);ctx.lineTo(-u*.25,-u*2);ctx.stroke();
         ctx.beginPath();ctx.moveTo(u*.55,-u*2.1);ctx.lineTo(u*.25,-u*2);ctx.stroke();
+        // Shoulder plates for broader silhouette
+        ctx.fillStyle='rgba(25,60,25,0.85)';ctx.beginPath();ctx.ellipse(-u*.88,-u*1.28,u*.32,u*.24,-.4,0,PI2);ctx.fill();
+        ctx.beginPath();ctx.ellipse(u*.88,-u*1.28,u*.32,u*.24,.4,0,PI2);ctx.fill();
         break;
       }
       case 'CHARGER':{
@@ -2501,6 +2514,10 @@ function drawEnemies(){
         // Tail
         ctx.strokeStyle='#CC8833';ctx.lineWidth=u*.15;ctx.lineCap='round';
         ctx.beginPath();ctx.moveTo(u*1.1,-u*.9);ctx.quadraticCurveTo(u*1.6,-u*1.8,u*1.3,-u*1.5);ctx.stroke();
+        // Mane ridge + back stripe for clearer forward read
+        ctx.strokeStyle='rgba(90,40,10,0.75)';ctx.lineWidth=u*.12;
+        ctx.beginPath();ctx.moveTo(-u*.9,-u*1.25);ctx.quadraticCurveTo(0,-u*1.55,u*.95,-u*1.2);ctx.stroke();
+        ctx.fillStyle='rgba(255,220,150,0.18)';ctx.beginPath();ctx.ellipse(-u*.55,-u*1.1,u*.34,u*.16,-.2,0,PI2);ctx.fill();
         break;
       }
       case 'DIVER':{
@@ -2523,6 +2540,10 @@ function drawEnemies(){
         ctx.fillStyle='#cc8800';ctx.beginPath();ctx.moveTo(-u*1,-u*.15);ctx.lineTo(-u*1.6,0);ctx.lineTo(-u*1,-u*.05);ctx.fill();
         // Eye
         ctx.fillStyle='#ff0';ctx.beginPath();ctx.arc(-u*.75,-u*.25,u*.08,0,PI2);ctx.fill();
+        // Wing tips / belly stripe for silhouette clarity
+        ctx.strokeStyle='rgba(255,235,180,0.34)';ctx.lineWidth=1.4;
+        ctx.beginPath();ctx.moveTo(-u*1.5,u*.08);ctx.lineTo(-u*1.95,u*.28);ctx.moveTo(u*1.48,u*.1);ctx.lineTo(u*1.92,u*.3);ctx.stroke();
+        ctx.fillStyle='rgba(245,210,150,0.24)';ctx.beginPath();ctx.ellipse(-u*.1,u*.08,u*.28,u*.12,0,0,PI2);ctx.fill();
         break;
       }
       case 'WITCH':{
@@ -2548,6 +2569,9 @@ function drawEnemies(){
         // Orb on staff
         ctx.fillStyle='#aa00ff';ctx.shadowColor='#aa00ff';ctx.shadowBlur=8;
         ctx.beginPath();ctx.arc(u*.55,-u*.6,u*.18,0,PI2);ctx.fill();ctx.shadowBlur=0;
+        // Hem trim for stronger robe read
+        ctx.strokeStyle='rgba(210,120,255,0.45)';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(-u*.55,u*.35);ctx.lineTo(0,u*.45);ctx.lineTo(u*.55,u*.35);ctx.stroke();
         break;
       }
       case 'GOLEM':{
@@ -2573,6 +2597,8 @@ function drawEnemies(){
         // Mouth (angry)
         ctx.strokeStyle='#ff4400';ctx.lineWidth=u*.08;ctx.beginPath();
         ctx.moveTo(-u*.3,-u*1.7);ctx.lineTo(-u*.1,-u*1.5);ctx.lineTo(u*.1,-u*1.7);ctx.lineTo(u*.3,-u*1.5);ctx.stroke();
+        // Shoulder embers for stronger shape separation
+        ctx.fillStyle='rgba(255,120,0,0.3)';ctx.beginPath();ctx.arc(-u*.72,-u*2.05,u*.12,0,PI2);ctx.arc(u*.72,-u*2.05,u*.12,0,PI2);ctx.fill();
         break;
       }
       case 'BOMBER':{
@@ -2595,6 +2621,8 @@ function drawEnemies(){
         ctx.fillStyle='#ff0';ctx.beginPath();ctx.arc(-u*.5,-u*.1,u*.1,0,PI2);ctx.fill();
         // Tail
         ctx.fillStyle='#6a3a1a';ctx.beginPath();ctx.moveTo(u*.7,0);ctx.lineTo(u*1.4,-u*.4);ctx.lineTo(u*1.4,u*.2);ctx.closePath();ctx.fill();
+        // Belly plate + bomb stripe
+        ctx.strokeStyle='rgba(255,220,140,0.38)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-u*.2,u*.18);ctx.lineTo(u*.28,u*.18);ctx.stroke();
         break;
       }
       case 'SERPENT':{
@@ -2618,6 +2646,9 @@ function drawEnemies(){
         // Forked tongue
         ctx.strokeStyle='#ff3366';ctx.lineWidth=2;ctx.beginPath();
         ctx.moveTo(-u*.75,-u*.4);ctx.lineTo(-u*1.1,-u*.5);ctx.moveTo(-u*.9,-u*.42);ctx.lineTo(-u*1.1,-u*.3);ctx.stroke();
+        // Dorsal spots to help body segments read
+        ctx.fillStyle='rgba(180,255,120,0.22)';
+        for(let i=1;i<5;i++){ctx.beginPath();ctx.arc(i*u*.48,Math.sin(en.slitherPhase+i*1.2)*u*.3-u*.55,u*.08,0,PI2);ctx.fill();}
         break;
       }
     }
@@ -2678,6 +2709,14 @@ function drawEnemies(){
           }
           break;
         }
+      }
+      if(en.telegraphLabel){
+        const lx=en.type==='DIVER'||en.type==='BOMBER'||en.type==='SERPENT'||en.type==='CHARGER'?en.screenX:sx;
+        const ly=en.type==='CHARGER'?GROUND_BASE-UNIT*4.1:en.type==='DIVER'||en.type==='BOMBER'?en.y-UNIT*1.45:en.type==='SERPENT'?en.y-UNIT*1.4:sy-UNIT*2.9;
+        const labelW=Math.max(UNIT*2.6,en.telegraphLabel.length*UNIT*.33),labelH=UNIT*.48;
+        drawPanel(lx-labelW/2,ly-labelH/2,labelW,labelH,{radius:UNIT*.16,fill:'rgba(34,8,8,0.8)',stroke:'rgba(255,150,110,0.32)',glow:'rgba(255,90,60,0.18)',glowWidth:UNIT*.08,highlight:false});
+        ctx.font=\`bold \${UNIT*.25}px monospace\`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgba(255,235,210,0.92)';
+        ctx.fillText(en.telegraphLabel.toUpperCase(),lx,ly+1);
       }
       ctx.restore();
     }
@@ -3487,6 +3526,12 @@ function drawBossHPBar(){
 function drawBoss(){
   if(!boss)return;
   const u=UNIT;
+  const bossAttackLabels={
+    ROCK_CLUSTER:'ROCK CLUSTER', GROUND_POUND:'GROUND POUND', BOULDER_RAIN:'BOULDER RAIN', FIRE_BEAM:'FIRE BEAM',
+    ICE_SHARD:'ICE SHARD', ICE_PILLAR:'ICE PILLAR', HOMING_SKULLS:'HOMING SKULLS', POISON_CLOUD:'POISON CLOUD',
+    SWOOP:'SWOOP', FEATHER_STORM:'FEATHER STORM', VINE_ERUPTION:'VINE ERUPTION', MAGMA_POOL:'MAGMA POOL',
+    FROST_CONE:'FROST CONE', SHADOW_BURST:'SHADOW BURST', DIVE_BOMB:'DIVE BOMB'
+  };
   ctx.save();ctx.translate(boss.x, boss.y);
   // Phase visual effects
   if(boss.bossPhase===2){
@@ -3698,6 +3743,14 @@ function drawBoss(){
     ctx.font=\`bold \${u*.42}px monospace\`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#FFD9B8';
     ctx.fillText('BOSS WIND-UP',boss.x,by+bannerH/2);
   }
+  if(boss.lastAttack && boss.lastAttackTimer>0){
+    const pulse=0.6+Math.sin(G.time*10)*0.4;
+    const label=bossAttackLabels[boss.lastAttack]||boss.lastAttack;
+    const bw=Math.max(u*4.8,label.length*u*.33),bh=u*.72,bx=W/2-bw/2,by=u*3.3;
+    drawPanel(bx,by,bw,bh,{radius:u*.24,fill:\`rgba(34,8,8,\${0.72+0.08*pulse})\`,stroke:'rgba(255,170,120,0.42)',glow:'rgba(255,100,70,0.18)',glowWidth:u*.1,highlight:false});
+    ctx.font=\`bold \${u*.38}px monospace\`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgba(255,238,220,0.96)';
+    ctx.fillText(label,W/2,by+bh/2+1);
+  }
 
   // Draw boss projectiles
   for(const pr of boss.projectiles){
@@ -3769,6 +3822,7 @@ function checkBossCollisions(dt){
     else if(pr.type==='ICE_PILLAR') prHB={x:pr.x-UNIT*.25,y:pr.y-UNIT*2,w:UNIT*.5,h:UNIT*2};
     else if(pr.type==='POISON_CLOUD') prHB={x:pr.x-(pr.r||UNIT*2),y:pr.y-(pr.r||UNIT*2),w:(pr.r||UNIT*2)*2,h:(pr.r||UNIT*2)*2};
     else if(pr.type==='SWOOP_TRAIL') prHB={x:pr.x-UNIT,y:pr.y-UNIT*.3,w:UNIT*2,h:UNIT*.6};
+    else if(pr.type==='MAGMA_POOL') prHB={x:pr.x-(pr.r||UNIT*2.5),y:pr.y-UNIT*.35,w:(pr.r||UNIT*2.5)*2,h:UNIT*.7};
     else prHB={x:pr.x-UNIT*.4,y:pr.y-UNIT*.4,w:UNIT*.8,h:UNIT*.8};
     if(pr.homing){
       const dx=p.screenX-pr.x, dy=(p.y-UNIT)-pr.y;

@@ -60,15 +60,23 @@ window._diag = document.getElementById('diag');
 window.diagLog = function(msg) {
   if (window._diag) { window._diag.style.display = 'block'; window._diag.innerHTML += msg + '<br>'; }
 };
-window.diagLog('Diagnostic Script Loaded - v1.1.3');
+window.diagLog('Diag v1.2.0 loaded');
 document.title = 'DIAG_LOADED';
 window.onerror = function(msg, url, line, col, err) {
   window.diagLog('<span style="color:red">ERROR line ' + line + ': ' + msg + '</span>');
   return false;
 };
+// Fallback: if main script never loads, show diagnostic after 3s
+window._mainScriptLoaded = false;
+setTimeout(function() {
+  if (!window._mainScriptLoaded) {
+    window.diagLog('<span style="color:orange">WARN: Main script did not load after 3s</span>');
+  }
+}, 3000);
 </script>
 <script>
 'use strict';
+window._mainScriptLoaded = true;
 window.diagLog('Main Script Parsing Start...');
 
 // ============================================================

@@ -52,8 +52,24 @@
   <span>&#8635;</span>
   Rotate for best experience!
 </div>
+<div id="diag" style="position:fixed;bottom:0;left:0;right:0;padding:8px;background:rgba(0,0,0,0.85);color:#0f0;font:11px monospace;z-index:9999;max-height:40%;overflow:auto;display:none"></div>
 <script>
 'use strict';
+// DIAGNOSTIC: catch errors including SyntaxErrors from the main script
+window._diag = document.getElementById('diag');
+window.diagLog = function(msg) {
+  if (window._diag) { window._diag.style.display = 'block'; window._diag.innerHTML += msg + '<br>'; }
+};
+window.diagLog('Diagnostic Script Loaded - v1.1.3');
+document.title = 'DIAG_LOADED';
+window.onerror = function(msg, url, line, col, err) {
+  window.diagLog('<span style="color:red">ERROR line ' + line + ': ' + msg + '</span>');
+  return false;
+};
+</script>
+<script>
+'use strict';
+window.diagLog('Main Script Parsing Start...');
 
 // ============================================================
 // CANVAS
@@ -522,12 +538,12 @@ class Particle {
   constructor(x, y, c) { this.init(x, y, c); }
   init(x, y, c) {
     this.x = x; this.y = y;
-    this.vx = c.vx ?? (Math.random()-.5)*280;
-    this.vy = c.vy ?? -(Math.random()*180+80);
-    this.grav = c.grav ?? 550;
-    this.life = 1; this.decay = c.decay ?? 1.8;
-    this.r = c.r ?? UNIT*.28; this.color = c.color ?? '#FFD700';
-    this.sq = c.sq ?? false;
+    this.vx = c.vx !== undefined ? c.vx : (Math.random()-.5)*280;
+    this.vy = c.vy !== undefined ? c.vy : -(Math.random()*180+80);
+    this.grav = c.grav !== undefined ? c.grav : 550;
+    this.life = 1; this.decay = c.decay !== undefined ? c.decay : 1.8;
+    this.r = c.r !== undefined ? c.r : UNIT*.28; this.color = c.color !== undefined ? c.color : '#FFD700';
+    this.sq = c.sq !== undefined ? c.sq : false;
     return this;
   }
   update(dt) { this.x+=this.vx*dt; this.y+=this.vy*dt; this.vy+=this.grav*dt; this.life-=this.decay*dt; }
@@ -3422,7 +3438,7 @@ function drawChar(p, mini) {
   ctx.ellipse(u*.3,-u*1.28,u*.29*eyeScale,u*.33*eyeScale,0,0,PI2);ctx.fill();
   // Pupils
   ctx.fillStyle='#1a1a30';
-  const el=(!mini&&p.onGround)?.08:0;
+  const el=(!mini&&p.onGround) ? 0.08 : 0;
   ctx.beginPath();ctx.ellipse(-u*.2+u*el,-u*1.28,u*.17,u*.21,0,0,PI2);
   ctx.ellipse(u*.4+u*el,-u*1.28,u*.17,u*.21,0,0,PI2);ctx.fill();
   // Shine
@@ -5614,6 +5630,9 @@ function loop(ts){
   try{
   const raw=(ts-lastT)/1000; lastT=ts;
   DT=Math.min(raw,.05);
+  if(!window._loopCount){window._loopCount=0;}
+  window._loopCount++;
+  if(window._loopCount<=3) diagLog('LOOP #'+window._loopCount+' phase='+G.phase+' W='+W+' H='+H);
   // Safety: reset canvas state every frame to prevent leaks
   ctx.globalAlpha=1;
   ctx.globalCompositeOperation='source-over';
@@ -6055,12 +6074,19 @@ function loop(ts){
 // ============================================================
 // INIT
 // ============================================================
+diagLog('INIT: loadSave...');
 loadSave();
+diagLog('INIT: checkMissionResets...');
 checkMissionResets();
+diagLog('INIT: safeSelectedChar...');
 G.selectedChar=safeSelectedChar();
+diagLog('INIT: resize W=' + window.innerWidth + ' H=' + window.innerHeight);
 resize();
+diagLog('INIT: canvas=' + W + 'x' + H + ' UNIT=' + UNIT);
 initBg();
+diagLog('INIT: starting loop, phase=' + G.phase);
 requestAnimationFrame(loop);
+window.diagLog('Main Script Execution Reached End.');
 </script>
 </body>
 </html>

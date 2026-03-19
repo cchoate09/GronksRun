@@ -82,9 +82,9 @@ function rebuildFonts(u) {
 function lightenColor(hex, amount) {
   hex = hex.replace('#','');
   if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-  const r = Math.min(255, parseInt(hex.substring(0,2),16) + amount);
-  const g = Math.min(255, parseInt(hex.substring(2,4),16) + amount);
-  const b = Math.min(255, parseInt(hex.substring(4,6),16) + amount);
+  const r = Math.max(0, Math.min(255, parseInt(hex.substring(0,2),16) + amount));
+  const g = Math.max(0, Math.min(255, parseInt(hex.substring(2,4),16) + amount));
+  const b = Math.max(0, Math.min(255, parseInt(hex.substring(4,6),16) + amount));
   return '#' + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
 }
 function darkenColor(hex, amount) { return lightenColor(hex, -amount); }

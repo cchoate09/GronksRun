@@ -29,7 +29,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-screen-orientation"
+      "expo-screen-orientation",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-8879184280264151~8722286751"
+        }
+      ]
     ],
     "extra": {
       "eas": {

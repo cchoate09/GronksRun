@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, Component } from 'react';
-import { View, StyleSheet, BackHandler, Text } from 'react-native';
+import { View, StyleSheet, BackHandler, Text, Vibration } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -165,6 +165,20 @@ function GameApp() {
       } else if (msg.type === 'exitApp') {
         // Game sent exit request (back button at main menu)
         BackHandler.exitApp();
+      } else if (msg.type === 'haptic') {
+        // Vibration feedback from game events
+        const p = msg.pattern;
+        if (Array.isArray(p)) {
+          Vibration.vibrate(p);
+        } else if (p === 'light') {
+          Vibration.vibrate(10);
+        } else if (p === 'medium') {
+          Vibration.vibrate(25);
+        } else if (p === 'heavy') {
+          Vibration.vibrate(50);
+        } else {
+          Vibration.vibrate(15);
+        }
       }
     } catch (e) {
       console.log('Message parse error:', e);

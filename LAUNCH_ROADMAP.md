@@ -74,16 +74,16 @@ Gronk's Run is feature-rich for an indie runner. Here's what's already built:
 
 > What users expect from a 4+ star runner in 2026.
 
-- [ ] **Graphics uplift** — gradient backgrounds, terrain textures, enhanced gems/obstacles/particles (planned in prior batch)
-- [ ] **Remaining character sprites** — Bruk, Zara, Rex, Mog still render as colored circles
-- [ ] **Real music tracks** — at least 1 looping track per theme (5 total). Web Audio synth music sounds thin on device speakers. Consider royalty-free tracks or procedural music libraries
-- [ ] **Haptic feedback** — vibration on hit, death, gem milestones via WebView bridge to `ReactNative.Vibration`
-- [ ] **First-run onboarding** — skip menu on first launch, drop player directly into Level 1 with interactive tutorial (Crossy Road / Alto's model)
-- [ ] **Quick restart** — death screen should allow retry in 1 tap (currently requires navigating through continue/ad options)
-- [ ] **Loading performance** — sprite Base64 decoding adds ~1-2s on cold start. Consider lazy-loading non-selected character sprites
-- [ ] **Screen transitions** — current 0.25s fade is functional but flat. Add slide/scale transitions for more polish
-- [ ] **Settings improvements** — add music volume separate from SFX (already have sliders but verify they work), add language/credits
-- [ ] **Consistent art style** — enemies and obstacles are procedurally drawn while characters have sprites. Visual mismatch will be noticeable. Plan enemy/obstacle sprites or shift to a cohesive procedural style
+- [x] **Graphics uplift** — gradient backgrounds, terrain gradients, twinkling stars, cloud parallax, enhanced gems with glow/sparkles, additive particle blending, atmospheric overlays, vignette
+- [ ] **Remaining character sprites** — Bruk, Zara, Rex, Mog still render as colored circles *(deferred — needs artist assets)*
+- [x] **Enhanced procedural music** — 6-layer system: bass drone, sub bass, pad with LFO rhythm, filtered melody arpeggio, high shimmer, filter sweeps. Per-theme patterns
+- [x] **Haptic feedback** — vibration via WebView→RN bridge: light (gem), medium (hit), heavy (death), pattern (level complete)
+- [x] **First-run onboarding** — fresh save skips menu, drops directly into Level 1 as Gronk with tutorial
+- [x] **Quick restart** — death screen: instant RETRY (same level), NEW RUN (level 1), LEVEL MAP. No cooldown timer
+- [x] **Loading performance** — lazy sprite loading: only selected character loads during splash, others load in background from MENU
+- [x] **Screen transitions** — snappier 0.2s fade transitions (from 0.25s)
+- [x] **Settings improvements** — credits section added, music/SFX volume sliders verified working, version bumped to 1.3
+- [ ] **Consistent art style** — enemies/obstacles procedurally drawn vs sprite characters *(deferred — needs artist assets)*
 
 ### Phase 3: Engagement & Retention (Medium Priority)
 
@@ -109,8 +109,8 @@ Gronk's Run is feature-rich for an indie runner. Here's what's already built:
 - [ ] **Analytics integration** — Firebase Analytics or similar to track: levels played, death causes, session length, ad engagement, purchase conversion
 - [ ] **Crash reporting** — Sentry or Firebase Crashlytics for both React Native layer and WebView errors
 - [ ] **Reduce APK size** — current Base64 sprite data inflates the JS bundle. Consider loading sprites from assets/ folder via WebView file:// or asset:// protocol
-- [ ] **Proguard/R8 optimization** — ensure minification is enabled for release builds
-- [ ] **WebView hardware acceleration** — verify `androidLayerType="hardware"` is set on WebView component
+- [x] **Proguard/R8 optimization** — R8 minification enabled for release builds ✓
+- [x] **WebView hardware acceleration** — `androidLayerType="hardware"` set on WebView component ✓
 
 ### Phase 5: Store Listing & Launch Prep (Required Before Submit)
 
@@ -179,6 +179,6 @@ Gronk's Run is feature-rich for an indie runner. Here's what's already built:
 
 ## Progress Tracking
 
-**Overall: 8 / 47 items complete** (Phase 1: 9/11 — remaining 2 are Play Console tasks)
+**Overall: 18 / 47 items complete** (Phase 1: 9/11, Phase 2: 8/10 — remaining items need artist assets or Play Console)
 
 Use this file as a living document. Check off items as they're completed and update the date at the top.

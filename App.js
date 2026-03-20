@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { useEffect, useRef, useCallback, Component } from 'react';
+import { View, StyleSheet, BackHandler, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -20,7 +20,49 @@ const rewardedInterstitial = RewardedInterstitialAd.createForAdRequest(AD_UNIT_I
   requestNonPersonalizedAdsOnly: true,
 });
 
-export default function App() {
+// ============================================================
+// Error Boundary — catches React Native crashes and shows
+// a recovery screen instead of a white screen
+// ============================================================
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('App crash caught by ErrorBoundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorMessage}>
+            {this.state.error?.message || 'Unknown error'}
+          </Text>
+          <Text
+            style={styles.errorRetry}
+            onPress={() => this.setState({ hasError: false, error: null })}
+          >
+            TAP TO RETRY
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ============================================================
+// Main App Component
+// ============================================================
+function GameApp() {
   const webViewRef = useRef(null);
   const adLoadedRef = useRef(false);
   const pendingRewardType = useRef(null);
@@ -46,6 +88,12 @@ export default function App() {
     ScreenOrientation.lockAsync(
       ScreenOrientation.OrientationLock.LANDSCAPE
     );
+
+    // Android hardware back button — forward to WebView game
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      sendToGame('backButton', {});
+      return true; // prevent default (app exit)
+    });
 
     // Ad event listeners
     const onAdLoaded = rewardedInterstitial.addAdEventListener(
@@ -92,6 +140,7 @@ export default function App() {
     loadAd();
 
     return () => {
+      backHandler.remove();
       onAdLoaded();
       onAdEarned();
       onAdClosed();
@@ -113,6 +162,9 @@ export default function App() {
         }
       } else if (msg.type === 'checkAd') {
         sendToGame('adReady', { ready: adLoadedRef.current });
+      } else if (msg.type === 'exitApp') {
+        // Game sent exit request (back button at main menu)
+        BackHandler.exitApp();
       }
     } catch (e) {
       console.log('Message parse error:', e);
@@ -139,8 +191,30 @@ export default function App() {
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
         onMessage={onMessage}
+        androidLayerType="hardware"
+        onError={(syntheticEvent) => {
+          console.log('WebView error:', syntheticEvent.nativeEvent);
+        }}
+        onRenderProcessGone={(syntheticEvent) => {
+          console.log('WebView process gone:', syntheticEvent.nativeEvent);
+          // WebView crashed — reload it
+          if (webViewRef.current) {
+            webViewRef.current.reload();
+          }
+        }}
       />
     </View>
+  );
+}
+
+// ============================================================
+// Export wrapped in ErrorBoundary
+// ============================================================
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <GameApp />
+    </ErrorBoundary>
   );
 }
 
@@ -152,5 +226,34 @@ const styles = StyleSheet.create({
   webview: {
     flex: 1,
     backgroundColor: '#0a1628',
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#0a1628',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  errorTitle: {
+    color: '#FF6644',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  errorMessage: {
+    color: '#AABBCC',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 32,
+    fontFamily: 'monospace',
+  },
+  errorRetry: {
+    color: '#44DD66',
+    fontSize: 20,
+    fontWeight: 'bold',
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#44DD66',
+    borderRadius: 8,
   },
 });

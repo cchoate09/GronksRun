@@ -667,12 +667,29 @@ function updateShake(dt) {
 // ============================================================
 // AD BRIDGE (WebView <-> React Native)
 // ============================================================
+let isOnline = navigator.onLine !== false; // assume online unless explicitly offline
+window.addEventListener('online', function(){ isOnline = true; checkAdReady(); });
+window.addEventListener('offline', function(){ isOnline = false; adReady = false; });
 let adReady = false;
 let adPendingReward = null; // 'continue' or 'doubleGems'
 let adDoubleGemsUsed = false; // only allow once per run
+let adDeathCount = 0; // deaths since last ad shown
+let adLastShownTime = 0; // timestamp of last ad shown
+const AD_DEATH_INTERVAL = 3; // show ads every Nth death at most
+const AD_COOLDOWN_MS = 60000; // minimum 60s between ads
 
+function canShowAd() {
+  if (!isOnline) return false;
+  // Frequency gate: only offer ads every Nth death and after cooldown
+  const now = Date.now();
+  if (adDeathCount < AD_DEATH_INTERVAL && adLastShownTime > 0) return false;
+  if (now - adLastShownTime < AD_COOLDOWN_MS && adLastShownTime > 0) return false;
+  return true;
+}
 function requestAd(rewardType) {
   adPendingReward = rewardType;
+  adLastShownTime = Date.now();
+  adDeathCount = 0; // reset counter when ad is shown
   if (window.ReactNativeWebView) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ type:'showAd', rewardType:rewardType }));
   }
@@ -699,6 +716,8 @@ window.addEventListener('message', function(e) {
       adReady = false;
     } else if (msg.type === 'adClosed') {
       // Ad closed, next one loading
+    } else if (msg.type === 'backButton') {
+      handleBackButton();
     }
   } catch(ex) {}
 });
@@ -716,6 +735,8 @@ document.addEventListener('message', function(e) {
       }
     } else if (msg.type === 'adNotReady' || msg.type === 'adError') {
       adReady = false;
+    } else if (msg.type === 'backButton') {
+      handleBackButton();
     }
   } catch(ex) {}
 });
@@ -736,6 +757,49 @@ function adGrantContinue() {
   checkGemUpgrades(true);
   if(G.wheelResult) applyWheelPowerup(G.wheelResult);
   initBg();
+}
+function handleBackButton() {
+  // Navigate back based on current phase
+  switch(G.phase) {
+    case 'PLAYING':
+      G.phase = 'PAUSED';
+      break;
+    case 'PAUSED':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'SETTINGS':
+      G.phase = G._settingsReturnPhase || 'LEVEL_MAP';
+      break;
+    case 'MISSIONS':
+    case 'STATS':
+    case 'SHOP':
+    case 'SKINS':
+    case 'TUTORIAL':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'CHAR_SELECT':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'DEATH':
+    case 'DEAD':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'DAILY_REWARD':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'LEVEL_MAP':
+      G.phase = 'MENU';
+      break;
+    case 'MENU':
+      // At main menu, tell React Native to handle back (exit app)
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'exitApp' }));
+      }
+      break;
+    default:
+      G.phase = 'MENU';
+      break;
+  }
 }
 function adGrantDoubleGems() {
   if (!adDoubleGemsUsed) {
@@ -2477,7 +2541,7 @@ function startNewRun() {
   G.endless=false; G.dailyChallenge=false;
   G.runGems=0; G.runScore=0; G.gems=0;
   G.newHigh=false; G.lastUpgrade=-1;
-  adDoubleGemsUsed=false; // reset ad bonus for new run
+  adDoubleGemsUsed=false; adDeathCount=0; // reset ad state for new run
   G.continuesLeft = 2 + (save.shopUpgrades&&save.shopUpgrades.up_continue ? 1 : 0);
   G.wheelResult=null;
   G._nextLevelNum=0; G._pendingWheelResult=null;
@@ -3927,8 +3991,8 @@ function drawDeathScreen(){
 
   // Ad buttons row
   const adBtnW=u*5.5, adBtnH=u*1.3;
-  const showAdContinue = adReady && !G.endless && !G.dailyChallenge;
-  const showDoubleGems = adReady && !adDoubleGemsUsed && G.runGems > 0;
+  const showAdContinue = adReady && !G.endless && !G.dailyChallenge && canShowAd();
+  const showDoubleGems = adReady && !adDoubleGemsUsed && G.runGems > 0 && canShowAd();
 
   if (showAdContinue || showDoubleGems) {
     const adY = H*.42;
@@ -4682,7 +4746,7 @@ function handleContinueTap(){
   // Give up button
   const noY=H*.7;
   if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>noY&&ty<noY+btnH){
-    G.phase='DEAD';
+    adDeathCount++; G.phase='DEAD';
   }
 }
 
@@ -5641,7 +5705,7 @@ function loop(ts){
         if(G.deathDelay>1.9){
           if(G.dailyChallenge){
             // Daily challenge: no continues, update best
-            G.phase='DEAD';
+            adDeathCount++; G.phase='DEAD';
             const today = localDateStr(new Date());
             save.lastChallengeDate = today;
             if(G.runScore>save.challengeBest){save.challengeBest=G.runScore;G.newHigh=true;}
@@ -5649,13 +5713,13 @@ function loop(ts){
             updateStatsEndRun();
           } else if(G.endless){
             // Endless: no continues, update best score
-            G.phase='DEAD';
+            adDeathCount++; G.phase='DEAD';
             if(G.runScore>save.endlessBest){save.endlessBest=G.runScore;G.newHigh=true;}
             updateStatsEndRun();
           } else if(G.continuesLeft>0){
             G.phase='CONTINUE_PROMPT'; G.continuePromptTimer=0;
           } else {
-            G.phase='DEAD'; checkAdReady();
+            adDeathCount++; G.phase='DEAD'; checkAdReady();
             // Save progress for Candy Crush style retry
             save.savedLevel=G.levelNum;
             save.savedScore=G.runScore;
@@ -5760,7 +5824,7 @@ function loop(ts){
           if(G.deathDelay>1.9){
             boss=null;
             if(G.continuesLeft>0){G.phase='CONTINUE_PROMPT';G.continuePromptTimer=0;}
-            else{G.phase='DEAD';save.savedLevel=G.levelNum;save.savedScore=G.runScore;save.savedGems=G.runGems;save.cooldownEnd=Date.now()+5*60*1000;updateStatsEndRun();}
+            else{adDeathCount++; G.phase='DEAD';save.savedLevel=G.levelNum;save.savedScore=G.runScore;save.savedGems=G.runGems;save.cooldownEnd=Date.now()+5*60*1000;updateStatsEndRun();}
             if(G.runScore>save.bestScore){save.bestScore=G.runScore;G.newHigh=true;}
             save.totalGems+=G.runGems;persistSave();
           }

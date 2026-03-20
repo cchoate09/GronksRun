@@ -4079,8 +4079,8 @@ function drawDeathScreen(){
 function handleDeathTap(){
   const tx=inp.tapX, ty=inp.tapY, u=UNIT;
   const adBtnW=u*5.5, adBtnH=u*1.3;
-  const showAdContinue = adReady && !G.endless && !G.dailyChallenge;
-  const showDoubleGems = adReady && !adDoubleGemsUsed && G.runGems > 0;
+  const showAdContinue = adReady && !G.endless && !G.dailyChallenge && canShowAd();
+  const showDoubleGems = adReady && !adDoubleGemsUsed && G.runGems > 0 && canShowAd();
   const adY = H*.42;
 
   // Ad button taps

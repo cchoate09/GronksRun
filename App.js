@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, Component } from 'react';
-import { View, StyleSheet, BackHandler, Text, Vibration } from 'react-native';
+import { View, StyleSheet, BackHandler, Text, Vibration, Share, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -149,7 +149,7 @@ function GameApp() {
   }, [loadAd, sendToGame]);
 
   // Handle messages from WebView
-  const onMessage = useCallback((event) => {
+  const onMessage = useCallback(async (event) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'showAd') {
@@ -165,6 +165,27 @@ function GameApp() {
       } else if (msg.type === 'exitApp') {
         // Game sent exit request (back button at main menu)
         BackHandler.exitApp();
+      } else if (msg.type === 'share') {
+        // Social sharing from game
+        try {
+          await Share.share({
+            message: msg.text || "Check out Gronk's Run!",
+          });
+        } catch (e) {
+          console.log('Share error:', e);
+        }
+      } else if (msg.type === 'rateApp') {
+        // Open Play Store listing for rating
+        try {
+          await Linking.openURL('market://details?id=com.gronksrun.app');
+        } catch (e) {
+          // Fallback to web Play Store
+          try {
+            await Linking.openURL('https://play.google.com/store/apps/details?id=com.gronksrun.app');
+          } catch (e2) {
+            console.log('Could not open Play Store:', e2);
+          }
+        }
       } else if (msg.type === 'haptic') {
         // Vibration feedback from game events
         const p = msg.pattern;

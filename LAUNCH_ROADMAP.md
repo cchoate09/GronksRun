@@ -89,15 +89,15 @@ Gronk's Run is feature-rich for an indie runner. Here's what's already built:
 
 > Features that drive Day-7 and Day-30 retention. Target 35-40% Day-1 retention.
 
-- [ ] **Google Play Games Services** — leaderboards (best score, highest level) + cloud save + Play achievements
-- [ ] **Ad-removal IAP** — $2.99 "Remove Ads" is expected and is a significant revenue source for indie games
-- [ ] **Gem bundle IAPs** — small/medium/large gem packs for players who want to skip grinding
-- [ ] **Rate-the-app prompt** — trigger after 5+ sessions or level 10, using in-app review API
-- [ ] **Push notifications** — "Your daily reward is ready!" and "New weekly missions available!" (via Expo Notifications)
-- [ ] **Social sharing** — share score/achievement screenshots with a branded overlay
-- [ ] **Seasonal events** — holiday-themed skins, limited-time missions (low effort, high retention impact)
-- [ ] **More achievements** — expand from 10 to 20+ to match Play Games expectations
-- [ ] **Statistics screen polish** — add graphs/charts for runs over time, gem history, etc.
+- [ ] **Google Play Games Services** — leaderboards + cloud save + Play achievements *(deferred — needs Play Console setup)*
+- [ ] **Ad-removal IAP** — $2.99 "Remove Ads" *(deferred — needs Play Console billing setup)*
+- [ ] **Gem bundle IAPs** — gem packs for skip grinding *(deferred — needs Play Console billing setup)*
+- [x] **Rate-the-app prompt** — triggers after 5+ runs or level 10, with Rate/Later buttons, opens Play Store listing
+- [ ] **Push notifications** — daily reward/mission reminders *(deferred — needs Expo Notifications setup)*
+- [x] **Social sharing** — canvas screenshot capture + RN Share API on death & level complete screens
+- [x] **Seasonal events** — 4 seasonal events (Halloween, Winter, Spring, Summer) with event-specific missions + level map banner
+- [x] **More achievements** — expanded from 10 to 24 achievements across 5 tiers (beginner, gems, score, combat, persistence)
+- [x] **Statistics screen polish** — grouped layout (Progression/Collection/Combat), icons, achievement progress bar, best score & streak display
 
 ### Phase 4: Performance & Stability (Medium Priority)
 
@@ -179,6 +179,6 @@ Gronk's Run is feature-rich for an indie runner. Here's what's already built:
 
 ## Progress Tracking
 
-**Overall: 18 / 47 items complete** (Phase 1: 9/11, Phase 2: 8/10 — remaining items need artist assets or Play Console)
+**Overall: 23 / 47 items complete** (Phase 1: 9/11, Phase 2: 8/10 — remaining items need artist assets or Play Console)
 
 Use this file as a living document. Check off items as they're completed and update the date at the top.

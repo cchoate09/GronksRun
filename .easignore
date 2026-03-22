@@ -1,0 +1,19 @@
+# Source sprite sheets (already embedded as Base64 in index.html)
+assets/spritesheets/
+# Debug output
+assets/spritesheets/enemies/debug/
+assets/spritesheets/enemies/generated/
+assets/spritesheets/enemies/regenerated/debug/
+# Build/helper scripts
+add_all_sprites.js
+add_enemy_sprites.js
+add_sprites.js
+fix_all_sprites.js
+fix_enemy_anims.js
+gen_sprite_sheets.js
+implement_regen_sprites.js
+diagnose_sprites.js
+diagnose_grids.js
+extract_all_frames.js
+# Node modules handled by EAS
+node_modules/

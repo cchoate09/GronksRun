@@ -200,6 +200,23 @@ function GameApp() {
         } else {
           Vibration.vibrate(15);
         }
+      } else if (msg.type === 'analytics') {
+        // Analytics events from game — forward to Firebase when integrated
+        // For now, log in dev mode for debugging
+        if (__DEV__) {
+          console.log(`[Analytics] ${msg.event}`, msg.params);
+        }
+        // TODO: When Firebase is added:
+        // analytics().logEvent(msg.event, msg.params);
+      } else if (msg.type === 'crash') {
+        // Crash report from WebView game loop
+        console.error(`[GameCrash] ${msg.phase}: ${msg.message}`, {
+          fps: msg.fps,
+          particles: msg.particles,
+          stack: msg.stack,
+        });
+        // TODO: When Crashlytics is added:
+        // crashlytics().recordError(new Error(msg.message), msg.phase);
       }
     } catch (e) {
       console.log('Message parse error:', e);

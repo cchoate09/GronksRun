@@ -33,6 +33,10 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Release signing keystore (NEVER commit)
+release.keystore
+keystore-credentials.txt
+
 # typescript
 *.tsbuildinfo
 

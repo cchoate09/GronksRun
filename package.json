@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "canvas": "^3.2.2",
     "expo": "~55.0.6",
     "expo-asset": "~55.0.8",
     "expo-file-system": "~55.0.10",
@@ -17,7 +18,8 @@
     "react": "19.2.0",
     "react-native": "0.83.2",
     "react-native-google-mobile-ads": "^16.3.0",
-    "react-native-webview": "13.16.0"
+    "react-native-webview": "13.16.0",
+    "sharp": "^0.34.5"
   },
   "private": true
 }

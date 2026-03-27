@@ -8,6 +8,14 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let W = 0, H = 0, UNIT = 1, GROUND_BASE = 0, PLAYER_SX = 0;
 
+// Global Ad State (Recovered)
+let adPendingReward = null;
+let adDoubleGemsUsed = false;
+let adDeathCount = 0;
+let adLastShownTime = 0;
+const AD_DEATH_INTERVAL = 3;
+const AD_COOLDOWN_MS = 60000;
+
 // Pre-cached font strings (rebuilt on resize to avoid per-frame template literals)
 const FONTS = {};
 function rebuildFonts(u) {
@@ -3512,7 +3520,7 @@ function drawChar(p, mini) {
   ctx.ellipse(u*.3,-u*1.28,u*.29*eyeScale,u*.33*eyeScale,0,0,PI2);ctx.fill();
   // Pupils
   ctx.fillStyle='#1a1a30';
-  const el=(!mini&&p.onGround)?.08:0;
+  const el=(!mini&&p.onGround)? 0.08 :0;
   ctx.beginPath();ctx.ellipse(-u*.2+u*el,-u*1.28,u*.17,u*.21,0,0,PI2);
   ctx.ellipse(u*.4+u*el,-u*1.28,u*.17,u*.21,0,0,PI2);ctx.fill();
   // Shine
@@ -5796,6 +5804,44 @@ function handleDebugTap(tx, ty) {
     }
   }
   return true; // consume tap
+}
+
+// ============================================================
+// DEATH TUMBLE FX (Recovered)
+// ============================================================
+var deathTumble = {active:false, x:0, y:0, vx:0, vy:0, rot:0, rotSpeed:0, timer:0, alpha:1};
+function startDeathTumble(x, y) {
+  deathTumble.active = true;
+  deathTumble.x = x; deathTumble.y = y;
+  deathTumble.vx = -150 + Math.random()*100;
+  deathTumble.vy = -500 - Math.random()*200;
+  deathTumble.rot = 0;
+  deathTumble.rotSpeed = (Math.random()>0.5?1:-1) * (8+Math.random()*6);
+  deathTumble.timer = 1.5;
+  deathTumble.alpha = 1;
+}
+function updateDeathTumble(dt) {
+  if (!deathTumble.active) return;
+  deathTumble.x += deathTumble.vx * dt;
+  deathTumble.y += deathTumble.vy * dt;
+  deathTumble.vy += 1500 * dt;
+  deathTumble.rot += deathTumble.rotSpeed * dt;
+  deathTumble.timer -= dt;
+  deathTumble.alpha = clamp(deathTumble.timer / 0.5, 0, 1);
+  if (deathTumble.timer <= 0) deathTumble.active = false;
+}
+function drawDeathTumble() {
+  if (!deathTumble.active) return;
+  ctx.save();
+  ctx.globalAlpha = deathTumble.alpha;
+  ctx.translate(deathTumble.x, deathTumble.y);
+  ctx.rotate(deathTumble.rot);
+  var u = UNIT;
+  ctx.fillStyle='rgba(255,50,50,0.6)';
+  ctx.beginPath();ctx.ellipse(0,-u*.85,u*.88,u*1.05,0,0,PI2);ctx.fill();
+  ctx.fillStyle='rgba(255,100,100,0.4)';
+  ctx.beginPath();ctx.ellipse(0,-u*.65,u*.5,u*.6,0,0,PI2);ctx.fill();
+  ctx.restore();
 }
 
 // ============================================================

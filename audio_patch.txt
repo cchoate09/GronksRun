@@ -1,0 +1,70 @@
+let audioCtx = null;
+let soundMuted = false;
+let musicVolume = 0.35;
+let sfxVolume = 0.7;
+let sfxGain = null;
+let musicGain = null;
+
+const AudioManager = {
+  buffers: {},
+  init() {
+    if (audioCtx) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      this.initRouting();
+      this.loadAssets();
+    } catch(e) { console.warn('AudioContext failed:', e); }
+  },
+  resume() {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(()=>{});
+    }
+  },
+  initRouting() {
+    if (!audioCtx) return;
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = musicVolume;
+    musicGain.connect(audioCtx.destination);
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = sfxVolume;
+    sfxGain.connect(audioCtx.destination);
+  },
+  async loadAssets() {
+    if (typeof AUDIO_B64 === 'undefined') return;
+    for (const [id, b64] of Object.entries(AUDIO_B64)) {
+      try {
+        const response = await fetch(b64);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        this.buffers[id] = audioBuffer;
+      } catch (e) { console.error('Failed to load audio asset:', id, e); }
+    }
+  },
+  playSFX(id, volumeMult = 1.0) {
+    if (soundMuted || sfxVolume <= 0 || !audioCtx) return;
+    this.resume();
+    const buffer = this.buffers[id];
+    if (buffer) {
+      const src = audioCtx.createBufferSource();
+      src.buffer = buffer;
+      const g = audioCtx.createGain();
+      g.gain.value = volumeMult;
+      src.connect(g);
+      g.connect(sfxGain || audioCtx.destination);
+      src.start(0);
+    }
+  }
+};
+
+function ensureAudio() { AudioManager.init(); AudioManager.resume(); }
+function sfxJump() { AudioManager.playSFX('jump'); }
+function sfxLand() { AudioManager.playSFX('land'); }
+function sfxGem() { haptic('light'); AudioManager.playSFX('gem'); }
+function sfxHit() { haptic('medium'); AudioManager.playSFX('hit'); }
+function sfxDeath() { haptic('heavy'); AudioManager.playSFX('death'); }
+function sfxDash() { AudioManager.playSFX('dash'); }
+function sfxSlide() { AudioManager.playSFX('slide'); }
+function sfxShield() { AudioManager.playSFX('shield'); }
+function sfxLevelComplete() { haptic([50,50,100]); AudioManager.playSFX('level_complete'); }
+function sfxSpin() { AudioManager.playSFX('spin'); }
+function sfxUITap() { AudioManager.playSFX('ui_tap'); }

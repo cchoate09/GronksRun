@@ -1,0 +1,5 @@
+ReferenceError: requestAnimationFrame is not defined
+    at loop (about:blank:6324:3)
+    at Timeout._onTimeout ([eval]:1:163)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)

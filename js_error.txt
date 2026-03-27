@@ -1,0 +1,11 @@
+Error: Uncaught [ReferenceError: requestAnimationFrame is not defined]
+    at reportException (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\living\helpers\runtime-script-errors.js:66:24)
+    at processJavaScript (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\living\nodes\HTMLScriptElement-impl.js:233:7)
+    at HTMLScriptElementImpl._innerEval (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\living\nodes\HTMLScriptElement-impl.js:166:5)
+    at C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\living\nodes\HTMLScriptElement-impl.js:107:12
+    at ResourceQueue.push (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\browser\resources\resource-queue.js:53:16)
+    at HTMLScriptElementImpl._fetchInternalScript (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\living\nodes\HTMLScriptElement-impl.js:106:21)
+    at HTMLScriptElementImpl._eval (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\living\nodes\HTMLScriptElement-impl.js:160:12)
+    at HTMLScriptElementImpl._poppedOffStackOfOpenElements (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\living\nodes\HTMLScriptElement-impl.js:123:10)
+    at JSDOMParse5Adapter.onItemPop (C:\Users\cchoa\Claude_Sandbox\gronk-run-app\node_modules\jsdom\lib\jsdom\browser\parser\html.js:175:43)
+    at Parser.onItemPop (file:///C:/Users/cchoa/Claude_Sandbox/gronk-run-app/node_modules/parse5/dist/parser/index.js:179:90)

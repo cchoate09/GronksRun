@@ -760,7 +760,402 @@ function checkSpeakerTap(tx, ty, x, y, size) {
 }
 
 // ============================================================
-// COMBO SYSTEM
+// ============================================================
+// PARTICLES
+// ============================================================
+const particles = [];
+let MAX_PARTICLES = 200;
+function updateMaxParticles() { MAX_PARTICLES = _perfLevel === 0 ? 60 : _perfLevel === 1 ? 120 : 200; }
+// Object pool for particles to reduce GC pressure
+const _particlePool = [];
+class Particle {
+  constructor(x, y, c) { this.init(x, y, c); }
+  init(x, y, c) {
+    this.x = x; this.y = y;
+    this.vx = c.vx ?? (Math.random()-.5)*280;
+    this.vy = c.vy ?? -(Math.random()*180+80);
+    this.grav = c.grav ?? 550;
+    this.life = 1; this.decay = c.decay ?? 1.8;
+    this.r = c.r ?? UNIT*.28; this.color = c.color ?? '#FFD700';
+    this.sq = c.sq ?? false;
+    return this;
+  }
+  update(dt) { this.x+=this.vx*dt; this.y+=this.vy*dt; this.vy+=this.grav*dt; this.life-=this.decay*dt; }
+  get alive() { return this.life > 0; }
+}
+function spawnParticle(x, y, cfg) {
+  if (particles.length >= MAX_PARTICLES) return; // hard cap
+  const p = _particlePool.length > 0 ? _particlePool.pop().init(x, y, cfg) : new Particle(x, y, cfg);
+  particles.push(p);
+}
+function spawnParts(x,y,n,cfg) { for(let i=0;i<n;i++) spawnParticle(x,y,cfg); }
+function spawnGemFX(x,y,hue) {
+  const _gemParts = _perfLevel === 0 ? 4 : _perfLevel === 1 ? 8 : 12;
+for(let i=0;i<_gemParts;i++) spawnParticle(x,y,{
+    color:`hsl(${hue+Math.random()*40},100%,70%)`,r:UNIT*(.15+Math.random()*.2),decay:1.4+Math.random()*.8,grav:350});
+}
+// Power-up announcement banner
+var _announceText = '';
+var _announceTimer = 0;
+var _announceColor = '#FFD700';
+function showAnnouncement(text, color) {
+  _announceText = text;
+  _announceTimer = 1.5;
+  _announceColor = color || '#FFD700';
+}
+function updateAnnouncement(dt) {
+  if (_announceTimer > 0) _announceTimer -= dt;
+}
+function drawAnnouncement() {
+  if (_announceTimer <= 0) return;
+  var u = UNIT;
+  var alpha = _announceTimer > 1.2 ? clamp((_announceTimer-1.2)/0.3,0,1) : _announceTimer < 0.3 ? _announceTimer/0.3 : 1;
+  var scale = _announceTimer > 1.2 ? 1.3 - (_announceTimer-1.2) : 1;
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.85;
+  ctx.translate(W/2, H*0.35);
+  ctx.scale(scale, scale);
+  // Banner background
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  var bw = u*10, bh = u*1.8;
+  ctx.fillRect(-bw/2, -bh/2, bw, bh);
+  // Text
+  ctx.font = 'bold ' + Math.round(u*1) + 'px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = _announceColor;
+  ctx.shadowColor = _announceColor; ctx.shadowBlur = 15;
+  ctx.fillText(_announceText, 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// Floating text particles (for gem +1, damage numbers, etc.)
+var floatingTexts = [];
+function spawnFloatingText(x, y, text, color, size) {
+  floatingTexts.push({x:x, y:y, text:text, color:color||'#FFD700', size:size||1, life:1.0, vy:-120, vx:(Math.random()-0.5)*40});
+}
+function updateFloatingTexts(dt) {
+  for(var i=floatingTexts.length-1;i>=0;i--){
+    var ft=floatingTexts[i];
+    ft.y+=ft.vy*dt; ft.x+=ft.vx*dt; ft.vy+=200*dt; ft.life-=dt*1.5;
+    if(ft.life<=0) floatingTexts.splice(i,1);
+  }
+}
+function drawFloatingTexts() {
+  for(var i=0;i<floatingTexts.length;i++){
+    var ft=floatingTexts[i];
+    ctx.globalAlpha=clamp(ft.life,0,1);
+    ctx.font='bold '+Math.round(UNIT*0.6*ft.size)+'px monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=ft.color;
+    ctx.shadowColor=ft.color;ctx.shadowBlur=6;
+    ctx.fillText(ft.text,ft.x,ft.y);
+    ctx.shadowBlur=0;
+  }
+  ctx.globalAlpha=1;
+}
+
+// Near-miss slow-motion
+var _slowMoTimer = 0;
+var _slowMoFactor = 1;
+function triggerSlowMo(duration) {
+  _slowMoTimer = duration || 0.15;
+}
+function updateSlowMo(dt) {
+  if (_slowMoTimer > 0) {
+    _slowMoTimer -= dt;
+    _slowMoFactor = 0.3; // 30% speed during slow-mo
+  } else {
+    _slowMoFactor = 1;
+  }
+}
+
+// Death tumble animation state
+var deathTumble = {active:false, x:0, y:0, vx:0, vy:0, rot:0, rotSpeed:0, timer:0, alpha:1};
+function startDeathTumble(x, y) {
+  deathTumble.active = true;
+  deathTumble.x = x; deathTumble.y = y;
+  deathTumble.vx = -150 + Math.random()*100;
+  deathTumble.vy = -500 - Math.random()*200;
+  deathTumble.rot = 0;
+  deathTumble.rotSpeed = (Math.random()>0.5?1:-1) * (8+Math.random()*6);
+  deathTumble.timer = 1.5;
+  deathTumble.alpha = 1;
+}
+function updateDeathTumble(dt) {
+  if (!deathTumble.active) return;
+  deathTumble.x += deathTumble.vx * dt;
+  deathTumble.y += deathTumble.vy * dt;
+  deathTumble.vy += 1500 * dt;
+  deathTumble.rot += deathTumble.rotSpeed * dt;
+  deathTumble.timer -= dt;
+  deathTumble.alpha = clamp(deathTumble.timer / 0.5, 0, 1);
+  if (deathTumble.timer <= 0) deathTumble.active = false;
+}
+function drawDeathTumble() {
+  if (!deathTumble.active) return;
+  ctx.save();
+  ctx.globalAlpha = deathTumble.alpha;
+  ctx.translate(deathTumble.x, deathTumble.y);
+  ctx.rotate(deathTumble.rot);
+  // Draw a silhouette of the character
+  var u = UNIT;
+  ctx.fillStyle='rgba(255,50,50,0.6)';
+  ctx.beginPath();ctx.ellipse(0,-u*.85,u*.88,u*1.05,0,0,PI2);ctx.fill();
+  ctx.fillStyle='rgba(255,100,100,0.4)';
+  ctx.beginPath();ctx.ellipse(0,-u*.65,u*.5,u*.6,0,0,PI2);ctx.fill();
+  ctx.restore();
+}
+
+function spawnDeathFX(x,y) {
+  startDeathTumble(x, y);
+  const _deathParts = _perfLevel === 0 ? 8 : _perfLevel === 1 ? 16 : 24;
+for(let i=0;i<_deathParts;i++) spawnParticle(x,y,{
+    vx:(Math.random()-.5)*700,vy:-(Math.random()*550+100),
+    color:`hsl(${20+Math.random()*50},90%,60%)`,r:UNIT*(.18+Math.random()*.45),
+    decay:.6+Math.random()*.5,grav:900,sq:Math.random()>.5});
+}
+function spawnDustFX(x,y) {
+  for(let i=0;i<6;i++) spawnParticle(x,y,{
+    vx:(Math.random()-.5)*130,vy:-(Math.random()*70+20),
+    color:`hsl(30,40%,${50+Math.random()*20}%)`,r:UNIT*(.1+Math.random()*.15),decay:3,grav:220});
+}
+
+// ============================================================
+// SCREEN SHAKE
+// ============================================================
+let trauma=0, shX=0, shY=0;
+var _shakeBiasX = 0, _shakeBiasY = 0;
+function addTrauma(v, biasX, biasY) { if(save.screenShake===false) return; trauma=Math.min(trauma+v,1); _shakeBiasX=(biasX||0); _shakeBiasY=(biasY||0); }
+function updateShake(dt) {
+  trauma=Math.max(0,trauma-1.8*dt);
+  _shakeBiasX *= 0.9; _shakeBiasY *= 0.9;
+  const s=trauma*trauma, m=UNIT*1.8;
+  shX=(Math.random()-.5)*2*m*s + _shakeBiasX*s*UNIT*3;
+  shY=(Math.random()-.5)*2*m*s + _shakeBiasY*s*UNIT*3;
+}
+
+// ============================================================
+// AD BRIDGE (WebView <-> React Native)
+// ============================================================
+let isOnline = navigator.onLine !== false; // assume online unless explicitly offline
+window.addEventListener('online', function(){ isOnline = true; checkAdReady(); });
+window.addEventListener('offline', function(){ isOnline = false; adReady = false; });
+let adReady = false;
+let ratePromptShown = false;
+function checkRatePrompt() {
+  if (ratePromptShown) return false;
+  if (save._ratePromptDismissed) return false;
+  const s = save.stats || {};
+  // Show after 5+ runs or reaching level 10
+  if ((s.totalRuns >= 5 || (s.highestLevel || 0) >= 10)) {
+    ratePromptShown = true;
+    return true;
+  }
+  return false;
+}
+function triggerRateApp() {
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'rateApp' }));
+  }
+  save._ratePromptDismissed = true;
+  persistSave();
+}
+let adPendingReward = null; // 'continue' or 'doubleGems'
+let adDoubleGemsUsed = false; // only allow once per run
+let adDeathCount = 0; // deaths since last ad shown
+let adLastShownTime = 0; // timestamp of last ad shown
+const AD_DEATH_INTERVAL = 3; // show ads every Nth death at most
+const AD_COOLDOWN_MS = 60000; // minimum 60s between ads
+
+function canShowAd() {
+  if (!isOnline) return false;
+  // Frequency gate: only offer ads every Nth death and after cooldown
+  const now = Date.now();
+  if (adDeathCount < AD_DEATH_INTERVAL && adLastShownTime > 0) return false;
+  if (now - adLastShownTime < AD_COOLDOWN_MS && adLastShownTime > 0) return false;
+  return true;
+}
+function requestAd(rewardType) {
+  trackAdWatched(rewardType);
+  adPendingReward = rewardType;
+  adLastShownTime = Date.now();
+  adDeathCount = 0; // reset counter when ad is shown
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type:'showAd', rewardType:rewardType }));
+  }
+}
+function shareScore(text, imageDataUrl) {
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'share',
+      text: text,
+      image: imageDataUrl || null
+    }));
+  }
+}
+function captureAndShare(text) {
+  trackShare('death_or_complete');
+  // Capture current canvas as image and share
+  try {
+    const dataUrl = canvas.toDataURL('image/png');
+    shareScore(text, dataUrl);
+  } catch(e) {
+    shareScore(text, null);
+  }
+}
+// ============================================================
+// ANALYTICS EVENT BRIDGE
+// Sends game events to React Native for Firebase/analytics integration
+// Events are no-ops if analytics isn't configured on the native side
+// ============================================================
+function logEvent(eventName, params) {
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'analytics',
+      event: eventName,
+      params: params || {}
+    }));
+  }
+}
+// Key game events to track:
+function trackLevelStart(levelNum) { logEvent('level_start', { level: levelNum }); }
+function trackLevelComplete(levelNum, score, stars, timeLeft) {
+  logEvent('level_complete', { level: levelNum, score: score, stars: stars, time_left: Math.round(timeLeft) });
+}
+function trackDeath(levelNum, cause, score) {
+  logEvent('player_death', { level: levelNum, cause: cause || 'unknown', score: score });
+}
+function trackAdWatched(rewardType) { logEvent('ad_watched', { reward_type: rewardType }); }
+function trackPurchase(itemId, cost) { logEvent('shop_purchase', { item: itemId, cost: cost }); }
+function trackAchievement(achId) { logEvent('achievement_unlocked', { achievement: achId }); }
+function trackSessionStart() { logEvent('session_start', { highest_level: save.highestLevel, total_gems: save.totalGems }); }
+function trackShare(context) { logEvent('share', { context: context }); }
+
+function haptic(pattern) {
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'haptic', pattern: pattern }));
+  }
+}
+function checkAdReady() {
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type:'checkAd' }));
+  }
+}
+// Listen for messages from React Native
+window.addEventListener('message', function(e) {
+  try {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'adReady') {
+      adReady = !!msg.ready;
+    } else if (msg.type === 'adRewarded') {
+      // Ad was watched successfully — grant reward
+      if (msg.rewardType === 'continue') {
+        adGrantContinue();
+      } else if (msg.rewardType === 'doubleGems') {
+        adGrantDoubleGems();
+      }
+    } else if (msg.type === 'adNotReady' || msg.type === 'adError') {
+      adReady = false;
+    } else if (msg.type === 'adClosed') {
+      // Ad closed, next one loading
+    } else if (msg.type === 'backButton') {
+      handleBackButton();
+    }
+  } catch(ex) {}
+});
+// Also listen on 'document' for Android WebView compatibility
+document.addEventListener('message', function(e) {
+  try {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'adReady') {
+      adReady = !!msg.ready;
+    } else if (msg.type === 'adRewarded') {
+      if (msg.rewardType === 'continue') {
+        adGrantContinue();
+      } else if (msg.rewardType === 'doubleGems') {
+        adGrantDoubleGems();
+      }
+    } else if (msg.type === 'adNotReady' || msg.type === 'adError') {
+      adReady = false;
+    } else if (msg.type === 'backButton') {
+      handleBackButton();
+    }
+  } catch(ex) {}
+});
+
+function adGrantContinue() {
+  // Revive player and restart current level (same as using a continue)
+  G.phase='LEVEL_INTRO'; G.introTimer=0;
+  G.time=0; G.timeLeft=28; G.deathDelay=0;
+  G.diff=getDiff(0,levelDiffMult(G.levelNum));
+  G.speed=G.diff.speed*CHARS[G.selectedChar].spdM;
+  G.rng=new RNG(Date.now()^(Math.random()*0x7FFFFFFF|0));
+  G.announce={text:'AD CONTINUE!',life:2}; G.flashColor=null; G.flashLife=0;
+  inp.jp=inp.jh=false; inp.tapped=false;
+  particles.length=0; activeEnemies.length=0; ambients.length=0;
+  trauma=0; enemySpawnCD=6;
+  initWorld(G.rng,G.diff,G.levelDef.theme);
+  G.player=new Player(G.selectedChar);
+  checkGemUpgrades(true);
+  if(G.wheelResult) applyWheelPowerup(G.wheelResult);
+  initBg();
+}
+function handleBackButton() {
+  // Navigate back based on current phase
+  switch(G.phase) {
+    case 'PLAYING':
+      G.phase = 'PAUSED';
+      break;
+    case 'PAUSED':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'SETTINGS':
+      G.phase = G._settingsReturnPhase || 'LEVEL_MAP';
+      break;
+    case 'MISSIONS':
+    case 'STATS':
+      // (Seasonal event banner drawn in LEVEL_MAP render above)
+    case 'SHOP':
+    case 'SKINS':
+    case 'TUTORIAL':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'CHAR_SELECT':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'DEATH':
+    case 'DEAD':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'DAILY_REWARD':
+      G.phase = 'LEVEL_MAP';
+      break;
+    case 'LEVEL_MAP':
+      G.phase = 'MENU';
+      break;
+    case 'MENU':
+      // At main menu, tell React Native to handle back (exit app)
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'exitApp' }));
+      }
+      break;
+    default:
+      G.phase = 'MENU';
+      break;
+  }
+}
+function adGrantDoubleGems() {
+  if (!adDoubleGemsUsed) {
+    const bonus = G.runGems; // double what was earned
+    save.totalGems += bonus;
+    adDoubleGemsUsed = true;
+    G.announce = {text: `+${bonus} BONUS GEMS!`, life: 2.5};
+    persistSave();
+  }
+}
+
+// ============================================================\n\n// ============================================================\n// COMBO SYSTEM
 // ============================================================
 function comboAction(points, type) {
   G.combo++;

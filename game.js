@@ -1213,6 +1213,7 @@ function sfxShield() { AudioManager.playSFX('shield'); }
 function sfxSpin() { AudioManager.playSFX('spin'); }
 function sfxTap() { AudioManager.playSFX('ui_tap'); }
 function sfxLevel() { AudioManager.playSFX('level_complete'); }
+function sfxLevelComplete() { AudioManager.playSFX('level_complete'); }
 function sfxUITap() { AudioManager.playSFX('ui_tap'); }
 function sfxSpin() { AudioManager.playSFX('spin'); }
 

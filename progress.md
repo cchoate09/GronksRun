@@ -5,3 +5,4 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - `index.html` inline game script has a syntax error caused by literal `\n` escapes being converted into real newlines inside a JS string.
 - `App.js` loads `gameHtml` as an HTML string in `WebView`, but that HTML depends on relative `assets.js` and `audio_assets.js` scripts, which is fragile or broken in string-backed WebViews.
 - `game.js` parses correctly and appears to be the safer source of truth than the current generated `index.html`.
+- Follow-up runtime fix: level completion was crashing because the loop called `sfxLevelComplete()` but only `sfxLevel()` existed in the audio wrapper layer. Added `sfxLevelComplete()` as an alias in `game.js`, regenerated `gameHtml.js`, and verified in a WebView-style Puppeteer run that the `LEVEL_COMPLETE` phase renders with no red error overlay.

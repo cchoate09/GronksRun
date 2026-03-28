@@ -701,7 +701,6 @@ const SPRITE_FRAMES = {
   dash: 12, hit: 13, idleStand: 14, idleBlink: 15
 };
 const SPRITE_RUN_FPS = 5;
-const CHAR_SPRITE_ALLOWLIST = { gronk: true, pip: true };
 const ENEMY_SPRITES_ENABLED = false;
 
 var SPRITE_B64 = typeof window.SPRITE_B64 === 'object' ? window.SPRITE_B64 : {};
@@ -710,23 +709,47 @@ var charSprites = {};
 ['gronk', 'pip', 'bruk', 'zara', 'rex', 'mog'].forEach(function(id) {
   charSprites[id] = {
     ready: false,
-    loading: !CHAR_SPRITE_ALLOWLIST[id],
-    blocked: !CHAR_SPRITE_ALLOWLIST[id],
+    loading: false,
+    blocked: false,
     frames: null,
     fw: 0,
     fh: 0
   };
 });
 
+function getSpriteBackgroundColor(pixels, width, height) {
+  var samples = [
+    0,
+    (width - 1) * 4,
+    ((height - 1) * width) * 4,
+    (((height - 1) * width) + (width - 1)) * 4
+  ];
+  var sumR = 0, sumG = 0, sumB = 0, sumA = 0;
+  for (var si = 0; si < samples.length; si++) {
+    var idx = samples[si];
+    sumR += pixels[idx];
+    sumG += pixels[idx + 1];
+    sumB += pixels[idx + 2];
+    sumA += pixels[idx + 3];
+  }
+  return {
+    r: Math.round(sumR / samples.length),
+    g: Math.round(sumG / samples.length),
+    b: Math.round(sumB / samples.length),
+    a: Math.round(sumA / samples.length)
+  };
+}
+
 function initCharSprite(charId) {
   var sprite = charSprites[charId];
-  if (!sprite || sprite.loading || sprite.blocked) return;
+  if (!sprite || sprite.loading || sprite.ready) return;
   sprite.loading = true;
 
   var b64 = SPRITE_B64[charId];
   if (!b64) {
     console.warn('No sprite data for ' + charId);
     sprite.loading = false;
+    sprite.blocked = true;
     return;
   }
 
@@ -742,18 +765,18 @@ function initCharSprite(charId) {
 
     var imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
     var pixels = imageData.data;
-    var bgR = pixels[0];
-    var bgG = pixels[1];
-    var bgB = pixels[2];
-    var tolerance = 35;
+    var bg = getSpriteBackgroundColor(pixels, tempCanvas.width, tempCanvas.height);
+    var tolerance = 42;
 
-    for (var i = 0; i < pixels.length; i += 4) {
-      if (
-        Math.abs(pixels[i] - bgR) < tolerance &&
-        Math.abs(pixels[i + 1] - bgG) < tolerance &&
-        Math.abs(pixels[i + 2] - bgB) < tolerance
-      ) {
-        pixels[i + 3] = 0;
+    if (bg.a > 200) {
+      for (var i = 0; i < pixels.length; i += 4) {
+        if (
+          Math.abs(pixels[i] - bg.r) < tolerance &&
+          Math.abs(pixels[i + 1] - bg.g) < tolerance &&
+          Math.abs(pixels[i + 2] - bg.b) < tolerance
+        ) {
+          pixels[i + 3] = 0;
+        }
       }
     }
 
@@ -780,6 +803,7 @@ function initCharSprite(charId) {
   img.onerror = function() {
     console.warn('Sprite load failed for ' + charId);
     sprite.loading = false;
+    sprite.blocked = true;
   };
 
   img.src = b64;
@@ -4378,7 +4402,7 @@ function drawChar(p, mini) {
     const frameIdx = getSpriteFrame(p, mini);
     const frameCvs = _sprFrames[frameIdx];
     if (frameCvs) {
-      const drawH = u * 2.4;
+      const drawH = u * (mini ? 3.05 : 2.55);
       const drawW = drawH * (_sprFW / _sprFH);
       const drawX = -drawW / 2;
       const drawY = -drawH + u * 0.1;
@@ -5988,46 +6012,12 @@ function handleSpinWheelTap() {
 // ============================================================
 // SEASONAL EVENTS
 // ============================================================
-function getActiveEvent() {
-  const now = new Date();
-  const month = now.getMonth() + 1; // 1-12
-  const day = now.getDate();
-  // Halloween: Oct 20 - Nov 3
-  if ((month === 10 && day >= 20) || (month === 11 && day <= 3))
-    return { id:'halloween', name:'Spooky Run', color:'#FF6600', icon:'\uD83C\uDF83',
-      missions:[
-        {id:'hw_gems', desc:'Collect {n} spooky gems', targets:[50,100], reward:[30,60], stat:'gemsCollected'},
-        {id:'hw_runs', desc:'Complete {n} haunted runs', targets:[3,5], reward:[25,50], stat:'runsCompleted'},
-      ]};
-  // Winter Holiday: Dec 15 - Jan 5
-  if ((month === 12 && day >= 15) || (month === 1 && day <= 5))
-    return { id:'winter', name:'Winter Run', color:'#88CCFF', icon:'\u2744',
-      missions:[
-        {id:'wn_gems', desc:'Collect {n} frosty gems', targets:[75,150], reward:[40,80], stat:'gemsCollected'},
-        {id:'wn_score', desc:'Score {n} in a single run', targets:[5000,10000], reward:[50,100], stat:'scoreEarned'},
-      ]};
-  // Spring: Mar 15 - Apr 15
-  if ((month === 3 && day >= 15) || (month === 4 && day <= 15))
-    return { id:'spring', name:'Spring Dash', color:'#44CC44', icon:'\uD83C\uDF38',
-      missions:[
-        {id:'sp_dash', desc:'Dash {n} times', targets:[30,60], reward:[25,50], stat:'dashesUsed'},
-        {id:'sp_levels', desc:'Complete {n} levels', targets:[5,10], reward:[40,80], stat:'levelsCompleted'},
-      ]};
-  // Summer: Jun 15 - Jul 15
-  if ((month === 6 && day >= 15) || (month === 7 && day <= 15))
-    return { id:'summer', name:'Summer Sprint', color:'#FFAA00', icon:'\u2600',
-      missions:[
-        {id:'sm_time', desc:'Survive {n} seconds total', targets:[300,600], reward:[35,70], stat:'longestRun'},
-        {id:'sm_smash', desc:'Smash {n} obstacles', targets:[30,60], reward:[30,60], stat:'obstaclesSmashed'},
-      ]};
-  return null;
-}
-
-// Show active event banner on level map
+// Disabled for the current cleanup build.
+function getActiveEvent() { return null; }
 let _activeEvent = null;
 function checkSeasonalEvent() {
-  _activeEvent = getActiveEvent();
-  return _activeEvent;
+  _activeEvent = null;
+  return null;
 }
 
 // 7-Day Login Calendar with escalating rewards
@@ -6527,6 +6517,7 @@ function drawHUD(dt){
   const u = UNIT;
   const p = G.player;
   const tl = G.timeLeft;
+  const compact = W < 1100 || H < 560;
   const edge = Math.max(10, u * 0.45);
   const top = SAFE_TOP + edge;
   const left = SAFE_LEFT + edge;
@@ -6534,123 +6525,118 @@ function drawHUD(dt){
   const hpPct = clamp(p.hp / p.maxHP, 0, 1);
   const prog = clamp(G.time / G.levelDef.targetTime, 0, 1);
   const urg = clamp(1 - tl / 10, 0, 1);
-  const tCol = `rgb(255,${Math.floor(lerp(214,56,urg))},${Math.floor(lerp(124,64,urg))})`;
-  const levelChipW = Math.min(W * 0.54, u * 9.8);
-  const levelChipX = W / 2 - levelChipW / 2;
-  const levelChipY = top;
-  const timerW = u * 4.35;
-  const timerH = u * 1.6;
-  const timerY = levelChipY + u * 0.92;
-  const sideW = u * 5.5;
-  const sideH = u * 2.45;
-  const sideY = top + u * 0.45;
-  const rightX = right - sideW;
+  const tCol = `rgb(255,${Math.floor(lerp(216,78,urg))},${Math.floor(lerp(138,74,urg))})`;
+  const hudX = left + (compact ? u * 1.02 : u * 1.18);
+  const hudY = top;
+  const hudW = Math.max(u * (compact ? 9.8 : 10.8), right - hudX - (compact ? u * 1.18 : u * 1.45));
+  const hudH = compact ? u * 1.94 : u * 2.1;
+  const innerPad = compact ? u * 0.28 : u * 0.34;
+  const gap = compact ? u * 0.24 : u * 0.34;
+  const leftW = Math.min(u * (compact ? 4.2 : 4.6), hudW * (compact ? 0.32 : 0.34));
+  const centerW = Math.min(u * (compact ? 4.0 : 4.35), hudW * (compact ? 0.27 : 0.26));
+  const rightW = hudW - leftW - centerW - gap * 2;
+  const centerX = hudX + leftW + gap;
+  const rightX = centerX + centerW + gap;
 
-  drawPanel(levelChipX, levelChipY, levelChipW, u * 0.82, {
-    radius: u * 0.3,
-    top: 'rgba(16,28,48,0.86)',
-    bottom: 'rgba(10,16,30,0.82)',
+  drawPanel(hudX, hudY, hudW, hudH, {
+    radius: u * 0.38,
+    top: 'rgba(16,28,48,0.92)',
+    bottom: 'rgba(8,14,26,0.88)',
     stroke: 'rgba(255,255,255,0.1)',
-    accent: 'rgba(255,215,90,0.28)',
-    blur: 12
-  });
-  ctx.font = FONTS['b0.5'] || ('bold ' + Math.round(u * 0.5) + 'px monospace');
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(244,247,255,0.92)';
-  ctx.fillText(`LEVEL ${G.levelNum} - ${G.levelDef.name}`, W / 2, levelChipY + u * 0.41);
-
-  const pulse = tl < 5 ? 1 + Math.sin(G.time * 12) * 0.08 : 1;
-  ctx.save();
-  ctx.translate(W / 2, timerY + timerH / 2);
-  ctx.scale(pulse, pulse);
-  drawPanel(-timerW / 2, -timerH / 2, timerW, timerH, {
-    radius: u * 0.45,
-    top: 'rgba(28,16,18,0.95)',
-    bottom: 'rgba(12,8,12,0.88)',
-    stroke: 'rgba(255,255,255,0.12)',
-    accent: `rgba(255,${Math.floor(lerp(190,90,urg))},70,0.4)`,
+    accent: 'rgba(255,215,90,0.16)',
     blur: 18
   });
-  ctx.font = FONTS['b1.2'] || ('bold ' + Math.round(u * 1.2) + 'px monospace');
-  ctx.fillStyle = tCol;
-  ctx.fillText(`${Math.ceil(tl)}s`, 0, -u * 0.07);
-  ctx.font = FONTS['n0.4'] || (Math.round(u * 0.4) + 'px monospace');
-  ctx.fillStyle = 'rgba(255,255,255,0.62)';
-  ctx.fillText('SURVIVAL TIME', 0, u * 0.44);
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(hudX + leftW + gap * 0.5, hudY + u * 0.34);
+  ctx.lineTo(hudX + leftW + gap * 0.5, hudY + hudH - u * 0.34);
+  ctx.moveTo(centerX + centerW + gap * 0.5, hudY + u * 0.34);
+  ctx.lineTo(centerX + centerW + gap * 0.5, hudY + hudH - u * 0.34);
+  ctx.stroke();
   ctx.restore();
 
-  const barW = Math.min(W * 0.42, u * 8.4);
-  const barH = u * 0.42;
-  const barX = W / 2 - barW / 2;
-  const barY = timerY + timerH + u * 0.24;
-  drawProgressBar(barX, barY, barW, barH, prog, [
-    `hsl(${lerp(12,92,prog)},90%,58%)`,
-    `hsl(${lerp(32,132,prog)},92%,48%)`
-  ]);
-  ctx.font = FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace');
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.fillText(`${Math.round(prog * 100)}%`, W / 2, barY + barH + u * 0.35);
-
-  drawPanel(left, sideY, sideW, sideH, {
-    top: 'rgba(18,28,48,0.94)',
-    bottom: 'rgba(10,16,30,0.88)',
-    accent: 'rgba(255,215,0,0.24)'
-  });
-  ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = FONTS['n0.4'] || (Math.round(u * 0.4) + 'px monospace');
-  ctx.fillStyle = 'rgba(186,202,230,0.72)';
-  ctx.fillText('SCORE', left + u * 0.38, sideY + u * 0.28);
-  ctx.font = FONTS['b0.78'] || ('bold ' + Math.round(u * 0.78) + 'px monospace');
-  ctx.fillStyle = '#FFE27A';
-  ctx.fillText(`${G.runScore}`, left + u * 0.38, sideY + u * 0.74);
-  ctx.font = FONTS['n0.38'] || (Math.round(u * 0.38) + 'px monospace');
-  ctx.fillStyle = 'rgba(186,202,230,0.7)';
-  ctx.fillText('HP', left + u * 0.38, sideY + u * 1.35);
-  drawProgressBar(left + u * 0.38, sideY + u * 1.72, sideW - u * 0.76, u * 0.34, hpPct, [
+  ctx.textAlign = 'left';
+  ctx.font = FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace');
+  ctx.fillStyle = 'rgba(192,208,234,0.72)';
+  ctx.fillText('LEVEL ' + G.levelNum, hudX + innerPad, hudY + u * 0.22);
+  ctx.font = FONTS['b0.5'] || ('bold ' + Math.round(u * 0.5) + 'px monospace');
+  ctx.fillStyle = '#F5F7FF';
+  ctx.fillText(G.levelDef.name.toUpperCase(), hudX + innerPad, hudY + u * 0.58);
+  ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace');
+  ctx.fillStyle = 'rgba(176,194,220,0.62)';
+  ctx.fillText('HP', hudX + innerPad, hudY + u * 1.14);
+  drawProgressBar(hudX + innerPad, hudY + u * 1.44, leftW - innerPad * 2, u * 0.26, hpPct, [
     `hsl(${lerp(6,88,hpPct)},92%,58%)`,
-    `hsl(${lerp(16,120,hpPct)},88%,40%)`
+    `hsl(${lerp(16,118,hpPct)},88%,40%)`
   ]);
   if (p.hpFlash > 0) {
     ctx.save();
-    ctx.globalAlpha = clamp(p.hpFlash, 0, 1) * 0.45;
-    fillRR(left + u * 0.38, sideY + u * 1.72, sideW - u * 0.76, u * 0.34, u * 0.18, '#FF5252', null, 0);
+    ctx.globalAlpha = clamp(p.hpFlash, 0, 1) * 0.38;
+    fillRR(hudX + innerPad, hudY + u * 1.44, leftW - innerPad * 2, u * 0.26, u * 0.14, '#FF5252', null, 0);
     ctx.restore();
   }
-  ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace');
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHP}`, left + sideW - u * 0.38, sideY + u * 1.33);
+  ctx.font = FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace');
+  ctx.fillStyle = 'rgba(255,255,255,0.84)';
+  ctx.fillText(`${Math.ceil(p.hp)}/${p.maxHP}`, hudX + leftW - innerPad, hudY + u * 1.12);
 
-  drawPanel(rightX, sideY, sideW, sideH, {
-    top: 'rgba(18,30,50,0.94)',
-    bottom: 'rgba(9,16,30,0.88)',
-    accent: `hsla(${G.theme.gemH},100%,60%,0.26)`
-  });
+  const pulse = tl < 5 ? 1 + Math.sin(G.time * 12) * 0.08 : 1;
+  ctx.save();
+  ctx.translate(centerX + centerW / 2, hudY + u * 0.78);
+  ctx.scale(pulse, pulse);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = FONTS['b1.1'] || ('bold ' + Math.round(u * 1.1) + 'px monospace');
+  ctx.fillStyle = tCol;
+  ctx.fillText(`${Math.ceil(tl)}s`, 0, 0);
+  ctx.restore();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace');
+  ctx.fillStyle = 'rgba(196,208,232,0.66)';
+  ctx.fillText('TIME LEFT', centerX + centerW / 2, hudY + u * 1.0);
+  drawProgressBar(centerX + u * 0.18, hudY + u * 1.44, centerW - u * 0.36, u * 0.26, prog, [
+    `hsl(${lerp(12,92,prog)},90%,58%)`,
+    `hsl(${lerp(32,132,prog)},92%,48%)`
+  ]);
+  ctx.font = FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace');
+  ctx.fillStyle = 'rgba(255,255,255,0.62)';
+  ctx.fillText(`${Math.round(prog * 100)}% CLEAR`, centerX + centerW / 2, hudY + u * 1.8);
+
   ctx.textAlign = 'left';
-  ctx.font = FONTS['n0.4'] || (Math.round(u * 0.4) + 'px monospace');
-  ctx.fillStyle = 'rgba(186,202,230,0.72)';
-  ctx.fillText('GEMS', rightX + u * 0.38, sideY + u * 0.28);
-  ctx.font = FONTS['b0.76'] || ('bold ' + Math.round(u * 0.76) + 'px monospace');
-  drawDiamondShape(rightX + u * 0.56, sideY + u * 0.76, u * 0.16, `hsl(${G.theme.gemH},100%,68%)`, 'rgba(255,255,255,0.18)');
+  ctx.textBaseline = 'top';
+  ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
+  ctx.fillStyle = 'rgba(188,204,228,0.72)';
+  ctx.fillText('SCORE', rightX + innerPad, hudY + u * 0.22);
+  ctx.font = FONTS['b0.7'] || ('bold ' + Math.round(u * 0.7) + 'px monospace');
+  ctx.fillStyle = '#FFE27A';
+  ctx.fillText(`${G.runScore}`, rightX + innerPad, hudY + u * 0.56);
+  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
+  ctx.fillStyle = 'rgba(184,198,224,0.64)';
+  ctx.fillText('GEMS', rightX + innerPad, hudY + u * 1.16);
+  drawDiamondShape(rightX + innerPad + u * 0.18, hudY + u * 1.62, u * 0.16, `hsl(${G.theme.gemH},100%,68%)`, 'rgba(255,255,255,0.18)');
+  ctx.font = FONTS['b0.44'] || ('bold ' + Math.round(u * 0.44) + 'px monospace');
   ctx.fillStyle = `hsl(${G.theme.gemH},100%,68%)`;
-  ctx.fillText(`${G.runGems}`, rightX + u * 0.88, sideY + u * 0.73);
-  ctx.font = FONTS['n0.38'] || (Math.round(u * 0.38) + 'px monospace');
-  ctx.fillStyle = 'rgba(186,202,230,0.72)';
-  ctx.fillText('CONTINUES', rightX + u * 0.38, sideY + u * 1.35);
-  ctx.font = FONTS['b0.45'] || ('bold ' + Math.round(u * 0.45) + 'px monospace');
+  ctx.fillText(`${G.runGems}`, rightX + innerPad + u * 0.44, hudY + u * 1.38);
+  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
+  ctx.fillStyle = 'rgba(184,198,224,0.64)';
+  ctx.fillText('SAVES', rightX + rightW * 0.54, hudY + u * 1.16);
   if (G.continuesLeft > 0) {
-    drawHeartShape(rightX + u * 0.56, sideY + u * 1.84, u * 0.16, '#FF8F70', 'rgba(255,255,255,0.18)');
+    drawHeartShape(rightX + rightW * 0.54 + u * 0.18, hudY + u * 1.62, u * 0.16, '#FF8F70', 'rgba(255,255,255,0.18)');
   }
+  ctx.font = FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace');
   ctx.fillStyle = G.continuesLeft > 0 ? '#FFB066' : 'rgba(150,160,185,0.55)';
-  ctx.fillText(G.continuesLeft > 0 ? `${G.continuesLeft}` : 'NO SAVES', rightX + u * 0.88, sideY + u * 1.76);
+  ctx.fillText(`${Math.max(0, G.continuesLeft)}`, rightX + rightW * 0.54 + u * 0.44, hudY + u * 1.38);
 
-  drawMiniChip(W - SAFE_RIGHT - u * 2.35, top + u * 0.1, u * 1.1, u * 1.02, '||', {
+  drawMiniChip(W - SAFE_RIGHT - u * 1.48, hudY + u * 0.16, u * 1.1, u * 0.98, '||', {
     font: FONTS['b0.55'] || ('bold ' + Math.round(u * 0.55) + 'px monospace'),
     accent: 'rgba(255,255,255,0.12)'
   });
-  drawSpeakerIcon(left + u * 0.08, top + u * 0.06, u * 1.05);
+  drawSpeakerIcon(SAFE_LEFT + u * 0.3, hudY + u * 0.14, u * 1.0);
 
   if (G.combo > 0) {
     const colors = ['#FFFFFF', '#FFD766', '#FFAE47', '#FF6F61', '#FF53CF', '#61EDFF', '#FF5B87'];
@@ -6659,43 +6645,43 @@ function drawHUD(dt){
     if (G.combo >= 30) comboCol = `hsl(${(G.time * 360) % 360},100%,65%)`;
     const comboPulse = 1 + (G.comboPulse > 0 ? G.comboPulse * 0.18 : 0);
     if (G.comboPulse > 0) G.comboPulse -= dt * 2;
-    const comboW = Math.min(W * 0.36, u * 6.5);
-    const comboY = sideY + sideH + u * 0.28;
+    const comboW = Math.min(W * (compact ? 0.24 : 0.3), u * (compact ? 4.7 : 5.7));
+    const comboY = hudY + hudH + (compact ? u * 0.14 : u * 0.22);
     ctx.save();
-    ctx.translate(left + comboW / 2, comboY + u * 0.4);
+    ctx.translate(hudX + comboW / 2, comboY + u * 0.36);
     ctx.scale(comboPulse, comboPulse);
-    drawPanel(-comboW / 2, -u * 0.4, comboW, u * 0.8, {
+    drawPanel(-comboW / 2, -u * 0.36, comboW, u * 0.72, {
       radius: u * 0.28,
       top: 'rgba(24,16,24,0.92)',
       bottom: 'rgba(10,8,16,0.9)',
       stroke: 'rgba(255,255,255,0.08)',
       accent: comboCol
     });
-    ctx.font = FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace');
+    ctx.font = FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = comboCol;
-    ctx.fillText(`COMBO x${G.combo} - ${G.comboMult}.0x`, 0, 0);
+    ctx.fillText(`COMBO x${G.combo}  ${G.comboMult}.0x`, 0, 0);
     ctx.restore();
   }
 
   if (G.announce && G.announce.life > 0) {
     const al = clamp(G.announce.life, 0, 1);
     const sc = 1 + (1 - al) * 0.12;
-    const annW = Math.min(W * 0.72, u * 10.5);
-    const annY = H * 0.22;
+    const annW = Math.min(W * (compact ? 0.5 : 0.56), u * (compact ? 7.4 : 8.6));
+    const annY = hudY + hudH + (G.combo > 0 ? (compact ? u * 0.82 : u * 1.05) : (compact ? u * 0.24 : u * 0.38));
     ctx.save();
     ctx.globalAlpha = al;
-    ctx.translate(W / 2, annY + u * 0.48);
+    ctx.translate(W / 2, annY + u * 0.4);
     ctx.scale(sc, sc);
-    drawPanel(-annW / 2, -u * 0.48, annW, u * 0.96, {
+    drawPanel(-annW / 2, -u * 0.4, annW, u * 0.8, {
       radius: u * 0.34,
       top: 'rgba(28,18,12,0.94)',
       bottom: 'rgba(12,10,8,0.92)',
       stroke: 'rgba(255,223,120,0.2)',
       accent: 'rgba(255,215,0,0.28)'
     });
-    ctx.font = FONTS['b0.6'] || ('bold ' + Math.round(u * 0.6) + 'px monospace');
+    ctx.font = FONTS['b0.46'] || ('bold ' + Math.round(u * 0.46) + 'px monospace');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#FFD45E';
@@ -6718,17 +6704,25 @@ function drawHUD(dt){
   if (p.pounding) powerups.push({ label: 'POUND', accent: '#FFAA44' });
 
   let chipX = left;
-  const chipY = H - SAFE_BOTTOM - edge - u * 0.72;
+  let chipRow = 0;
+  const chipH = u * 0.72;
+  const chipBaseY = H - SAFE_BOTTOM - edge - chipH;
+  const chipLimit = W - SAFE_RIGHT - edge - (compact ? u * 1.3 : u * 2.4);
   for (let i = 0; i < powerups.length; i++) {
     const chip = powerups[i];
     const chipW = Math.max(u * 1.35, chip.label.length * u * 0.34 + u * 0.55);
-    drawMiniChip(chipX, chipY, chipW, u * 0.72, chip.label, {
+    if (chipX + chipW > chipLimit && chipRow === 0) {
+      chipRow = 1;
+      chipX = left;
+    }
+    if (chipRow > 1) break;
+    const chipY = chipBaseY - chipRow * (chipH + u * 0.16);
+    drawMiniChip(chipX, chipY, chipW, chipH, chip.label, {
       font: FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace'),
       accent: chip.accent,
       textColor: '#F5F7FF'
     });
     chipX += chipW + u * 0.18;
-    if (chipX > W - SAFE_RIGHT - edge - u * 2.4) break;
   }
 }
 
@@ -6958,22 +6952,78 @@ function drawLevelComplete(dt){
   }
 }
 
+function getLevelMapLayout() {
+  const u = UNIT;
+  const topPad = SAFE_TOP + u * 0.28;
+  const speakerX = SAFE_LEFT + u * 0.3;
+  const speakerY = SAFE_TOP + u * 0.3;
+  const speakerSize = u * 1;
+  const settingsW = u * 1.15;
+  const settingsH = u * 0.95;
+  const settingsX = SAFE_LEFT + u * 1.6;
+  const settingsY = topPad;
+  const shopW = u * 3.2;
+  const shopH = u * 0.95;
+  const statsW = u * 3.2;
+  const statsH = u * 0.95;
+  const statsX = W - SAFE_RIGHT - statsW - u * 0.32;
+  const statsY = topPad;
+  const shopX = statsX - shopW - u * 0.28;
+  const shopY = topPad;
+  const headerX = SAFE_LEFT + u * 0.55;
+  const headerY = topPad + u * 1.18;
+  const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1;
+  const headerH = u * 1.88;
+  const quickGap = u * 0.28;
+  const quickH = u * 0.88;
+  const quickTotalW = Math.min(W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, u * 9.6);
+  const missionW = quickTotalW * 0.46;
+  const loginW = quickTotalW - missionW - quickGap;
+  const quickX = W / 2 - quickTotalW / 2;
+  const missionX = quickX;
+  const loginX = missionX + missionW + quickGap;
+  const quickY = headerY + headerH + u * 0.24;
+  const mapTop = quickY + quickH + u * 0.42;
+  const infoY = H - SAFE_BOTTOM - u * 2.08;
+  const infoH = u * 0.66;
+  const runnerW = u * 4.4;
+  const progressW = u * 4.3;
+  const runnerX = W / 2 - runnerW - u * 0.16;
+  const progressX = W / 2 + u * 0.16;
+  const actionW = u * 5.1;
+  const actionH = u * 1.02;
+  const actionY = H - SAFE_BOTTOM - actionH - u * 0.42;
+  const resumeX = W * 0.33 - actionW / 2;
+  const newRunX = W * 0.67 - actionW / 2;
+  const centerActionX = W / 2 - actionW / 2;
+  const nextW = u * 7.2;
+  const nextX = W / 2 - nextW / 2;
+  const endlessW = u * 5.2;
+  const endlessH = u * 0.74;
+  const endlessX = W / 2 - endlessW / 2;
+  const endlessY = infoY - u * 0.84;
+  const mapBot = infoY - u * 0.34;
+  return {
+    speakerX, speakerY, speakerSize,
+    settingsX, settingsY, settingsW, settingsH,
+    shopX, shopY, shopW, shopH,
+    statsX, statsY, statsW, statsH,
+    headerX, headerY, headerW, headerH,
+    missionX, loginX, quickY, missionW, loginW, quickH,
+    infoY, infoH, runnerX, runnerW, progressX, progressW,
+    actionW, actionH, actionY, resumeX, newRunX, centerActionX,
+    nextX, nextW, endlessX, endlessY, endlessW, endlessH,
+    mapTop, mapBot
+  };
+}
+
 function drawLevelMap(dt) {
   const u = UNIT;
-  const headerX = SAFE_LEFT + u * 0.7;
-  const headerY = SAFE_TOP + u * 0.2;
-  const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.4;
-  const headerH = u * 2.2;
-  const shW=u*3.5, shH=u*1, shX=W-shW*2-u*1.2-SAFE_RIGHT, shY=SAFE_TOP+u*.3;
-  const stW=u*3.5, stH=u*1, stX=W-stW-u*.5-SAFE_RIGHT, stY=SAFE_TOP+u*.3;
-  const miW=u*3.8, miH=u*1, miX=SAFE_LEFT+u*2, miY=SAFE_TOP+u*.3;
-  const geX=miX+miW+u*0.3, geY=SAFE_TOP+u*.3, geW=u*1.3, geH=u*1;
+  const layout = getLevelMapLayout();
   const dlToday = localDateStr(new Date());
   const dlClaimed = save.lastLoginDate === dlToday;
-  const dlW=u*3.5, dlH=u*1, dlX=miX+miW+u*2.0, dlY=SAFE_TOP+u*.3;
-  const today = localDateStr(new Date());
-  const dcDone = save.lastChallengeDate === today;
-  const dcW=u*6, dcH=u*0.9, dcX=W/2-dcW/2, dcY=SAFE_TOP+u*2.25;
+  const unclaimedN = (save.missions&&save.missions.daily||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length + (save.missions&&save.missions.weekly||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length;
+  const runner = CHARS[safeSelectedChar()] || CHARS[0];
 
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#050d1e');
@@ -7001,7 +7051,23 @@ function drawLevelMap(dt) {
     ctx.restore();
   }
 
-  drawPanel(headerX, headerY, headerW, headerH, {
+  drawMiniChip(layout.shopX, layout.shopY, layout.shopW, layout.shopH, 'SHOP', {
+    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
+    accent: 'rgba(255,208,90,0.28)',
+    textColor: '#FFE27A'
+  });
+  drawMiniChip(layout.statsX, layout.statsY, layout.statsW, layout.statsH, 'STATS', {
+    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
+    accent: 'rgba(120,180,255,0.24)',
+    textColor: '#CBE4FF'
+  });
+  drawMiniChip(layout.settingsX, layout.settingsY, layout.settingsW, layout.settingsH, 'SET', {
+    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
+    accent: 'rgba(255,255,255,0.12)',
+    textColor: 'rgba(244,247,255,0.76)'
+  });
+
+  drawPanel(layout.headerX, layout.headerY, layout.headerW, layout.headerH, {
     radius: u * 0.42,
     top: 'rgba(18,28,46,0.92)',
     bottom: 'rgba(8,12,24,0.9)',
@@ -7011,56 +7077,35 @@ function drawLevelMap(dt) {
   });
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = FONTS['b0.92'] || ('bold ' + Math.round(u * 0.92) + 'px monospace');
+  ctx.font = FONTS['b0.86'] || ('bold ' + Math.round(u * 0.86) + 'px monospace');
   ctx.fillStyle = '#FFE27A';
-  ctx.fillText("GRONK'S JOURNEY", headerX + u * 0.5, headerY + u * 0.42);
-  ctx.font = FONTS['n0.38'] || (Math.round(u * 0.38) + 'px monospace');
+  ctx.fillText("GRONK'S JOURNEY", layout.headerX + u * 0.5, layout.headerY + u * 0.36);
+  ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
   ctx.fillStyle = 'rgba(192,208,232,0.7)';
-  ctx.fillText(`BEST ${save.bestScore} - TOTAL GEMS ${save.totalGems}`, headerX + u * 0.5, headerY + u * 1.18);
+  ctx.fillText(`BEST ${save.bestScore}  |  TOTAL GEMS ${save.totalGems}`, layout.headerX + u * 0.5, layout.headerY + u * 1.02);
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(244,247,255,0.78)';
-  ctx.fillText(`CURRENT LEVEL ${save.highestLevel + 1}`, headerX + headerW - u * 0.5, headerY + u * 0.52);
-  ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
+  ctx.fillText(`CURRENT LEVEL ${save.highestLevel + 1}`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.42);
+  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
   ctx.fillStyle = 'rgba(160,182,210,0.66)';
-  ctx.fillText('Scroll the trail and tap a node to replay or continue.', headerX + headerW - u * 0.5, headerY + u * 1.18);
+  ctx.fillText('Tap a node to replay or push forward.', layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.98);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  drawMiniChip(shX, shY, shW, shH, 'SHOP', {
+  drawMiniChip(layout.missionX, layout.quickY, layout.missionW, layout.quickH, 'MISSIONS', {
     font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
-    accent: 'rgba(255,208,90,0.28)',
-    textColor: '#FFE27A'
-  });
-  drawMiniChip(stX, stY, stW, stH, 'STATS', {
-    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
-    accent: 'rgba(120,180,255,0.24)',
-    textColor: '#CBE4FF'
-  });
-  const unclaimedN = (save.missions&&save.missions.daily||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length + (save.missions&&save.missions.weekly||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length;
-  drawMiniChip(miX, miY, miW, miH, 'MISSIONS', {
-    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
     accent: unclaimedN>0 ? 'rgba(255,194,70,0.3)' : 'rgba(110,210,130,0.22)',
     textColor: unclaimedN>0 ? '#FFD45E' : '#D8FFE2'
   });
-  if(unclaimedN>0) drawNotifDot(miX+miW-u*0.1, miY+u*0.1, unclaimedN, u);
-  drawMiniChip(geX, geY, geW, geH, 'SET', {
-    font: Math.round(u * 0.7) + 'px sans-serif',
-    accent: 'rgba(255,255,255,0.12)',
-    textColor: 'rgba(244,247,255,0.72)'
-  });
-  drawMiniChip(dlX, dlY, dlW, dlH, 'LOGIN', {
+  if(unclaimedN>0) drawNotifDot(layout.missionX + layout.missionW - u*0.1, layout.quickY + u*0.1, unclaimedN, u);
+  drawMiniChip(layout.loginX, layout.quickY, layout.loginW, layout.quickH, dlClaimed ? 'LOGIN CLAIMED' : 'DAILY LOGIN', {
     font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
     accent: dlClaimed ? 'rgba(110,120,150,0.18)' : 'rgba(255,126,84,0.32)',
     textColor: dlClaimed ? 'rgba(170,182,205,0.58)' : '#FFC39A'
   });
-  if(!dlClaimed) drawNotifDot(dlX+dlW-u*0.1, dlY+u*0.1, 1, u);
-  drawMiniChip(dcX, dcY, dcW, dcH, dcDone ? `DAILY DONE (${save.challengeBest})` : 'DAILY CHALLENGE', {
-    font: FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace'),
-    accent: dcDone ? 'rgba(120,130,160,0.18)' : 'rgba(255,120,92,0.3)',
-    textColor: dcDone ? 'rgba(176,188,214,0.58)' : '#FFC59A'
-  });
+  if(!dlClaimed) drawNotifDot(layout.loginX + layout.loginW - u*0.1, layout.quickY + u*0.1, 1, u);
 
-  const mapTop = SAFE_TOP+u*2.5, mapBot = H-SAFE_BOTTOM-u*2.5;
+  const mapTop = layout.mapTop, mapBot = layout.mapBot;
   const mapH = mapBot - mapTop;
   const totalLevels = 40;
   const nodeSpacingY = u*4;
@@ -7178,46 +7223,50 @@ function drawLevelMap(dt) {
   }
   ctx.restore();
 
-  const footerY = H - SAFE_BOTTOM - u * 2.2;
-  drawPanel(SAFE_LEFT + u * 0.5, footerY, W - SAFE_LEFT - SAFE_RIGHT - u, u * 1.9, {
-    radius: u * 0.4,
-    top: 'rgba(16,24,40,0.92)',
-    bottom: 'rgba(8,12,22,0.9)',
-    stroke: 'rgba(255,255,255,0.1)',
-    accent: 'rgba(120,200,255,0.12)',
-    blur: 16
-  });
-
-  const btnW = u*5, btnH = u*1.3;
   const hasNextLevel = G._nextLevelNum && G._nextLevelNum > 0;
   const canResume = save.savedLevel > 1 && (save.cooldownEnd-Date.now()) <= 0;
+  drawMiniChip(layout.runnerX, layout.infoY, layout.runnerW, layout.infoH, 'RUNNER ' + runner.name.toUpperCase(), {
+    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
+    accent: lightenColor(runner.col, 12),
+    textColor: '#F5F7FF'
+  });
+  drawMiniChip(layout.progressX, layout.infoY, layout.progressW, layout.infoH, `CLEARED ${save.highestLevel}/40`, {
+    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
+    accent: 'rgba(120,188,255,0.24)',
+    textColor: '#D8ECFF'
+  });
+
   if (hasNextLevel) {
-    drawPanel(W/2-u*3.5, H-SAFE_BOTTOM-u*2.0, u*7, u*1.5, {
-      radius: u * 0.4,
-      top: 'rgba(34,126,66,0.95)',
-      bottom: 'rgba(20,84,44,0.92)',
-      stroke: 'rgba(150,255,190,0.2)',
-      accent: 'rgba(180,255,200,0.2)'
+    drawActionCard(layout.nextX, layout.actionY, layout.nextW, layout.actionH, `NEXT LEVEL ${G._nextLevelNum}`, null, {
+      top: '#2F7A48',
+      bottom: '#184327',
+      stroke: '#76DEA0',
+      accent: '#4ED37D',
+      labelColor: '#F7FFF8',
+      labelFont: FONTS['b0.56'] || ('bold ' + Math.round(u * 0.56) + 'px monospace')
     });
-    ctx.font = FONTS['b0.7'] || ('bold ' + Math.round(u * 0.7) + 'px monospace');
-    ctx.fillStyle = '#F5F7FF';
-    ctx.fillText(`NEXT - LEVEL ${G._nextLevelNum}`, W/2, H-SAFE_BOTTOM-u*1.25);
   } else {
     if (canResume) {
-      const rx = W*0.3-btnW/2, ry = H-SAFE_BOTTOM-u*1.8;
-      drawMiniChip(rx, ry, btnW, btnH, `RESUME L${save.savedLevel}`, {
-        font: FONTS['b0.45'] || ('bold ' + Math.round(u * 0.45) + 'px monospace'),
-        accent: 'rgba(90,230,140,0.26)'
+      drawActionCard(layout.resumeX, layout.actionY, layout.actionW, layout.actionH, 'RESUME RUN', `LEVEL ${save.savedLevel}`, {
+        top: '#2F7A48',
+        bottom: '#184327',
+        stroke: '#76DEA0',
+        accent: '#4ED37D',
+        labelColor: '#F7FFF8',
+        subColor: 'rgba(214,255,226,0.76)',
+        labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px monospace')
       });
     }
-    const nrX = (canResume ? W*0.7 : W*0.5)-btnW/2, nrY = H-SAFE_BOTTOM-u*1.8;
-    drawMiniChip(nrX, nrY, btnW, btnH, 'NEW RUN', {
-      font: FONTS['b0.45'] || ('bold ' + Math.round(u * 0.45) + 'px monospace'),
-      accent: 'rgba(120,180,255,0.26)'
+    drawActionCard(canResume ? layout.newRunX : layout.centerActionX, layout.actionY, layout.actionW, layout.actionH, 'NEW RUN', null, {
+      top: 'rgba(44,64,114,0.96)',
+      bottom: 'rgba(22,30,58,0.92)',
+      stroke: 'rgba(167,192,255,0.36)',
+      accent: '#6288D9',
+      labelColor: '#EDF4FF',
+      labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px monospace')
     });
     if(save.highestLevel >= 40){
-      const eW=u*5, eH=u*1, eX=W/2-eW/2, eY=H-SAFE_BOTTOM-u*3.3;
-      drawMiniChip(eX, eY, eW, eH, `ENDLESS${save.endlessBest>0?' '+save.endlessBest:''}`, {
+      drawMiniChip(layout.endlessX, layout.endlessY, layout.endlessW, layout.endlessH, `ENDLESS${save.endlessBest>0?' '+save.endlessBest:''}`, {
         font: FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace'),
         accent: 'rgba(214,106,255,0.22)',
         textColor: '#EAB8FF'
@@ -7776,8 +7825,9 @@ function drawCharSelect() {
     };
 
     ctx.save();
-    ctx.translate(cx, ry + cardH * 0.42);
-    if (sel) ctx.scale(1.08, 1.08);
+    ctx.translate(cx, ry + cardH * 0.44);
+    const previewScale = sel ? 1.5 : 1.34;
+    ctx.scale(previewScale, previewScale);
     drawChar(preview, true);
     ctx.restore();
 
@@ -8123,46 +8173,34 @@ let mapTouchStartY = 0, mapTouchLastY = 0, mapScrolling = false;
 
 function handleLevelMapTap() {
   const tx=inp.tapX, ty=inp.tapY, u=UNIT;
-  const btnW=u*5, btnH=u*1.3;
+  const layout = getLevelMapLayout();
   const hasNextLevel = G._nextLevelNum && G._nextLevelNum > 0;
   const canResume = save.savedLevel > 1 && (save.cooldownEnd-Date.now()) <= 0;
 
-  // Shop button (top-right, left of stats)
-  const shW=u*3.5, shH=u*1, shX=W-shW*2-u*1.2-SAFE_RIGHT, shY=SAFE_TOP+u*.3;
-  if(tx>shX&&tx<shX+shW&&ty>shY&&ty<shY+shH){
+  if(tx>layout.shopX&&tx<layout.shopX+layout.shopW&&ty>layout.shopY&&ty<layout.shopY+layout.shopH){
     G.phase='SHOP'; G.shopScrollY=0; sfxUITap(); return;
   }
-  // Stats button (top-right)
-  const stW=u*3.5, stH=u*1, stX=W-stW-u*.5-SAFE_RIGHT, stY=SAFE_TOP+u*.3;
-  if(tx>stX&&tx<stX+stW&&ty>stY&&ty<stY+stH){
+  if(tx>layout.statsX&&tx<layout.statsX+layout.statsW&&ty>layout.statsY&&ty<layout.statsY+layout.statsH){
     G.phase='STATS'; G.statsScrollY=0; G.statsTargetScrollY=0; sfxUITap(); return;
   }
-  // Missions button
-  const miW=u*3.8, miH=u*1, miX=SAFE_LEFT+u*2, miY=SAFE_TOP+u*.3;
-  if(tx>miX&&tx<miX+miW&&ty>miY&&ty<miY+miH){
+  if(tx>layout.missionX&&tx<layout.missionX+layout.missionW&&ty>layout.quickY&&ty<layout.quickY+layout.quickH){
     G.phase='MISSIONS'; sfxUITap(); return;
   }
-  // Daily login button tap
-  const dlW2=u*3.5, dlH2=u*1, dlX2=miX+miW+u*2.0, dlY2=SAFE_TOP+u*.3;
-  if(tx>dlX2&&tx<dlX2+dlW2&&ty>dlY2&&ty<dlY2+dlH2){
+  if(tx>layout.loginX&&tx<layout.loginX+layout.loginW&&ty>layout.quickY&&ty<layout.quickY+layout.quickH){
     if(checkDailyReward()){ G.phase='DAILY_REWARD'; }
     else { G.phase='DAILY_REWARD'; G.dailyRewardType=null; G.dailyRewardClaimed=true; G.dailyRewardTimer=0; }
     sfxUITap(); return;
   }
-  // Settings gear
-  const geX=miX+miW+u*0.3, geY=SAFE_TOP+u*.3, geW=u*1.3, geH=u*1;
-  if(tx>geX&&tx<geX+geW&&ty>geY&&ty<geY+geH){
+  if(tx>layout.settingsX&&tx<layout.settingsX+layout.settingsW&&ty>layout.settingsY&&ty<layout.settingsY+layout.settingsH){
     G._settingsReturnPhase='LEVEL_MAP'; G.phase='SETTINGS'; sfxUITap(); return;
   }
-  // Speaker toggle
-  if(checkSpeakerTap(tx,ty,SAFE_LEFT+u*.3,SAFE_TOP+u*.3,u*1)){
+  if(checkSpeakerTap(tx,ty,layout.speakerX,layout.speakerY,layout.speakerSize)){
     soundMuted=!soundMuted; sfxUITap(); return;
   }
 
   // "Next Level" button (after completing a level)
   if (hasNextLevel) {
-    const nlW=u*7, nlH=u*1.5;
-    if(tx>W/2-nlW/2 && tx<W/2+nlW/2 && ty>H-SAFE_BOTTOM-u*1.25-nlH/2 && ty<H-SAFE_BOTTOM-u*1.25+nlH/2) {
+    if(tx>layout.nextX && tx<layout.nextX+layout.nextW && ty>layout.actionY && ty<layout.actionY+layout.actionH) {
       const nextLvl = G._nextLevelNum;
       const pendingPowerup = G._pendingWheelResult;
       G._nextLevelNum = 0;
@@ -8175,8 +8213,7 @@ function handleLevelMapTap() {
 
   // Resume button
   if (!hasNextLevel && canResume) {
-    const rx=W*0.3-btnW/2, ry=H-SAFE_BOTTOM-u*1.8;
-    if(tx>rx && tx<rx+btnW && ty>ry && ty<ry+btnH) {
+    if(tx>layout.resumeX && tx<layout.resumeX+layout.actionW && ty>layout.actionY && ty<layout.actionY+layout.actionH) {
       G.selectedChar = safeSelectedChar();
       resumeFromSave();
       return;
@@ -8185,29 +8222,22 @@ function handleLevelMapTap() {
 
   // New Run button
   if (!hasNextLevel) {
-    const nrX = (canResume ? W*0.7 : W*0.5)-btnW/2, nrY = H-SAFE_BOTTOM-u*1.8;
-    if(tx>nrX && tx<nrX+btnW && ty>nrY && ty<nrY+btnH) {
+    const newRunX = canResume ? layout.newRunX : layout.centerActionX;
+    if(tx>newRunX && tx<newRunX+layout.actionW && ty>layout.actionY && ty<layout.actionY+layout.actionH) {
       G.phase = 'CHAR_SELECT';
       return;
     }
   }
 
-  // Daily Challenge button
-  const dcW=u*6, dcH=u*0.9, dcX=W/2-dcW/2, dcY=SAFE_TOP+u*2.25;
-  if(tx>dcX&&tx<dcX+dcW&&ty>dcY&&ty<dcY+dcH){
-    sfxUITap(); startDailyChallenge(); return;
-  }
-
   // Endless mode button
   if(!hasNextLevel && save.highestLevel >= 40){
-    const eW=u*5, eH=u*1, eX=W/2-eW/2, eY=H-SAFE_BOTTOM-u*3.3;
-    if(tx>eX&&tx<eX+eW&&ty>eY&&ty<eY+eH){
+    if(tx>layout.endlessX&&tx<layout.endlessX+layout.endlessW&&ty>layout.endlessY&&ty<layout.endlessY+layout.endlessH){
       sfxUITap(); startEndlessMode(); return;
     }
   }
 
   // Tap on level nodes
-  const mapTop = SAFE_TOP+u*2.5, mapBot = H-SAFE_BOTTOM-u*2.5;
+  const mapTop = layout.mapTop, mapBot = layout.mapBot;
   const nodeSpacingY = u*4;
 
   // Check all tappable levels (completed + current)
@@ -8330,7 +8360,7 @@ function drawDebugPanel() {
     `Frame: ${(DT*1000).toFixed(1)}ms  |  Chunks: ${typeof chunks!=='undefined'?chunks.length:'--'}  |  Online: ${isOnline}`,
     `Ads: ready=${adReady} deaths=${adDeathCount} last=${adLastShownTime?Math.round((Date.now()-adLastShownTime)/1000)+'s ago':'never'}`,
     `Save: ${JSON.stringify(save).length} bytes  |  Sprites: ${Object.keys(charSprites).map(function(k){return k[0].toUpperCase()+'='+charSprites[k].ready;}).join(' ')}`,
-    `Event: ${_activeEvent?_activeEvent.name:'none'}  |  Streak: ${save.dailyStreak}d`,
+    `Missions ready: ${(save.missions&&save.missions.daily||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length + (save.missions&&save.missions.weekly||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length}  |  Streak: ${save.dailyStreak}d`,
     `Player HP: ${G.player?G.player.hp:'--'}/${G.player?G.player.maxHP:'--'}`,
     `Score: ${G.runScore}  |  Gems: ${G.runGems}  |  Combo: ${G.combo}x${G.comboMult}`,
     `Speed: ${G.speed?G.speed.toFixed(0):'--'}  |  Time Left: ${G.timeLeft?G.timeLeft.toFixed(1):'--'}`,
@@ -8613,17 +8643,6 @@ function loop(ts){
           else { inp.tapped=false; } // consume tap
         }
         else { inp.tapped=false;handleLevelMapTap(); }
-      }
-      // Seasonal event banner
-      if (!_activeEvent) checkSeasonalEvent();
-      if (_activeEvent) {
-        const _eu=UNIT, _ew=W*.6, _eh=_eu*1.2;
-        const _ex=W/2-_ew/2, _ey=SAFE_TOP+_eu*.3;
-        ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(_ex,_ey,_ew,_eh);
-        ctx.strokeStyle=_activeEvent.color;ctx.lineWidth=2;ctx.strokeRect(_ex,_ey,_ew,_eh);
-        ctx.font='bold '+Math.round(_eu*.5)+'px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillStyle=_activeEvent.color;
-        ctx.fillText(_activeEvent.icon+' '+_activeEvent.name.toUpperCase()+' EVENT '+_activeEvent.icon, W/2, _ey+_eh/2);
       }
       // Rate prompt overlay
       if (G._showRatePrompt) {

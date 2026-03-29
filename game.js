@@ -616,39 +616,40 @@ function updateTooltip(dt) {
 function drawTooltip() {
   if (!tooltipState.active || tooltipState.alpha <= 0) return;
   const u = UNIT;
+  const compact = W < 1100 || H < 560;
   const a = tooltipState.alpha;
-  ctx.font = `bold ${u * 0.55}px monospace`;
+  ctx.font = `bold ${u * (compact ? 0.42 : 0.48)}px monospace`;
   const tw = ctx.measureText(tooltipState.text).width;
-  const padX = u * 0.8;
-  const bw = tw + padX * 2 + u * 1.5;
-  const bh = u * 1.4;
+  const padX = u * (compact ? 0.56 : 0.66);
+  const bw = Math.min(W - SAFE_LEFT - SAFE_RIGHT - u * 1.3, tw + padX * 2 + u * 1.15);
+  const bh = u * (compact ? 0.94 : 1.04);
   const bx = W / 2 - bw / 2;
-  const by = H * 0.2;
+  const by = Math.max(SAFE_TOP + u * 3.05, H * (compact ? 0.29 : 0.25));
 
   ctx.save();
   ctx.globalAlpha = a * 0.9;
-  fillRR(bx, by, bw, bh, u * 0.3, 'rgba(0,0,0,0.8)', 'rgba(255,215,0,0.7)', 2.5);
+  fillRR(bx, by, bw, bh, u * 0.26, 'rgba(8,12,22,0.9)', 'rgba(255,215,0,0.58)', 2);
   ctx.globalAlpha = a;
 
   const icon = tooltipState.icon || '';
   if (icon) {
-    const arrowX = bx + u * 0.8;
+    const arrowX = bx + u * 0.62;
     const arrowY = by + bh / 2;
-    const bounce = Math.sin((G.time || 0) * 6) * u * 0.15;
+    const bounce = Math.sin((G.time || 0) * 6) * u * 0.12;
     ctx.fillStyle = '#FFD700';
     ctx.strokeStyle = '#FFD700';
-    ctx.lineWidth = u * 0.08;
+    ctx.lineWidth = u * 0.06;
     ctx.lineCap = 'round';
     if (icon === 'up') {
-      ctx.beginPath(); ctx.moveTo(arrowX, arrowY + bounce - u * 0.2); ctx.lineTo(arrowX - u * 0.2, arrowY + bounce + u * 0.15); ctx.lineTo(arrowX + u * 0.2, arrowY + bounce + u * 0.15); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(arrowX, arrowY + bounce - u * 0.17); ctx.lineTo(arrowX - u * 0.17, arrowY + bounce + u * 0.12); ctx.lineTo(arrowX + u * 0.17, arrowY + bounce + u * 0.12); ctx.closePath(); ctx.fill();
     } else if (icon === 'down') {
-      ctx.beginPath(); ctx.moveTo(arrowX, arrowY - bounce + u * 0.2); ctx.lineTo(arrowX - u * 0.2, arrowY - bounce - u * 0.15); ctx.lineTo(arrowX + u * 0.2, arrowY - bounce - u * 0.15); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(arrowX, arrowY - bounce + u * 0.17); ctx.lineTo(arrowX - u * 0.17, arrowY - bounce - u * 0.12); ctx.lineTo(arrowX + u * 0.17, arrowY - bounce - u * 0.12); ctx.closePath(); ctx.fill();
     } else if (icon === 'right') {
-      ctx.beginPath(); ctx.moveTo(arrowX + bounce + u * 0.2, arrowY); ctx.lineTo(arrowX + bounce - u * 0.15, arrowY - u * 0.2); ctx.lineTo(arrowX + bounce - u * 0.15, arrowY + u * 0.2); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(arrowX + bounce + u * 0.17, arrowY); ctx.lineTo(arrowX + bounce - u * 0.12, arrowY - u * 0.17); ctx.lineTo(arrowX + bounce - u * 0.12, arrowY + u * 0.17); ctx.closePath(); ctx.fill();
     } else if (icon === 'gem') {
-      ctx.beginPath(); ctx.moveTo(arrowX, arrowY - u * 0.25 + bounce * 0.5); ctx.lineTo(arrowX + u * 0.15, arrowY - u * 0.05); ctx.lineTo(arrowX + u * 0.15, arrowY + u * 0.1); ctx.lineTo(arrowX, arrowY + u * 0.25); ctx.lineTo(arrowX - u * 0.15, arrowY + u * 0.1); ctx.lineTo(arrowX - u * 0.15, arrowY - u * 0.05); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(arrowX, arrowY - u * 0.2 + bounce * 0.5); ctx.lineTo(arrowX + u * 0.12, arrowY - u * 0.04); ctx.lineTo(arrowX + u * 0.12, arrowY + u * 0.08); ctx.lineTo(arrowX, arrowY + u * 0.2); ctx.lineTo(arrowX - u * 0.12, arrowY + u * 0.08); ctx.lineTo(arrowX - u * 0.12, arrowY - u * 0.04); ctx.closePath(); ctx.fill();
     } else if (icon === 'warn') {
-      ctx.font = `bold ${u * 0.7}px monospace`;
+      ctx.font = `bold ${u * 0.54}px monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#FF4444';
@@ -658,7 +659,7 @@ function drawTooltip() {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `bold ${u * 0.55}px monospace`;
+  ctx.font = `bold ${u * (compact ? 0.42 : 0.48)}px monospace`;
   ctx.fillStyle = '#FFD700';
   ctx.fillText(tooltipState.text, W / 2, by + bh / 2);
   ctx.restore();
@@ -6537,6 +6538,8 @@ function drawHUD(dt){
   const rightW = hudW - leftW - centerW - gap * 2;
   const centerX = hudX + leftW + gap;
   const rightX = centerX + centerW + gap;
+  if (G.comboPulse > 0) G.comboPulse = Math.max(0, G.comboPulse - dt * 2);
+  const comboVisible = G.combo >= 5;
 
   drawPanel(hudX, hudY, hudW, hudH, {
     radius: u * 0.38,
@@ -6615,6 +6618,15 @@ function drawHUD(dt){
   ctx.font = FONTS['b0.7'] || ('bold ' + Math.round(u * 0.7) + 'px monospace');
   ctx.fillStyle = '#FFE27A';
   ctx.fillText(`${G.runScore}`, rightX + innerPad, hudY + u * 0.56);
+  const statChipW = Math.min(u * (compact ? 2.5 : 2.75), rightW * 0.34);
+  const statChipX = rightX + rightW - innerPad - statChipW;
+  drawMiniChip(statChipX, hudY + u * 0.2, statChipW, u * 0.56, `SAVE ${Math.max(0, G.continuesLeft)}`, {
+    font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace'),
+    accent: G.continuesLeft > 0 ? 'rgba(255,143,112,0.28)' : 'rgba(110,118,138,0.18)',
+    textColor: G.continuesLeft > 0 ? '#FFD9C9' : 'rgba(182,188,210,0.72)',
+    top: G.continuesLeft > 0 ? 'rgba(42,24,20,0.92)' : 'rgba(18,22,34,0.9)',
+    bottom: G.continuesLeft > 0 ? 'rgba(20,10,10,0.9)' : 'rgba(10,14,24,0.88)'
+  });
   ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
   ctx.fillStyle = 'rgba(184,198,224,0.64)';
   ctx.fillText('GEMS', rightX + innerPad, hudY + u * 1.16);
@@ -6622,15 +6634,32 @@ function drawHUD(dt){
   ctx.font = FONTS['b0.44'] || ('bold ' + Math.round(u * 0.44) + 'px monospace');
   ctx.fillStyle = `hsl(${G.theme.gemH},100%,68%)`;
   ctx.fillText(`${G.runGems}`, rightX + innerPad + u * 0.44, hudY + u * 1.38);
-  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
-  ctx.fillStyle = 'rgba(184,198,224,0.64)';
-  ctx.fillText('SAVES', rightX + rightW * 0.54, hudY + u * 1.16);
-  if (G.continuesLeft > 0) {
-    drawHeartShape(rightX + rightW * 0.54 + u * 0.18, hudY + u * 1.62, u * 0.16, '#FF8F70', 'rgba(255,255,255,0.18)');
+  if (comboVisible) {
+    const colors = ['#FFD766', '#FFAE47', '#FF6F61', '#FF53CF', '#61EDFF', '#FF5B87'];
+    const cIdx = Math.min(Math.max(0, Math.floor((G.combo - 5) / 5)), colors.length - 1);
+    let comboCol = colors[cIdx];
+    if (G.combo >= 30) comboCol = `hsl(${(G.time * 360) % 360},100%,65%)`;
+    const comboPulse = 1 + G.comboPulse * 0.16;
+    const comboChipW = Math.min(u * (compact ? 3.05 : 3.45), rightW * 0.46);
+    const comboChipX = rightX + rightW - innerPad - comboChipW;
+    ctx.save();
+    ctx.translate(comboChipX + comboChipW / 2, hudY + u * 1.62);
+    ctx.scale(comboPulse, comboPulse);
+    drawPanel(-comboChipW / 2, -u * 0.28, comboChipW, u * 0.56, {
+      radius: u * 0.24,
+      top: 'rgba(28,18,24,0.92)',
+      bottom: 'rgba(12,8,16,0.9)',
+      stroke: 'rgba(255,255,255,0.07)',
+      accent: comboCol,
+      blur: 10
+    });
+    ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = comboCol;
+    ctx.fillText(`COMBO x${G.combo}`, 0, 0);
+    ctx.restore();
   }
-  ctx.font = FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace');
-  ctx.fillStyle = G.continuesLeft > 0 ? '#FFB066' : 'rgba(150,160,185,0.55)';
-  ctx.fillText(`${Math.max(0, G.continuesLeft)}`, rightX + rightW * 0.54 + u * 0.44, hudY + u * 1.38);
 
   drawMiniChip(W - SAFE_RIGHT - u * 1.48, hudY + u * 0.16, u * 1.1, u * 0.98, '||', {
     font: FONTS['b0.55'] || ('bold ' + Math.round(u * 0.55) + 'px monospace'),
@@ -6638,50 +6667,25 @@ function drawHUD(dt){
   });
   drawSpeakerIcon(SAFE_LEFT + u * 0.3, hudY + u * 0.14, u * 1.0);
 
-  if (G.combo > 0) {
-    const colors = ['#FFFFFF', '#FFD766', '#FFAE47', '#FF6F61', '#FF53CF', '#61EDFF', '#FF5B87'];
-    const cIdx = Math.min(Math.floor(G.combo / 5), colors.length - 1);
-    let comboCol = colors[cIdx];
-    if (G.combo >= 30) comboCol = `hsl(${(G.time * 360) % 360},100%,65%)`;
-    const comboPulse = 1 + (G.comboPulse > 0 ? G.comboPulse * 0.18 : 0);
-    if (G.comboPulse > 0) G.comboPulse -= dt * 2;
-    const comboW = Math.min(W * (compact ? 0.24 : 0.3), u * (compact ? 4.7 : 5.7));
-    const comboY = hudY + hudH + (compact ? u * 0.14 : u * 0.22);
-    ctx.save();
-    ctx.translate(hudX + comboW / 2, comboY + u * 0.36);
-    ctx.scale(comboPulse, comboPulse);
-    drawPanel(-comboW / 2, -u * 0.36, comboW, u * 0.72, {
-      radius: u * 0.28,
-      top: 'rgba(24,16,24,0.92)',
-      bottom: 'rgba(10,8,16,0.9)',
-      stroke: 'rgba(255,255,255,0.08)',
-      accent: comboCol
-    });
-    ctx.font = FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace');
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = comboCol;
-    ctx.fillText(`COMBO x${G.combo}  ${G.comboMult}.0x`, 0, 0);
-    ctx.restore();
-  }
-
   if (G.announce && G.announce.life > 0) {
     const al = clamp(G.announce.life, 0, 1);
     const sc = 1 + (1 - al) * 0.12;
-    const annW = Math.min(W * (compact ? 0.5 : 0.56), u * (compact ? 7.4 : 8.6));
-    const annY = hudY + hudH + (G.combo > 0 ? (compact ? u * 0.82 : u * 1.05) : (compact ? u * 0.24 : u * 0.38));
+    const annW = Math.min(W * (compact ? 0.42 : 0.46), u * (compact ? 6.4 : 7.3));
+    const annH = u * (compact ? 0.7 : 0.76);
+    const tooltipActive = !!(tooltipState.active && tooltipState.alpha > 0);
+    const annY = Math.max(hudY + hudH + u * 0.24, H * (compact ? 0.225 : 0.2)) + (tooltipActive ? u * (compact ? 0.98 : 1.08) : 0);
     ctx.save();
     ctx.globalAlpha = al;
-    ctx.translate(W / 2, annY + u * 0.4);
+    ctx.translate(W / 2, annY + annH / 2);
     ctx.scale(sc, sc);
-    drawPanel(-annW / 2, -u * 0.4, annW, u * 0.8, {
-      radius: u * 0.34,
-      top: 'rgba(28,18,12,0.94)',
-      bottom: 'rgba(12,10,8,0.92)',
-      stroke: 'rgba(255,223,120,0.2)',
-      accent: 'rgba(255,215,0,0.28)'
+    drawPanel(-annW / 2, -annH / 2, annW, annH, {
+      radius: u * 0.28,
+      top: 'rgba(24,18,12,0.94)',
+      bottom: 'rgba(10,10,8,0.92)',
+      stroke: 'rgba(255,223,120,0.16)',
+      accent: 'rgba(255,215,0,0.24)'
     });
-    ctx.font = FONTS['b0.46'] || ('bold ' + Math.round(u * 0.46) + 'px monospace');
+    ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#FFD45E';
@@ -6842,12 +6846,20 @@ function drawMenu(){
 function drawLevelComplete(dt){
   G.levelCompleteTimer += dt;
   const u = UNIT;
-  const panelW = Math.min(W * 0.82, u * 12.8);
-  const panelH = u * 7.2;
+  const compact = W < 1100 || H < 560;
+  const panelW = Math.min(W * (compact ? 0.78 : 0.74), u * (compact ? 11.1 : 12.2));
+  const panelH = u * (compact ? 8.45 : 8.9);
   const panelX = W / 2 - panelW / 2;
-  const panelY = H * 0.16;
+  const panelY = Math.max(SAFE_TOP + u * 0.75, H * (compact ? 0.11 : 0.13));
+  const innerPad = u * 0.62;
   const timeBonus = Math.floor(G.timeLeft * 10);
   const stars = G._levelStarsEarned || 1;
+  const statGap = u * 0.32;
+  const statW = (panelW - innerPad * 2 - statGap) / 2;
+  const statH = u * 1.58;
+  const statY = panelY + u * 3.15;
+  const footerW = Math.min(panelW - innerPad * 2, u * (compact ? 8.7 : 9.3));
+  const footerY = panelY + panelH - u * 1.18;
 
   ctx.fillStyle = 'rgba(6,8,14,0.52)';
   ctx.fillRect(0, 0, W, H);
@@ -6862,53 +6874,63 @@ function drawLevelComplete(dt){
 
   const pulse = 1 + Math.sin(G.levelCompleteTimer * 4) * 0.04;
   ctx.save();
-  ctx.translate(W / 2, panelY + u * 1.05);
+  ctx.translate(W / 2, panelY + u * 1.0);
   ctx.scale(pulse, pulse);
-  ctx.font = FONTS['b1.55'] || ('bold ' + Math.round(u * 1.55) + 'px monospace');
+  ctx.font = FONTS['b1.35'] || ('bold ' + Math.round(u * 1.35) + 'px monospace');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#FFD45E';
   ctx.fillText('LEVEL CLEAR', 0, 0);
   ctx.restore();
 
-  drawMiniChip(W / 2 - u * 3.7, panelY + u * 1.55, u * 7.4, u * 0.8, G.levelDef.name.toUpperCase(), {
-    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
+  drawMiniChip(panelX + innerPad, panelY + u * 1.55, panelW - innerPad * 2, u * 0.78, G.levelDef.name.toUpperCase(), {
+    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
     accent: 'rgba(120,210,255,0.24)'
   });
 
-  drawPanel(panelX + u * 0.6, panelY + u * 2.7, u * 4.4, u * 1.55, {
+  if (G.newHigh) {
+    drawMiniChip(W / 2 - u * 3.1, panelY + u * 2.35, u * 6.2, u * 0.68, 'NEW BEST SCORE', {
+      font: FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace'),
+      accent: 'rgba(255,110,110,0.26)',
+      textColor: '#FFE7E9'
+    });
+  }
+
+  drawPanel(panelX + innerPad, statY, statW, statH, {
     radius: u * 0.34,
     top: 'rgba(22,20,14,0.92)',
     bottom: 'rgba(12,10,8,0.9)',
     accent: 'rgba(255,215,90,0.24)',
     blur: 14
   });
-  drawPanel(panelX + panelW - u * 5.0, panelY + u * 2.7, u * 4.4, u * 1.55, {
+  drawPanel(panelX + panelW - innerPad - statW, statY, statW, statH, {
     radius: u * 0.34,
     top: 'rgba(18,24,14,0.92)',
     bottom: 'rgba(10,14,8,0.9)',
     accent: 'rgba(140,255,150,0.22)',
     blur: 14
   });
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   ctx.font = FONTS['n0.36'] || (Math.round(u * 0.36) + 'px monospace');
   ctx.fillStyle = 'rgba(188,202,228,0.68)';
-  ctx.fillText('SCORE', panelX + u * 2.8, panelY + u * 3.08);
-  ctx.fillText('TIME BONUS', panelX + panelW - u * 2.8, panelY + u * 3.08);
+  ctx.fillText('RUN SCORE', panelX + innerPad + statW / 2, statY + u * 0.42);
+  ctx.fillText('TIME BONUS', panelX + panelW - innerPad - statW / 2, statY + u * 0.42);
   ctx.font = FONTS['b0.68'] || ('bold ' + Math.round(u * 0.68) + 'px monospace');
   ctx.fillStyle = '#FFE27A';
-  ctx.fillText(`${G.runScore}`, panelX + u * 2.8, panelY + u * 3.62);
+  ctx.fillText(`${G.runScore}`, panelX + innerPad + statW / 2, statY + u * 0.98);
   ctx.fillStyle = '#7FFAA0';
-  ctx.fillText(`+${timeBonus}`, panelX + panelW - u * 2.8, panelY + u * 3.62);
+  ctx.fillText(`+${timeBonus}`, panelX + panelW - innerPad - statW / 2, statY + u * 0.98);
 
   ctx.font = FONTS['n0.36'] || (Math.round(u * 0.36) + 'px monospace');
   ctx.fillStyle = 'rgba(188,202,228,0.7)';
-  ctx.fillText('STAR RATING', W / 2, panelY + u * 4.78);
+  ctx.fillText(stars === 3 ? 'THREE STAR CLEAR' : (stars === 2 ? 'SOLID CLEAR' : 'LEVEL SURVIVED'), W / 2, panelY + u * 5.25);
   for (let s = 0; s < 3; s++) {
-    const sx = W / 2 + (s - 1) * u * 1.45;
+    const sx = W / 2 + (s - 1) * u * 1.35;
     const ready = stars > s && G.levelCompleteTimer > 0.55 + s * 0.25;
     const starScale = ready ? 1 + Math.sin((G.levelCompleteTimer - s * 0.1) * 5) * 0.05 : 1;
     ctx.save();
-    ctx.translate(sx, panelY + u * 5.55);
+    ctx.translate(sx, panelY + u * 6.05);
     ctx.scale(starScale, starScale);
     drawPanel(-u * 0.48, -u * 0.48, u * 0.96, u * 0.96, {
       radius: u * 0.28,
@@ -6923,28 +6945,13 @@ function drawLevelComplete(dt){
     ctx.restore();
   }
 
-  if (G.newHigh) {
-    drawMiniChip(W / 2 - u * 3.1, panelY + panelH - u * 1.45, u * 6.2, u * 0.8, 'NEW BEST SCORE', {
-      font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
-      accent: 'rgba(255,110,110,0.26)'
-    });
-  }
-
-  if (G.levelCompleteTimer > 2) {
-    const _sbw=u*3.5, _sbh=u*.8;
-    const _sbx=W-SAFE_RIGHT-_sbw-u, _sby=H-SAFE_BOTTOM-u*1.5;
-    drawMiniChip(_sbx, _sby, _sbw, _sbh, 'SHARE', {
-      font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
-      accent: 'rgba(80,180,255,0.3)',
-      textColor: '#8FD8FF'
-    });
-  }
-  if (G.levelCompleteTimer > 3) {
+  if (G.levelCompleteTimer > 1.5) {
+    const footerLabel = G.levelCompleteTimer > 2.8 ? 'TAP ANYWHERE FOR BONUS SPIN' : 'BONUS SPIN READY';
     const nextAlpha = 0.55 + Math.sin(Date.now() * 0.005) * 0.25;
     ctx.save();
     ctx.globalAlpha = Math.max(0.18, nextAlpha);
-    drawMiniChip(W / 2 - u * 4.5, H - SAFE_BOTTOM - u * 2.1, u * 9.0, u * 1.0, 'TAP TO SPIN FOR A BONUS', {
-      font: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px monospace'),
+    drawMiniChip(W / 2 - footerW / 2, footerY, footerW, u * 0.92, footerLabel, {
+      font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
       accent: 'rgba(255,215,90,0.24)',
       textColor: '#F5F7FF'
     });
@@ -8957,16 +8964,6 @@ function loop(ts){
       break;
 
     case 'LEVEL_COMPLETE':
-      // Share button on level complete (rendered at bottom-right)
-      if(inp.tapped && G.levelCompleteTimer > 2){
-        const _su=UNIT, _sbw=_su*3.5, _sbh=_su*.8;
-        const _sbx=W-SAFE_RIGHT-_sbw-_su, _sby=H-SAFE_BOTTOM-_su*1.5;
-        if(inp.tapX>_sbx&&inp.tapX<_sbx+_sbw&&inp.tapY>_sby&&inp.tapY<_sby+_sbh){
-          const shareText = "I completed " + G.levelDef.name + " with " + (G._levelStarsEarned||1) + " stars in Gronk's Run!";
-          captureAndShare(shareText);
-          sfxUITap(); inp.tapped=false;
-        }
-      }
       // Keep rendering world in bg
       drawBg(G.theme);
       ctx.save();ctx.translate(shX,shY);

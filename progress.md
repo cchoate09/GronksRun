@@ -15,3 +15,7 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Verification: `node --check game.js`, `node gen_char_assets.js`, `node gen-gamehtmljs.js`, Playwright client smoke run against `index.html`, and a targeted Puppeteer mobile-landscape pass covering character select, level map, gameplay, and level complete.
 - Runtime QA result: all six `charSprites` report `ready=true`, `blocked=false`, `fw=128`, `fh=128`.
 - Residual non-blocker during local web QA: `manifest.json` 404 from the lightweight local server; this did not affect game rendering or runtime logic.
+- Additional mobile UI cleanup pass:
+- Reworked the gameplay HUD to keep combo state inside the main top bar instead of spawning another floating box, turned saves into a compact inline chip, and slimmed/repositioned tooltip and announcement banners so they no longer stack directly under the HUD.
+- Rebuilt the level-clear card around a single centered panel with cleaner spacing, a dedicated bonus-spin CTA, and no detached share button.
+- Verification: `node --check game.js`, `node gen-gamehtmljs.js`, and a Puppeteer mobile-landscape screenshot pass against forced `PLAYING` and `LEVEL_COMPLETE` states using the same aspect ratio as playtest screenshots.

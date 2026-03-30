@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
   <meta name="theme-color" content="#0d1b3e">
@@ -448,7 +449,7 @@ function canShowAd() {
 }
 
 function requestAd(rewardType) {
-  trackAdWatched(rewardType);
+  trackAdShow(rewardType);
   adPendingReward = rewardType;
   adLastShownTime = Date.now();
   adDeathCount = 0;
@@ -477,12 +478,28 @@ function captureAndShare(text) {
   }
 }
 
+function getEventContext(params) {
+  const charIdx = typeof safeSelectedChar === 'function' ? safeSelectedChar() : (save.selectedChar || 0);
+  const char = CHARS[charIdx] || null;
+  const base = {
+    biome: G.levelDef && G.levelDef.theme ? G.levelDef.theme : null,
+    character: char ? char.id : null,
+    daily_challenge: !!G.dailyChallenge,
+    endless_mode: !!G.endless,
+    level: Number.isFinite(G.levelNum) ? G.levelNum : null,
+    phase: G.phase || null,
+    run_gems: Number.isFinite(G.runGems) ? G.runGems : 0,
+    run_score: Number.isFinite(G.runScore) ? G.runScore : 0,
+  };
+  return Object.assign(base, params || {});
+}
+
 function logEvent(eventName, params) {
   if (window.ReactNativeWebView) {
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'analytics',
       event: eventName,
-      params: params || {},
+      params: getEventContext(params),
     }));
   }
 }
@@ -497,13 +514,37 @@ function trackLevelComplete(levelNum, score, stars, timeLeft) {
   });
 }
 function trackDeath(levelNum, cause, score) {
-  logEvent('player_death', { level: levelNum, cause: cause || 'unknown', score: score });
+  logEvent('death', { level: levelNum, cause: cause || 'unknown', score: score });
 }
-function trackAdWatched(rewardType) { logEvent('ad_watched', { reward_type: rewardType }); }
+function trackAdShow(rewardType) { logEvent('ad_show', { reward_type: rewardType }); }
 function trackPurchase(itemId, cost) { logEvent('shop_purchase', { item: itemId, cost: cost }); }
 function trackAchievement(achId) { logEvent('achievement_unlocked', { achievement: achId }); }
 function trackSessionStart() { logEvent('session_start', { highest_level: save.highestLevel, total_gems: save.totalGems }); }
 function trackShare(context) { logEvent('share', { context: context }); }
+function trackTutorialStep(step, params) { logEvent('tutorial_step', Object.assign({ step: step }, params || {})); }
+function trackTutorialComplete() { logEvent('tutorial_complete', { tutorial_seen: true }); }
+function trackContinueOffer() { logEvent('continue_offer', { continues_left: G.continuesLeft }); }
+function trackRetry(source) { logEvent('retry', { retry_source: source || 'unknown' }); }
+function trackNextLevel(levelNum) { logEvent('next_level', { next_level: levelNum }); }
+function trackPhaseView(phase) {
+  switch (phase) {
+    case 'MENU':
+      logEvent('menu_view');
+      break;
+    case 'LEVEL_MAP':
+      logEvent('map_view');
+      break;
+    case 'CHAR_SELECT':
+      logEvent('char_select_view');
+      break;
+    case 'CONTINUE_PROMPT':
+      trackContinueOffer();
+      break;
+    case 'TUTORIAL':
+      trackTutorialStep('tutorial_modal');
+      break;
+  }
+}
 
 function haptic(pattern) {
   if (window.ReactNativeWebView) {
@@ -548,7 +589,7 @@ function adGrantContinue() {
   G.time = 0;
   G.timeLeft = 28;
   G.deathDelay = 0;
-  G.diff = getDiff(0, levelDiffMult(G.levelNum));
+  G.diff = getDiff(0, getLevelOpeningMultiplier(G.levelDef));
   G.speed = G.diff.speed * CHARS[G.selectedChar].spdM;
   G.rng = new RNG(Date.now() ^ (Math.random() * 0x7FFFFFFF | 0));
   G.announce = { text: 'AD CONTINUE!', life: 2 };
@@ -561,7 +602,7 @@ function adGrantContinue() {
   activeEnemies.length = 0;
   ambients.length = 0;
   trauma = 0;
-  enemySpawnCD = 6;
+  enemySpawnCD = getLevelEnemyDelay(G.levelDef);
   initWorld(G.rng, G.diff, G.levelDef.theme);
   G.player = new Player(G.selectedChar);
   checkGemUpgrades(true);
@@ -635,15 +676,231 @@ const TUTORIAL_TIPS = [
 
 let tooltipState = { active: false, text: '', timer: 0, alpha: 0, queue: [], icon: '' };
 
+const GUIDED_LEVELS = {
+  1: {
+    header: 'LESSON 1 OF 3',
+    title: 'Jump + dash',
+    intro: 'Learn the lane first: jump cleanly, then dash to steal space back.',
+    rewardHint: 'Healthy clears plus most gems earn the best star rating.',
+    mapHint: 'Start with the two core movement verbs.',
+    afterClear: 'Next lesson: slide low hazards and stomp down from the air.',
+    cta: 'START LEVEL 1',
+    steps: [
+      { action: 'jump', short: 'JUMP', label: 'Jump once', remind: 'Swipe UP to clear the first ridge.', accent: '#66B3FF', completeText: 'JUMP LOCKED IN' },
+      { action: 'dash', short: 'DASH', label: 'Dash once', remind: 'Swipe RIGHT when the lane tightens.', accent: '#7FFFD4', completeText: 'DASH LOCKED IN' },
+    ],
+  },
+  2: {
+    header: 'LESSON 2 OF 3',
+    title: 'Slide + stomp',
+    intro: 'Stay low under ground hazards, then spike back down when you are airborne.',
+    rewardHint: 'Level 2 is about lane reading, not raw speed. Stay calm and stay centered.',
+    mapHint: 'Practice low hazards and air recovery.',
+    afterClear: 'Next lesson: dash through enemies instead of only dodging them.',
+    cta: 'START LEVEL 2',
+    steps: [
+      { action: 'slide', short: 'SLIDE', label: 'Slide once', remind: 'Swipe DOWN on the ground to duck under danger.', accent: '#F5B14B', completeText: 'SLIDE LOCKED IN' },
+      { action: 'pound', short: 'STOMP', label: 'Ground pound once', remind: 'Swipe DOWN in the air to slam back to the lane.', accent: '#FF8D5A', completeText: 'STOMP LOCKED IN' },
+    ],
+  },
+  3: {
+    header: 'LESSON 3 OF 3',
+    title: 'Dash through enemies',
+    intro: 'Enemies are part of the lane. Burst through one while dashing instead of giving up space.',
+    rewardHint: 'Once this clicks, missions, new runners, and later biomes start opening up.',
+    mapHint: 'Learn offensive dash timing.',
+    afterClear: 'After this, use missions, login rewards, and runners to shape the next run.',
+    cta: 'START LEVEL 3',
+    steps: [
+      { action: 'dash', short: 'DASH', label: 'Dash once', remind: 'Swipe RIGHT before the first enemy closes in.', accent: '#7FFFD4', completeText: 'DASH READY' },
+      { action: 'dash_hit', short: 'HIT', label: 'Dash through one enemy', remind: 'Stay committed and hit an enemy while the dash glow is active.', accent: '#FF8B72', completeText: 'ENEMY BROKEN' },
+    ],
+  },
+};
+
+const GUIDED_CHUNK_PLANS = {
+  1: [
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'RIDGE', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+    { type: 'RIDGE', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+  ],
+  2: [
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'VALLEY', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'RIDGE', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'VALLEY', allowObstacles: false, allowPteros: false },
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+  ],
+  3: [
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'RIDGE', allowObstacles: false, allowPteros: false },
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'VALLEY', allowObstacles: false, allowPteros: false },
+    { type: 'FLAT', allowObstacles: false, allowPteros: false },
+    { type: 'GEM_RUN', allowObstacles: false, allowPteros: false },
+  ],
+};
+
+function getGuidedLevel(levelNum) {
+  return GUIDED_LEVELS[levelNum] || null;
+}
+
+function shouldRunGuidedLevel(levelNum) {
+  if (levelNum > 3) return false;
+  if (typeof G === 'undefined') return false;
+  if (G.endless || G.dailyChallenge) return false;
+  return save.highestLevel < 3;
+}
+
+function configureGuidedLevel(levelNum) {
+  const guide = getGuidedLevel(levelNum);
+  if (!guide || !shouldRunGuidedLevel(levelNum)) {
+    G.onboarding = null;
+    return null;
+  }
+  G.onboarding = {
+    level: levelNum,
+    header: guide.header,
+    title: guide.title,
+    intro: guide.intro,
+    rewardHint: guide.rewardHint,
+    mapHint: guide.mapHint,
+    afterClear: guide.afterClear,
+    cta: guide.cta,
+    completed: false,
+    completedAt: 0,
+    steps: guide.steps.map(function(step) {
+      return {
+        action: step.action,
+        short: step.short,
+        label: step.label,
+        remind: step.remind,
+        accent: step.accent,
+        completeText: step.completeText,
+        done: false,
+      };
+    }),
+  };
+  return G.onboarding;
+}
+
+function getGuidedPendingStep() {
+  const guide = G.onboarding;
+  if (!guide || !Array.isArray(guide.steps)) return null;
+  for (let i = 0; i < guide.steps.length; i++) {
+    if (!guide.steps[i].done) return guide.steps[i];
+  }
+  return null;
+}
+
+function noteGuidedAction(action, params) {
+  const guide = G.onboarding;
+  if (!guide || guide.level !== G.levelNum || G.phase !== 'PLAYING') return false;
+
+  let matched = null;
+  for (let i = 0; i < guide.steps.length; i++) {
+    const step = guide.steps[i];
+    if (!step.done && step.action === action) {
+      step.done = true;
+      matched = step;
+      break;
+    }
+  }
+  if (!matched) return false;
+
+  showAnnouncement(matched.completeText || matched.label.toUpperCase(), matched.accent || '#FFD700');
+  trackTutorialStep('guided_' + action, Object.assign({
+    guided_level: guide.level,
+    guided_title: guide.title,
+  }, params || {}));
+
+  if (!getGuidedPendingStep()) {
+    guide.completed = true;
+    guide.completedAt = G.time || 0;
+    showAnnouncement('LESSON CLEAR', '#7DF09B');
+    trackTutorialStep('guided_level_complete', {
+      guided_level: guide.level,
+      guided_title: guide.title,
+    });
+  }
+  return true;
+}
+
+function getGuidedGoalForLevel(levelNum) {
+  const guide = getGuidedLevel(levelNum);
+  if (!guide || !shouldRunGuidedLevel(levelNum)) return null;
+  return guide;
+}
+
+function getUpcomingGuidedGoal(levelNum) {
+  return getGuidedGoalForLevel(levelNum);
+}
+
+function getPostLevelGuidance(levelNum) {
+  const guide = G.onboarding && G.onboarding.level === levelNum ? G.onboarding : getGuidedGoalForLevel(levelNum);
+  if (guide && guide.afterClear) return guide.afterClear;
+  const nextGuide = getUpcomingGuidedGoal(levelNum + 1);
+  return nextGuide ? nextGuide.mapHint : '';
+}
+
+function getUnclaimedMissionCount() {
+  const daily = save.missions && save.missions.daily || [];
+  const weekly = save.missions && save.missions.weekly || [];
+  let count = 0;
+  for (let i = 0; i < daily.length; i++) {
+    const mission = daily[i];
+    if (!mission.claimed && (mission.progress || 0) >= mission.target) count++;
+  }
+  for (let i = 0; i < weekly.length; i++) {
+    const mission = weekly[i];
+    if (!mission.claimed && (mission.progress || 0) >= mission.target) count++;
+  }
+  return count;
+}
+
+function getRewardReadyHint(levelNum) {
+  const unclaimed = getUnclaimedMissionCount();
+  if (!unclaimed || G.endless || G.dailyChallenge) return '';
+  if (levelNum > 3 && save.highestLevel > 3) return '';
+  return unclaimed === 1
+    ? 'Mission reward ready - open missions for bonus gems.'
+    : `${unclaimed} mission rewards ready - open missions for bonus gems.`;
+}
+
+function shouldUseGuidedChunkPlan() {
+  return !!(G.onboarding && G.onboarding.level === G.levelNum && !G.endless && !G.dailyChallenge);
+}
+
+function getGuidedChunkSpec(levelNum, index) {
+  const plan = GUIDED_CHUNK_PLANS[levelNum];
+  if (!plan || index < 0 || index >= plan.length) return null;
+  const spec = plan[index];
+  return typeof spec === 'string' ? { type: spec } : Object.assign({}, spec);
+}
+
 function triggerLevelTooltips(levelNum) {
   tooltipState.queue = [];
   tooltipState.active = false;
   tooltipState.alpha = 0;
   tooltipState.icon = '';
+  if (getGuidedGoalForLevel(levelNum)) return;
   if (save.highestLevel > levelNum + 2) return;
   const tips = TUTORIAL_TIPS.filter(function(t) { return t.level === levelNum; });
   for (let i = 0; i < tips.length; i++) {
     tooltipState.queue.push({
+      level: tips[i].level,
       text: tips[i].text,
       delay: tips[i].delay,
       duration: tips[i].duration,
@@ -671,6 +928,10 @@ function updateTooltip(dt) {
       tooltipState.timer = next.duration;
       tooltipState.alpha = 0;
       tooltipState.icon = next.icon || '';
+      trackTutorialStep(next.text, {
+        tip_icon: next.icon || '',
+        tutorial_level: next.level || G.levelNum || 1,
+      });
     }
   }
 }
@@ -966,6 +1227,7 @@ function buySkin(skinId, charId) {
   if (!save.ownedSkins) save.ownedSkins = [];
   save.ownedSkins.push(skinId);
   save.activeSkins[charId] = skinId;
+  trackPurchase(`skin_${skinId}`, skin.cost);
   persistSave();
   return true;
 }
@@ -1075,11 +1337,11 @@ function updateSlowMo(dt) {
 // LEVEL DATA  (5 unique themes, then repeat harder)
 // ============================================================
 const LEVEL_DEFS = [
-  { name:'Jungle Ruins',   theme:'JUNGLE',  targetTime:45, enemies:['TROLL','SERPENT'] },
-  { name:'Volcanic Caves', theme:'VOLCANO', targetTime:55, enemies:['TROLL','CHARGER','GOLEM'] },
-  { name:'Glacier Peaks',  theme:'GLACIER', targetTime:65, enemies:['CHARGER','DIVER','BOMBER'] },
-  { name:'Murky Swamp',    theme:'SWAMP',   targetTime:75, enemies:['TROLL','WITCH','SERPENT','GOLEM'] },
-  { name:'Sky Sanctuary',  theme:'SKY',     targetTime:85, enemies:['DIVER','WITCH','CHARGER','BOMBER'] },
+  { name:'Jungle Ruins',   theme:'JUNGLE',  targetTime:36, enemies:[], paceScale:0.88, enemyDelay:999, focus:'Jump + dash' },
+  { name:'Volcanic Caves', theme:'VOLCANO', targetTime:44, enemies:[], paceScale:0.98, enemyDelay:999, focus:'Slide + stomp' },
+  { name:'Glacier Peaks',  theme:'GLACIER', targetTime:54, enemies:['SERPENT'], paceScale:1.08, enemyDelay:8.5, focus:'Dash through enemies' },
+  { name:'Murky Swamp',    theme:'SWAMP',   targetTime:75, enemies:['TROLL','WITCH','SERPENT','GOLEM'], focus:'Pressure and route reading' },
+  { name:'Sky Sanctuary',  theme:'SKY',     targetTime:85, enemies:['DIVER','WITCH','CHARGER','BOMBER'], focus:'Fast reactions and air space' },
 ];
 
 function getLevelDef(n) {
@@ -1091,6 +1353,16 @@ function getLevelDef(n) {
   if (cycle >= 1 && !d.enemies.includes('BOMBER')) d.enemies = [...d.enemies, 'BOMBER'];
   if (cycle >= 2 && !d.enemies.includes('WITCH')) d.enemies = [...d.enemies, 'WITCH'];
   return d;
+}
+
+function getLevelOpeningMultiplier(levelDef) {
+  if (levelDef && Number.isFinite(levelDef.paceScale)) return levelDef.paceScale;
+  return levelDiffMult(levelDef && levelDef.id ? levelDef.id : 1);
+}
+
+function getLevelEnemyDelay(levelDef) {
+  if (levelDef && Number.isFinite(levelDef.enemyDelay)) return levelDef.enemyDelay;
+  return 6;
 }
 
 function levelDiffMult(n) {
@@ -2203,15 +2475,17 @@ const SAMPLE_D = 55;
 let chunks = [], worldOffset = 0;
 
 class Chunk {
-  constructor(worldX, type, rng, diff, theme) {
+  constructor(worldX, type, rng, diff, theme, script) {
     this.worldX = worldX; this.type = type;
     this.w = Math.round(W * 1.5);
     this.sampleCount = Math.ceil(this.w / SAMPLE_D) + 2;
     this.heights = []; this.obstacles = []; this.gems = []; this.powerup = null;
+    this.script = script || null;
     this._gen(rng, diff, theme);
   }
   _gen(rng, diff, themeKey) {
     const sc = this.sampleCount, bY = GROUND_BASE;
+    const script = this.script || null;
     // Heights
     if (this.type==='GAP') {
       const gs=rng.range(.32,.52), ge=gs+rng.range(.14,.26);
@@ -2241,17 +2515,37 @@ class Chunk {
 
     // Obstacles
     if (this.type!=='GAP'&&this.type!=='GEM_RUN') {
-      const slots = this.type==='GAUNTLET'?rng.int(3,6):rng.int(1,3);
-      const sp = this.w/(slots+1);
-      for(let s=0;s<slots;s++){
-        const lx=sp*(s+1)+rng.range(-sp*.25,sp*.25);
-        if(!rng.bool(diff.oChance))continue;
-        const gnd=this.groundAt(lx); if(gnd>H*.9)continue;
-        const pool=['ROCK','SPIKE','LOG']; if(diff.boulder)pool.push('BOULDER','BOULDER','FIRE_GEYSER');
-        const t=rng.pick(pool);
-        this.obstacles.push({type:t,lx,ly:gnd,vx:t==='BOULDER'?rng.range(-320,-160):t==='LOG'?rng.range(-180,-80):0});
+      if (script && Array.isArray(script.obstacles)) {
+        for (let i = 0; i < script.obstacles.length; i++) {
+          const entry = script.obstacles[i];
+          const lx = typeof entry.at === 'number' ? this.w * clamp(entry.at, 0.12, 0.88) : rng.range(this.w * 0.22, this.w * 0.78);
+          const gnd = this.groundAt(lx);
+          if (gnd > H * 0.9) continue;
+          const type = entry.type || 'ROCK';
+          this.obstacles.push({
+            type,
+            lx,
+            ly: gnd,
+            vx: type === 'BOULDER'
+              ? rng.range(-320, -160)
+              : type === 'LOG'
+                ? rng.range(-180, -80)
+                : 0
+          });
+        }
+      } else if (!(script && script.allowObstacles === false)) {
+        const slots = this.type==='GAUNTLET'?rng.int(3,6):rng.int(1,3);
+        const sp = this.w/(slots+1);
+        for(let s=0;s<slots;s++){
+          const lx=sp*(s+1)+rng.range(-sp*.25,sp*.25);
+          if(!rng.bool(diff.oChance))continue;
+          const gnd=this.groundAt(lx); if(gnd>H*.9)continue;
+          const pool=['ROCK','SPIKE','LOG']; if(diff.boulder)pool.push('BOULDER','BOULDER','FIRE_GEYSER');
+          const t=rng.pick(pool);
+          this.obstacles.push({type:t,lx,ly:gnd,vx:t==='BOULDER'?rng.range(-320,-160):t==='LOG'?rng.range(-180,-80):0});
+        }
       }
-      if(diff.ptero&&rng.bool(.4))
+      if((!script || script.allowPteros !== false) && diff.ptero&&rng.bool(.4))
         this.obstacles.push({type:'PTERO',lx:rng.range(this.w*.25,this.w*.75),
           ly:GROUND_BASE-UNIT*rng.range(2.8,5.5),phase:rng.range(0,PI2),amp:UNIT*rng.range(.9,2)});
     }
@@ -2285,13 +2579,38 @@ function pickChunkType(rng, diff, last) {
   for(const[type,wt]of Object.entries(w)){r-=wt;if(r<=0)return type;}
   return'FLAT';
 }
+function getNextChunkSpec(rng, diff, lastType) {
+  if (shouldUseGuidedChunkPlan()) {
+    const idx = G.guidedChunkCursor || 0;
+    const guidedSpec = getGuidedChunkSpec(G.onboarding.level, idx);
+    if (guidedSpec) {
+      G.guidedChunkCursor = idx + 1;
+      return guidedSpec;
+    }
+  }
+  return { type: pickChunkType(rng, diff, lastType) };
+}
+function appendChunk(worldX, spec, rng, diff, theme) {
+  const chunk = new Chunk(worldX, spec.type, rng, diff, theme, spec);
+  chunks.push(chunk);
+  return chunk;
+}
 function getGroundAt(wx){
   for(const c of chunks)if(wx>=c.worldX&&wx<=c.rightEdge)return c.worldGroundAt(wx);
   return GROUND_BASE;
 }
 function initWorld(rng,diff,theme){
   chunks=[]; worldOffset=0;
+  G.guidedChunkCursor = 0;
   let x=0;
+  if (shouldUseGuidedChunkPlan()) {
+    while (chunks.length < 5) {
+      const lastType = chunks.length ? chunks[chunks.length - 1].type : 'FLAT';
+      const chunk = appendChunk(x, getNextChunkSpec(rng, diff, lastType), rng, diff, theme);
+      x += chunk.w;
+    }
+    return;
+  }
   // First chunk: safe (no obstacles)
   const safeC=new Chunk(x,'GEM_RUN',rng,diff,theme);chunks.push(safeC);x+=safeC.w;
   for(let i=0;i<2;i++){const c=new Chunk(x,'FLAT',rng,diff,theme);chunks.push(c);x+=c.w;}
@@ -2303,8 +2622,8 @@ function updateWorld(dt,diff,speed,rng,theme){
   while(true){
     const last=chunks[chunks.length-1];
     if(last.rightEdge-worldOffset>=W*3.5)break;
-    const t=pickChunkType(rng,diff,last.type);
-    const nc=new Chunk(last.rightEdge,t,rng,diff,theme);
+    const spec = getNextChunkSpec(rng, diff, last.type);
+    const nc=new Chunk(last.rightEdge,spec.type,rng,diff,theme,spec);
     chunks.push(nc);
     if(typeof G!=='undefined') G.levelTotalGems=(G.levelTotalGems||0)+nc.gems.length;
   }
@@ -2657,6 +2976,7 @@ class Player {
         if(this.jumpsLeft===2)this.jumpsLeft=1;
         this.squash=0.55; this.stretch=1.65;
         G.lastAction={type:'jump',time:G.time};
+        noteGuidedAction('jump');
         sfxJump();
         // Jump dust
         spawnDustFX(this.screenX, this.y);
@@ -2670,7 +2990,7 @@ class Player {
     }
     if (!inp.jh&&this.vy<-320) this.vy=-320;
     if (!this.onGround){ this.vy=Math.min(this.vy+ch.grav*dt,1100); this.y+=this.vy*dt; }
-    if (this.y>H+UNIT*3){ this.hp=0; this.die(); return; }
+    if (this.y>H+UNIT*3){ this.hp=0; this.die('fall'); return; }
 
     this.worldX = this.screenX + worldOffset;
     // During slide, maintain compressed shape; otherwise spring back to normal
@@ -2703,6 +3023,7 @@ class Player {
           const dx=en.screenX-this.screenX, dy=(en.y||0)-(this.y-UNIT);
           if(dx>-UNIT && dx<UNIT*4 && Math.abs(dy)<UNIT*2){
             en.takeDamage(en.maxHP); comboAction(50,'quake_kill');
+            noteGuidedAction('dash_hit', { enemy_type: en.type, guided_source: 'quake_rush' });
             for(let j=0;j<10;j++)spawnParticle(en.screenX,en.y||this.y-UNIT,{
               vx:(Math.random()-.5)*400,vy:-(Math.random()*300+50),
               color:'#FFAA44',r:UNIT*(.15+Math.random()*.1),decay:1.8,grav:500});
@@ -2729,6 +3050,7 @@ class Player {
       spawnDustFX(this.screenX,this.y);
       sfxSlide();
       G.lastAction={type:'slide',time:G.time};
+      noteGuidedAction('slide');
       if(save.stats) save.stats.slidesUsed++;
       updateMissionProgress('slidesUsed', 1);
       inp.down=false;
@@ -2749,6 +3071,7 @@ class Player {
       this._meteorChain = (G.lastAction.type==='doublejump' && G.time-G.lastAction.time<2.0);
       if (this._meteorChain) { G.announce={text:'METEOR!',life:0.8}; comboAction(75,'chain'); }
       G.lastAction={type:'pound',time:G.time};
+      noteGuidedAction('pound');
       // Shockwave particles
       const pNum = this._meteorChain ? 24 : 16;
       for(let i=0;i<pNum;i++){const a=(i/pNum)*PI2;
@@ -2798,10 +3121,12 @@ class Player {
           const dx=en.sx-this.screenX, dy=(en.sy||en.y)-(this.y-UNIT);
           if(dx>-UNIT*2 && dx<UNIT*4 && Math.abs(dy)<UNIT*3){
             en.takeDamage(15);
+            noteGuidedAction('dash_hit', { enemy_type: en.type, guided_source: 'dash_contact' });
           }
         }
       }
       G.lastAction={type:'dash',time:G.time};
+      noteGuidedAction('dash');
       inp.dash=false;
     }
 
@@ -2890,10 +3215,11 @@ class Player {
       for(let i=0;i<14;i++) spawnParticle(this.screenX,this.y-UNIT,{color:'#FF88FF',r:UNIT*.22,decay:2,grav:300});
       return;
     }
-    if (this.hp <= 0) { this.hp=0; this.die(); }
+    if (this.hp <= 0) { this.hp=0; this.die('damage'); }
   }
-  die() {
+  die(cause) {
     if(!this.alive)return; this.alive=false;
+    G._lastDeathCause = cause || 'unknown';
     spawnDeathFX(this.screenX,this.y-UNIT); addTrauma(1);
     sfxDeath();
   }
@@ -3033,6 +3359,7 @@ const G = {
   time:0, timeLeft:35, speed:200, diff:null, rng:null,
   player:null, gems:0, runGems:0, score:0, runScore:0,
   newHigh:false, lastUpgrade:-1, deathDelay:0,
+  _deathTracked:false, _lastDeathCause:null,
   announce:null, flashColor:null, flashLife:0,
   selectedChar:0, introTimer:0,
   levelCompleteTimer:0,
@@ -3056,6 +3383,9 @@ const G = {
   fadeAlpha:0, fadeDir:0, fadeCallback:null,
   // Hit-stop
   hitStop:0,
+  // Guided onboarding for the first three levels
+  onboarding:null,
+  guidedChunkCursor:0,
 };
 
 // Smooth phase transition: fade out → change phase → fade in
@@ -3104,21 +3434,23 @@ function calculateLevelStars() {
 }
 
 function startLevel(levelNum) {
-  trackLevelStart(levelNum);
   G.phase='LEVEL_INTRO'; G.levelNum=levelNum;
   G.levelDef=getLevelDef(levelNum);
   G.theme=THEMES[G.levelDef.theme];
+  trackLevelStart(levelNum);
   G.flashColor='rgba(255,255,255,0.45)'; G.flashLife=0.5;
   startMusic(G.levelDef.theme);
   G.introTimer=0;
   G.time=0; G.timeLeft=28; G.deathDelay=0;
-  G.diff=getDiff(0,levelDiffMult(levelNum));
+  G._deathTracked=false; G._lastDeathCause=null;
+  G.diff=getDiff(0,getLevelOpeningMultiplier(G.levelDef));
   G.speed=G.diff.speed*CHARS[G.selectedChar].spdM;
   G.rng=new RNG(Date.now()^(Math.random()*0x7FFFFFFF|0));
   G.announce=null; G.flashColor=null; G.flashLife=0;
   inp.jp=inp.jh=false; inp.tapped=false;
   particles.length=0; activeEnemies.length=0; ambients.length=0;
-  trauma=0; enemySpawnCD=6; nearMissCD=0;
+  trauma=0; enemySpawnCD=getLevelEnemyDelay(G.levelDef); nearMissCD=0;
+  configureGuidedLevel(levelNum);
   initWorld(G.rng,G.diff,G.levelDef.theme);
   // Count total gems for star rating
   G.levelTotalGems=0;
@@ -3153,6 +3485,7 @@ function startNewRun() {
   G.endless=false; G.dailyChallenge=false;
   G.runGems=0; G.runScore=0; G.gems=0;
   G.newHigh=false; G.lastUpgrade=-1;
+  G._deathTracked=false; G._lastDeathCause=null;
   adDoubleGemsUsed=false; adDeathCount=0; // reset ad state for new run
   G.continuesLeft = 2 + (save.shopUpgrades&&save.shopUpgrades.up_continue ? 1 : 0);
   G.wheelResult=null;
@@ -3172,6 +3505,7 @@ function startDailyChallenge() {
   G.endless=false; G.dailyChallenge=true;
   G.runGems=0; G.runScore=0; G.gems=0;
   G.newHigh=false; G.lastUpgrade=-1;
+  G._deathTracked=false; G._lastDeathCause=null;
   G.continuesLeft=0; // no continues in daily
   G.wheelResult=null; G._nextLevelNum=0; G._pendingWheelResult=null;
   G.combo=0; G.comboTimer=0; G.comboMult=1; G.comboPulse=0;
@@ -5019,23 +5353,78 @@ function handleCharSelectTap(){
 function drawLevelIntro(dt){
   G.introTimer+=dt;
   const u=UNIT;
+  const compact = W < 1100 || H < 560;
+  const guide = G.onboarding && G.onboarding.level === G.levelNum ? G.onboarding : null;
   drawBg(G.theme);
-
-  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(6,8,14,0.68)';ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';ctx.textBaseline='middle';
 
-  const scale=Math.min(1,G.introTimer*2);
-  ctx.save();ctx.translate(W/2,H*.35);ctx.scale(scale,scale);
-  ctx.font=`bold ${u*2}px monospace`;ctx.fillStyle='#FFD700';
-  ctx.fillText(`LEVEL ${G.levelNum}`,0,0);ctx.restore();
+  const panelW = Math.min(W * (compact ? 0.76 : 0.7), u * (guide ? 12.4 : 10.8));
+  const panelH = u * (guide ? (compact ? 5.4 : 5.7) : (compact ? 4.1 : 4.4));
+  const panelX = W / 2 - panelW / 2;
+  const panelY = Math.max(SAFE_TOP + u * 0.7, H * (compact ? 0.14 : 0.16));
+  const titleScale=Math.min(1,G.introTimer*2.2);
 
-  ctx.font=`bold ${u*1.2}px monospace`;ctx.fillStyle='#88CCFF';
-  ctx.fillText(G.levelDef.name,W/2,H*.55);
+  drawPanel(panelX, panelY, panelW, panelH, {
+    radius: u * 0.46,
+    top: 'rgba(18,26,44,0.94)',
+    bottom: 'rgba(8,12,24,0.92)',
+    stroke: 'rgba(255,255,255,0.12)',
+    accent: guide ? 'rgba(125,240,155,0.18)' : 'rgba(255,215,90,0.22)',
+    blur: 24
+  });
 
-  ctx.font=`${u*.75}px monospace`;ctx.fillStyle='rgba(255,255,255,0.6)';
-  ctx.fillText(`Survive ${G.levelDef.targetTime}s to advance!`,W/2,H*.68);
+  if (guide) {
+    drawMiniChip(W / 2 - u * 2.5, panelY + u * 0.34, u * 5, u * 0.58, guide.header, {
+      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
+      accent: 'rgba(120,220,255,0.22)'
+    });
+  }
 
-  if(G.introTimer>2.5) G.phase='PLAYING';
+  ctx.save();
+  ctx.translate(W/2,panelY + u * (guide ? 1.25 : 0.95));
+  ctx.scale(titleScale,titleScale);
+  ctx.font = FONTS['b1.35'] || ('bold ' + Math.round(u * 1.35) + 'px monospace');
+  ctx.fillStyle = '#FFD700';
+  ctx.fillText(`LEVEL ${G.levelNum}`,0,0);
+  ctx.restore();
+
+  drawMiniChip(panelX + u * 0.62, panelY + u * (guide ? 1.6 : 1.35), panelW - u * 1.24, u * 0.7, G.levelDef.name.toUpperCase(), {
+    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
+    accent: 'rgba(120,210,255,0.2)'
+  });
+
+  ctx.font = FONTS['b0.58'] || ('bold ' + Math.round(u * 0.58) + 'px monospace');
+  ctx.fillStyle = guide ? '#F5F7FF' : '#88CCFF';
+  ctx.fillText((guide ? guide.title : (G.levelDef.focus || 'Stay alive')).toUpperCase(), W / 2, panelY + u * (guide ? 2.55 : 2.35));
+
+  ctx.font = FONTS['n0.4'] || (Math.round(u * 0.4) + 'px monospace');
+  ctx.fillStyle = 'rgba(224,233,248,0.76)';
+  ctx.fillText(guide ? guide.intro : `Survive ${G.levelDef.targetTime}s to advance.`, W / 2, panelY + u * (guide ? 3.2 : 2.95));
+
+  if (guide) {
+    const chipGap = u * 0.18;
+    const chipW = Math.min(u * 3.2, (panelW - u * 1.24 - chipGap) / 2);
+    const chipY = panelY + u * 3.62;
+    for (let i = 0; i < guide.steps.length; i++) {
+      const step = guide.steps[i];
+      const chipX = W / 2 - chipW - chipGap / 2 + i * (chipW + chipGap);
+      drawMiniChip(chipX, chipY, chipW, u * 0.6, step.short, {
+        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
+        accent: step.accent,
+        textColor: '#F7FBFF'
+      });
+    }
+    ctx.font = FONTS['n0.33'] || (Math.round(u * 0.33) + 'px monospace');
+    ctx.fillStyle = 'rgba(218,230,246,0.68)';
+    ctx.fillText(guide.rewardHint, W / 2, panelY + panelH - u * 0.52);
+  } else {
+    ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
+    ctx.fillStyle = 'rgba(220,228,245,0.68)';
+    ctx.fillText('Stay healthy, grab gems, and keep the lane readable.', W / 2, panelY + panelH - u * 0.48);
+  }
+
+  if(G.introTimer > (guide ? 3.05 : 2.45)) G.phase='PLAYING';
 }
 
 function drawLevelComplete(dt){
@@ -5230,7 +5619,7 @@ function handleDeathTap(){
   // Retry button (same level)
   const retryY = H*.58 - btnH/2;
   if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>retryY&&ty<retryY+btnH){
-    resumeFromSave(); sfxUITap(); return;
+    resumeFromSave('death_retry'); sfxUITap(); return;
   }
   // New Run button
   const nrY2=H*.72;
@@ -5340,6 +5729,7 @@ function handleTutorialTap(){
   const btnW=u*6, btnH=u*1.5, btnY=H*.85;
   if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>btnY&&ty<btnY+btnH){
     save.tutorialSeen=true; persistSave();
+    trackTutorialComplete();
     sfxUITap();
     startNewRun();
   }
@@ -5710,6 +6100,7 @@ function handleShopTap(){
         } else {
           save.nextRunPowerups.push(item.id);
         }
+        trackPurchase(item.id, item.cost);
         sfxUITap(); persistSave();
       }
       return;
@@ -5875,54 +6266,138 @@ function handleSkinsTap(){
 // ============================================================
 // CONTINUE PROMPT SCREEN
 // ============================================================
+function getContinuePromptLayout() {
+  const u = UNIT;
+  const panelW = Math.min(W * 0.78, u * 10.8);
+  const panelH = u * 7.25;
+  const panelX = W / 2 - panelW / 2;
+  const panelY = Math.max(SAFE_TOP + u * 0.7, H * 0.11);
+  const innerPad = u * 0.58;
+  const primaryW = panelW - innerPad * 2;
+  const primaryH = u * 1.22;
+  const primaryX = panelX + innerPad;
+  const primaryY = panelY + panelH - u * 2.2;
+  const secondaryW = u * 4.6;
+  const secondaryH = u * 0.9;
+  const secondaryX = W / 2 - secondaryW / 2;
+  const secondaryY = panelY + panelH - u * 0.9;
+  return {
+    panelX, panelY, panelW, panelH, innerPad,
+    primaryX, primaryY, primaryW, primaryH,
+    secondaryX, secondaryY, secondaryW, secondaryH
+  };
+}
+
+function getContinuePromptViewModel() {
+  const guide = G.onboarding && G.onboarding.level === G.levelNum ? G.onboarding : null;
+  const pending = getGuidedPendingStep();
+  const guided = !!(guide && pending);
+  return {
+    guided,
+    title: guided ? 'SAVE THE LESSON' : 'KEEP THE RUN?',
+    subtitle: guided
+      ? `${guide.title.toUpperCase()} STILL NEEDS ${pending.label.toUpperCase()}.`
+      : 'Spend one save to restart this level with your score and gems intact.',
+    note: guided
+      ? pending.remind
+      : 'You restart the level clean, but your run score, gems, and upgrades stay with you.',
+    lessonChip: guided ? `NEXT: ${pending.label.toUpperCase()}` : `${Math.max(0, G.continuesLeft)} SAVE${G.continuesLeft === 1 ? '' : 'S'} AVAILABLE`,
+    primaryLabel: guided ? 'RETRY LESSON' : 'CONTINUE RUN',
+    primarySub: guided ? guide.title.toUpperCase() : 'KEEP SCORE + GEMS',
+    secondaryLabel: guided ? 'END RUN' : 'GIVE UP'
+  };
+}
+
 function drawContinuePrompt(dt){
   G.continuePromptTimer+=dt;
-  const u=UNIT;
-  drawBg(G.theme);
-  ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,W,H);
+  const u = UNIT;
+  const layout = getContinuePromptLayout();
+  const vm = getContinuePromptViewModel();
+  const pulse = 1 + Math.sin(G.continuePromptTimer * 5) * 0.035;
+
+  drawMetaBackdrop(G.theme || THEMES.JUNGLE, '#DA9A49');
+  ctx.fillStyle='rgba(6,8,14,0.56)';ctx.fillRect(0,0,W,H);
+  drawPanel(layout.panelX, layout.panelY, layout.panelW, layout.panelH, {
+    radius: u * 0.5,
+    top: 'rgba(28,26,18,0.94)',
+    bottom: 'rgba(12,12,10,0.92)',
+    stroke: 'rgba(255,222,148,0.16)',
+    accent: 'rgba(255,187,84,0.24)',
+    blur: 22
+  });
+
   ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font = FONTS['b1.18'] || ('bold ' + Math.round(u * 1.18) + 'px monospace');
+  ctx.fillStyle = '#FFD46C';
+  ctx.fillText(vm.title, W / 2, layout.panelY + u * 0.88);
+  ctx.font = FONTS['n0.36'] || (Math.round(u * 0.36) + 'px monospace');
+  ctx.fillStyle = 'rgba(235,240,250,0.74)';
+  ctx.fillText(vm.subtitle, W / 2, layout.panelY + u * 1.55, layout.panelW - layout.innerPad * 2);
 
-  ctx.shadowColor='#FFAA00';ctx.shadowBlur=15;
-  ctx.font=`bold ${u*1.8}px monospace`;ctx.fillStyle='#FFAA00';
-  ctx.fillText('CONTINUE?',W/2,H*.22);ctx.shadowBlur=0;
+  const statW = (layout.panelW - layout.innerPad * 2 - u * 0.24 * 2) / 3;
+  const statY = layout.panelY + u * 2.1;
+  drawMiniChip(layout.panelX + layout.innerPad, statY, statW, u * 0.74, `LEVEL ${G.levelNum}`, {
+    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
+    accent: 'rgba(120,188,255,0.22)'
+  });
+  drawMiniChip(layout.panelX + layout.innerPad + statW + u * 0.24, statY, statW, u * 0.74, `${G.runScore} SCORE`, {
+    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
+    accent: 'rgba(255,215,90,0.2)'
+  });
+  drawMiniChip(layout.panelX + layout.panelW - layout.innerPad - statW, statY, statW, u * 0.74, `${Math.max(0, G.continuesLeft - 1)} AFTER USE`, {
+    font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
+    accent: 'rgba(255,143,112,0.22)',
+    textColor: '#FFD9C9'
+  });
 
-  ctx.font=`${u*.9}px monospace`;ctx.fillStyle='rgba(255,255,255,0.7)';
-  ctx.fillText(`${G.continuesLeft} continue${G.continuesLeft>1?'s':''} remaining`,W/2,H*.36);
+  drawMiniChip(layout.panelX + layout.innerPad, layout.panelY + u * 3.12, layout.panelW - layout.innerPad * 2, u * 0.68, vm.lessonChip, {
+    font: FONTS['b0.33'] || ('bold ' + Math.round(u * 0.33) + 'px monospace'),
+    accent: vm.guided ? 'rgba(127,255,212,0.2)' : 'rgba(255,255,255,0.12)',
+    textColor: vm.guided ? '#E8FFF5' : 'rgba(245,247,255,0.8)'
+  });
 
-  // Continue button
-  const btnW=u*6,btnH=u*1.5;
-  const yesX=W/2-btnW/2,yesY=H*.5;
-  const pulse=1+Math.sin(G.continuePromptTimer*5)*.05;
-  ctx.save();ctx.translate(W/2,yesY+btnH/2);ctx.scale(pulse,pulse);
-  ctx.fillStyle='#22AA44';ctx.fillRect(-btnW/2,-btnH/2,btnW,btnH);
-  ctx.strokeStyle='#44DD66';ctx.lineWidth=2;ctx.strokeRect(-btnW/2,-btnH/2,btnW,btnH);
-  ctx.font=`bold ${u*1}px monospace`;ctx.fillStyle='white';
-  ctx.fillText('CONTINUE',0,0);ctx.restore();
+  ctx.font = FONTS['n0.31'] || (Math.round(u * 0.31) + 'px monospace');
+  ctx.fillStyle = 'rgba(210,220,236,0.68)';
+  ctx.fillText(vm.note, W / 2, layout.panelY + u * 4.1, layout.panelW - layout.innerPad * 2);
 
-  // Give up button
-  const noY=H*.7;
-  ctx.fillStyle='rgba(255,60,60,0.3)';ctx.fillRect(W/2-btnW/2,noY,btnW,btnH);
-  ctx.strokeStyle='rgba(255,60,60,0.5)';ctx.lineWidth=1;ctx.strokeRect(W/2-btnW/2,noY,btnW,btnH);
-  ctx.font=`bold ${u*.8}px monospace`;ctx.fillStyle='rgba(255,255,255,0.7)';
-  ctx.fillText('GIVE UP',W/2,noY+btnH/2);
+  ctx.save();
+  ctx.translate(layout.primaryX + layout.primaryW / 2, layout.primaryY + layout.primaryH / 2);
+  ctx.scale(pulse, pulse);
+  drawActionCard(-layout.primaryW / 2, -layout.primaryH / 2, layout.primaryW, layout.primaryH, vm.primaryLabel, vm.primarySub, {
+    top: '#2F7A48',
+    bottom: '#184327',
+    stroke: '#76DEA0',
+    accent: '#4ED37D',
+    labelColor: '#F7FFF8',
+    subColor: 'rgba(214,255,226,0.8)'
+  });
+  ctx.restore();
+
+  drawActionCard(layout.secondaryX, layout.secondaryY, layout.secondaryW, layout.secondaryH, vm.secondaryLabel, null, {
+    top: 'rgba(122,44,52,0.96)',
+    bottom: 'rgba(66,20,28,0.92)',
+    stroke: 'rgba(255,170,170,0.3)',
+    accent: '#D85A66',
+    labelColor: '#FFF5F6',
+    labelFont: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace')
+  });
 }
 function handleContinueTap(){
-  const tx=inp.tapX, ty=inp.tapY, u=UNIT;
-  const btnW=u*6,btnH=u*1.5;
-  // Continue button
-  const yesX=W/2-btnW/2,yesY=H*.5;
-  if(tx>yesX&&tx<yesX+btnW&&ty>yesY&&ty<yesY+btnH){
+  const tx=inp.tapX, ty=inp.tapY;
+  const layout = getContinuePromptLayout();
+  if(tx>layout.primaryX&&tx<layout.primaryX+layout.primaryW&&ty>layout.primaryY&&ty<layout.primaryY+layout.primaryH){
     G.continuesLeft--;
+    trackRetry('continue_prompt');
     // Revive: restart current level but keep score/gems
     G.phase='LEVEL_INTRO'; G.introTimer=0;
     G.time=0; G.timeLeft=28; G.deathDelay=0;
-    G.diff=getDiff(0,levelDiffMult(G.levelNum));
+    G.diff=getDiff(0,getLevelOpeningMultiplier(G.levelDef));
     G.speed=G.diff.speed*CHARS[G.selectedChar].spdM;
     G.rng=new RNG(Date.now()^(Math.random()*0x7FFFFFFF|0));
     G.announce=null; G.flashColor=null; G.flashLife=0;
     inp.jp=inp.jh=false; inp.tapped=false;
     particles.length=0; activeEnemies.length=0; ambients.length=0;
-    trauma=0; enemySpawnCD=6;
+    trauma=0; enemySpawnCD=getLevelEnemyDelay(G.levelDef);
     initWorld(G.rng,G.diff,G.levelDef.theme);
     G.player=new Player(G.selectedChar);
     checkGemUpgrades(true);
@@ -5931,9 +6406,7 @@ function handleContinueTap(){
     initBg();
     return;
   }
-  // Give up button
-  const noY=H*.7;
-  if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>noY&&ty<noY+btnH){
+  if(tx>layout.secondaryX&&tx<layout.secondaryX+layout.secondaryW&&ty>layout.secondaryY&&ty<layout.secondaryY+layout.secondaryH){
     adDeathCount++; G.phase='DEAD';
   }
 }
@@ -6576,6 +7049,57 @@ function drawLevelMap(dt) {
   drawSpeakerIcon(SAFE_LEFT+u*.3, SAFE_TOP+u*.3, u*1);
 }
 
+function drawGuidedLessonStrip(baseY, compact) {
+  const guide = G.onboarding;
+  if (!guide || G.phase !== 'PLAYING') return 0;
+
+  const u = UNIT;
+  const panelW = Math.min(W * (compact ? 0.62 : 0.56), u * (compact ? 9.8 : 11.2));
+  const panelH = u * (compact ? 1.28 : 1.38);
+  const panelX = W / 2 - panelW / 2;
+  const panelY = baseY;
+  const pending = getGuidedPendingStep();
+  const accent = pending ? pending.accent : '#7DF09B';
+
+  drawPanel(panelX, panelY, panelW, panelH, {
+    radius: u * 0.3,
+    top: 'rgba(16,24,42,0.94)',
+    bottom: 'rgba(8,12,24,0.92)',
+    stroke: 'rgba(255,255,255,0.1)',
+    accent: accent,
+    blur: 16
+  });
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
+  ctx.fillStyle = 'rgba(218,230,250,0.7)';
+  ctx.fillText(guide.header, W / 2, panelY + u * 0.26);
+
+  ctx.font = FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace');
+  ctx.fillStyle = guide.completed ? '#7DF09B' : '#F5F7FF';
+  ctx.fillText(guide.completed ? 'KEEP THE RHYTHM' : guide.title.toUpperCase(), W / 2, panelY + u * 0.58);
+
+  const chipGap = u * 0.16;
+  const chipW = (panelW - u * 0.42 - chipGap) / 2;
+  const chipY = panelY + u * 0.78;
+  for (let i = 0; i < guide.steps.length; i++) {
+    const step = guide.steps[i];
+    const chipX = panelX + u * 0.21 + i * (chipW + chipGap);
+    const done = !!step.done;
+    const current = !done && pending === step;
+    drawMiniChip(chipX, chipY, chipW, u * 0.42, (done ? 'OK ' : '') + step.short, {
+      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
+      accent: done ? 'rgba(125,240,155,0.28)' : (current ? step.accent : 'rgba(110,126,152,0.16)'),
+      textColor: done ? '#DFFFE9' : (current ? '#FFF7E6' : 'rgba(228,236,248,0.78)'),
+      top: done ? 'rgba(16,38,26,0.94)' : 'rgba(16,24,40,0.92)',
+      bottom: done ? 'rgba(8,22,16,0.9)' : 'rgba(8,12,24,0.88)'
+    });
+  }
+
+  return panelH + u * 0.16;
+}
+
 function drawHUD(dt){
   const u = UNIT;
   const p = G.player;
@@ -6729,13 +7253,15 @@ function drawHUD(dt){
   });
   drawSpeakerIcon(SAFE_LEFT + u * 0.3, hudY + u * 0.14, u * 1.0);
 
+  const guidedOffset = drawGuidedLessonStrip(hudY + hudH + u * 0.22, compact);
+
   if (G.announce && G.announce.life > 0) {
     const al = clamp(G.announce.life, 0, 1);
     const sc = 1 + (1 - al) * 0.12;
     const annW = Math.min(W * (compact ? 0.42 : 0.46), u * (compact ? 6.4 : 7.3));
     const annH = u * (compact ? 0.7 : 0.76);
     const tooltipActive = !!(tooltipState.active && tooltipState.alpha > 0);
-    const annY = Math.max(hudY + hudH + u * 0.24, H * (compact ? 0.225 : 0.2)) + (tooltipActive ? u * (compact ? 0.98 : 1.08) : 0);
+    const annY = Math.max(hudY + hudH + guidedOffset + u * 0.24, H * (compact ? 0.225 : 0.2)) + (tooltipActive ? u * (compact ? 0.98 : 1.08) : 0);
     ctx.save();
     ctx.globalAlpha = al;
     ctx.translate(W / 2, annY + annH / 2);
@@ -6909,6 +7435,9 @@ function drawLevelComplete(dt){
   G.levelCompleteTimer += dt;
   const u = UNIT;
   const compact = W < 1100 || H < 560;
+  const postGuidance = getPostLevelGuidance(G.levelNum);
+  const rewardReadyHint = getRewardReadyHint(G.levelNum);
+  const guideCopy = rewardReadyHint || postGuidance;
   const panelW = Math.min(W * (compact ? 0.78 : 0.74), u * (compact ? 11.1 : 12.2));
   const panelH = u * (compact ? 8.45 : 8.9);
   const panelX = W / 2 - panelW / 2;
@@ -6922,6 +7451,7 @@ function drawLevelComplete(dt){
   const statY = panelY + u * 3.15;
   const footerW = Math.min(panelW - innerPad * 2, u * (compact ? 8.7 : 9.3));
   const footerY = panelY + panelH - u * 1.18;
+  const guideY = footerY - u * 0.96;
 
   ctx.fillStyle = 'rgba(6,8,14,0.52)';
   ctx.fillRect(0, 0, W, H);
@@ -7007,8 +7537,18 @@ function drawLevelComplete(dt){
     ctx.restore();
   }
 
+  if (guideCopy) {
+    drawMiniChip(panelX + innerPad, guideY, panelW - innerPad * 2, u * 0.64, guideCopy.toUpperCase(), {
+      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
+      accent: rewardReadyHint ? 'rgba(255,194,70,0.24)' : 'rgba(120,220,255,0.2)',
+      textColor: rewardReadyHint ? '#FFE7B2' : 'rgba(236,244,255,0.82)'
+    });
+  }
+
   if (G.levelCompleteTimer > 1.5) {
-    const footerLabel = G.levelCompleteTimer > 2.8 ? 'TAP ANYWHERE FOR BONUS SPIN' : 'BONUS SPIN READY';
+    const footerLabel = rewardReadyHint
+      ? (G.levelCompleteTimer > 2.8 ? 'TAP FOR BONUS SPIN - THEN CLAIM MISSIONS' : 'BONUS SPIN -> CLAIM MISSIONS')
+      : (G.levelCompleteTimer > 2.8 ? 'TAP ANYWHERE FOR BONUS SPIN' : 'BONUS SPIN READY');
     const nextAlpha = 0.55 + Math.sin(Date.now() * 0.005) * 0.25;
     ctx.save();
     ctx.globalAlpha = Math.max(0.18, nextAlpha);
@@ -7091,8 +7631,15 @@ function drawLevelMap(dt) {
   const layout = getLevelMapLayout();
   const dlToday = localDateStr(new Date());
   const dlClaimed = save.lastLoginDate === dlToday;
-  const unclaimedN = (save.missions&&save.missions.daily||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length + (save.missions&&save.missions.weekly||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length;
+  const unclaimedN = getUnclaimedMissionCount();
   const runner = CHARS[safeSelectedChar()] || CHARS[0];
+  const hasNextLevel = G._nextLevelNum && G._nextLevelNum > 0;
+  const canResume = save.savedLevel > 1 && (save.cooldownEnd-Date.now()) <= 0;
+  const guidedGoal = getUpcomingGuidedGoal(hasNextLevel ? G._nextLevelNum : (save.highestLevel + 1));
+  const rewardReadyHint = getRewardReadyHint(save.highestLevel || G.levelNum || 1);
+  const missionLabel = unclaimedN > 0
+    ? (unclaimedN === 1 ? 'CLAIM 1 MISSION' : `CLAIM ${unclaimedN} MISSIONS`)
+    : 'MISSIONS';
 
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#050d1e');
@@ -7157,11 +7704,11 @@ function drawLevelMap(dt) {
   ctx.fillText(`CURRENT LEVEL ${save.highestLevel + 1}`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.42);
   ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
   ctx.fillStyle = 'rgba(160,182,210,0.66)';
-  ctx.fillText('Tap a node to replay or push forward.', layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.98);
+  ctx.fillText(rewardReadyHint || (guidedGoal ? guidedGoal.mapHint : 'Tap a node to replay or push forward.'), layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.98);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  drawMiniChip(layout.missionX, layout.quickY, layout.missionW, layout.quickH, 'MISSIONS', {
+  drawMiniChip(layout.missionX, layout.quickY, layout.missionW, layout.quickH, missionLabel, {
     font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
     accent: unclaimedN>0 ? 'rgba(255,194,70,0.3)' : 'rgba(110,210,130,0.22)',
     textColor: unclaimedN>0 ? '#FFD45E' : '#D8FFE2'
@@ -7292,26 +7839,25 @@ function drawLevelMap(dt) {
   }
   ctx.restore();
 
-  const hasNextLevel = G._nextLevelNum && G._nextLevelNum > 0;
-  const canResume = save.savedLevel > 1 && (save.cooldownEnd-Date.now()) <= 0;
   drawMiniChip(layout.runnerX, layout.infoY, layout.runnerW, layout.infoH, 'RUNNER ' + runner.name.toUpperCase(), {
     font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
     accent: lightenColor(runner.col, 12),
     textColor: '#F5F7FF'
   });
-  drawMiniChip(layout.progressX, layout.infoY, layout.progressW, layout.infoH, `CLEARED ${save.highestLevel}/40`, {
+  drawMiniChip(layout.progressX, layout.infoY, layout.progressW, layout.infoH, rewardReadyHint ? 'CLAIM BONUS GEMS' : guidedGoal ? ('NEXT ' + guidedGoal.steps.map(function(step) { return step.short; }).join(' + ')) : `CLEARED ${save.highestLevel}/40`, {
     font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
-    accent: 'rgba(120,188,255,0.24)',
-    textColor: '#D8ECFF'
+    accent: rewardReadyHint ? 'rgba(255,194,70,0.24)' : guidedGoal ? 'rgba(125,240,155,0.2)' : 'rgba(120,188,255,0.24)',
+    textColor: rewardReadyHint ? '#FFECC8' : guidedGoal ? '#E7FFF0' : '#D8ECFF'
   });
 
   if (hasNextLevel) {
-    drawActionCard(layout.nextX, layout.actionY, layout.nextW, layout.actionH, `NEXT LEVEL ${G._nextLevelNum}`, null, {
+    drawActionCard(layout.nextX, layout.actionY, layout.nextW, layout.actionH, `NEXT LEVEL ${G._nextLevelNum}`, guidedGoal ? guidedGoal.title.toUpperCase() : null, {
       top: '#2F7A48',
       bottom: '#184327',
       stroke: '#76DEA0',
       accent: '#4ED37D',
       labelColor: '#F7FFF8',
+      subColor: 'rgba(214,255,226,0.78)',
       labelFont: FONTS['b0.56'] || ('bold ' + Math.round(u * 0.56) + 'px monospace')
     });
   } else {
@@ -7326,12 +7872,13 @@ function drawLevelMap(dt) {
         labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px monospace')
       });
     }
-    drawActionCard(canResume ? layout.newRunX : layout.centerActionX, layout.actionY, layout.actionW, layout.actionH, 'NEW RUN', null, {
+    drawActionCard(canResume ? layout.newRunX : layout.centerActionX, layout.actionY, layout.actionW, layout.actionH, guidedGoal ? guidedGoal.cta : 'NEW RUN', guidedGoal ? guidedGoal.mapHint : null, {
       top: 'rgba(44,64,114,0.96)',
       bottom: 'rgba(22,30,58,0.92)',
       stroke: 'rgba(167,192,255,0.36)',
       accent: '#6288D9',
       labelColor: '#EDF4FF',
+      subColor: 'rgba(214,228,255,0.72)',
       labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px monospace')
     });
     if(save.highestLevel >= 40){
@@ -7795,6 +8342,8 @@ function drawCharSelect() {
   const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, headerH = u * 2.2;
   const selIdx = clamp(G.selectedChar || 0, 0, CHARS.length - 1);
   const selChar = CHARS[selIdx];
+  const firstSession = save.highestLevel === 0;
+  const starterGuide = firstSession ? getGuidedLevel(1) : null;
 
   drawMetaBackdrop(THEMES.JUNGLE, '#4C87C5');
 
@@ -7812,7 +8361,7 @@ function drawCharSelect() {
   ctx.fillText('CHOOSE YOUR RUNNER', W / 2, headerY + headerH * 0.42);
   ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px monospace');
   ctx.fillStyle = 'rgba(220,235,255,0.8)';
-  ctx.fillText('Each hero reshapes your run with a different passive and stat profile.', W / 2, headerY + headerH * 0.76);
+  ctx.fillText(firstSession ? 'Start clean: Gronk is the easiest opener. Level 1 teaches jump plus dash.' : 'Each hero reshapes your run with a different passive and stat profile.', W / 2, headerY + headerH * 0.76);
 
   drawMiniChip(headerX + u * 0.35, headerY + u * 0.42, u * 4.4, u * 0.72, 'BEST L' + save.highestLevel + ' - ' + save.bestScore, {
     accent: '#6B8FB9',
@@ -7900,7 +8449,7 @@ function drawCharSelect() {
     drawChar(preview, true);
     ctx.restore();
 
-    drawMiniChip(rx + u * 0.22, ry + u * 0.16, cardW * 0.42, u * 0.42, sel ? 'SELECTED' : 'READY', {
+    drawMiniChip(rx + u * 0.22, ry + u * 0.16, cardW * 0.42, u * 0.42, firstSession && i === 0 ? 'STARTER' : (sel ? 'SELECTED' : 'READY'), {
       accent: sel ? lightenColor(ch.col, 22) : darkenColor(ch.col, 12),
       textColor: '#F7FBFF',
       top: 'rgba(16,28,42,0.92)',
@@ -7934,17 +8483,17 @@ function drawCharSelect() {
   });
   ctx.font = FONTS['b0.55'] || ('bold ' + Math.round(u * 0.55) + 'px monospace');
   ctx.fillStyle = '#F6FAFF';
-  ctx.fillText(selChar.name.toUpperCase() + ' - ' + getCharPassiveLabel(selChar).toUpperCase(), W / 2, H - SAFE_BOTTOM - u * 2.85);
+  ctx.fillText(firstSession ? ('RECOMMENDED START - ' + selChar.name.toUpperCase()) : (selChar.name.toUpperCase() + ' - ' + getCharPassiveLabel(selChar).toUpperCase()), W / 2, H - SAFE_BOTTOM - u * 2.85);
   ctx.font = FONTS['n0.42'] || (Math.round(u * 0.42) + 'px monospace');
   ctx.fillStyle = 'rgba(224,233,248,0.74)';
-  ctx.fillText(selChar.desc + '  |  Dash, slide, and survive long enough to cash out gems.', W / 2, H - SAFE_BOTTOM - u * 2.4);
+  ctx.fillText(firstSession && starterGuide ? ('BALANCED STARTER  |  LEVEL 1 TEACHES JUMP + DASH') : (selChar.desc + '  |  Dash, slide, and survive long enough to cash out gems.'), W / 2, H - SAFE_BOTTOM - u * 2.4);
 
   const btnW = u * 5, btnH = u * 1.3, btnX = W / 2 - btnW / 2, btnY = H - SAFE_BOTTOM - u * 1.5;
   const startPulse = 1 + Math.sin(Date.now() * 0.005) * 0.04;
   ctx.save();
   ctx.translate(W / 2, btnY + btnH / 2);
   ctx.scale(startPulse, startPulse);
-  drawActionCard(-btnW / 2, -btnH / 2, btnW, btnH, 'START RUN', null, {
+  drawActionCard(-btnW / 2, -btnH / 2, btnW, btnH, firstSession && starterGuide ? starterGuide.cta : 'START RUN', firstSession && starterGuide ? starterGuide.title.toUpperCase() : null, {
     top: '#3A7A45',
     bottom: '#1E4F2A',
     stroke: '#85E0A2',
@@ -7976,6 +8525,8 @@ function drawCharSelect() {
 
 function drawDeathScreen() {
   const u = UNIT;
+  const guide = G.onboarding && G.onboarding.level === G.levelNum ? G.onboarding : null;
+  const pendingGuide = getGuidedPendingStep();
   const panelX = W / 2 - u * 5.6, panelY = SAFE_TOP + u * 0.65, panelW = u * 11.2, panelH = H * 0.28;
 
   drawMetaBackdrop(G.theme || THEMES.JUNGLE, '#B94444');
@@ -8059,16 +8610,23 @@ function drawDeathScreen() {
     });
   }
 
-  drawMiniChip(W / 2 - u * 3.8, H * 0.55, u * 7.6, u * 0.62, 'PROGRESS SAVED AT LEVEL ' + G.levelNum, {
-    accent: '#D48D3C',
-    top: 'rgba(55,33,12,0.94)',
-    bottom: 'rgba(22,14,10,0.92)',
-    textColor: '#FFF3D1'
+  drawMiniChip(W / 2 - u * 3.8, H * 0.55, u * 7.6, u * 0.62, pendingGuide ? ('LESSON CHECKPOINT - ' + pendingGuide.label.toUpperCase()) : ('PROGRESS SAVED AT LEVEL ' + G.levelNum), {
+    accent: pendingGuide ? '#58C68D' : '#D48D3C',
+    top: pendingGuide ? 'rgba(14,44,26,0.94)' : 'rgba(55,33,12,0.94)',
+    bottom: pendingGuide ? 'rgba(10,20,14,0.92)' : 'rgba(22,14,10,0.92)',
+    textColor: pendingGuide ? '#E6FFF0' : '#FFF3D1'
   });
+  if (pendingGuide && guide) {
+    ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
+    ctx.fillStyle = 'rgba(230,238,248,0.74)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`Retry the ${guide.title.toLowerCase()} lesson and finish ${pendingGuide.label.toLowerCase()}.`, W / 2, H * 0.595, u * 8.8);
+  }
 
   const btnW = u * 8, btnH = u * 1.3;
   const retryY = H * 0.58 - btnH / 2;
-  drawActionCard(W / 2 - btnW / 2, retryY, btnW, btnH, 'RETRY', 'Resume saved run', {
+  drawActionCard(W / 2 - btnW / 2, retryY, btnW, btnH, pendingGuide ? 'RETRY LESSON' : 'RETRY', pendingGuide ? pendingGuide.label.toUpperCase() : 'Resume saved run', {
     top: '#2F7A48',
     bottom: '#184327',
     stroke: '#76DEA0',
@@ -8195,7 +8753,7 @@ function drawTutorial() {
   ctx.fillText('HOW TO PLAY', W / 2, SAFE_TOP + u * 1.1);
   ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px monospace');
   ctx.fillStyle = 'rgba(222,233,250,0.78)';
-  ctx.fillText('The run is fast. Read the verbs once, then learn the rhythm in motion.', W / 2, SAFE_TOP + u * 1.68);
+  ctx.fillText('Read the verbs once, then let the first three levels teach jump, slide, stomp, and dash timing in motion.', W / 2, SAFE_TOP + u * 1.68);
 
   const cardX = SAFE_LEFT + u * 0.85, cardW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.7;
   const startY = SAFE_TOP + u * 3, cardH = u * 1.05, gap = u * 0.18;
@@ -8226,7 +8784,7 @@ function drawTutorial() {
   ctx.fillStyle = 'rgba(232,239,250,0.8)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('Read the lane, stay centered, and save dash for panic moments.', W / 2, btnY - u * 0.56);
+  ctx.fillText('Read the lane, stay centered, and let Level 1 teach the pace before you start improvising.', W / 2, btnY - u * 0.56);
 
   drawActionCard(W / 2 - btnW / 2, btnY, btnW, btnH, 'START RUN', 'Tap to begin', {
     top: '#2F7A48',
@@ -8274,6 +8832,7 @@ function handleLevelMapTap() {
       const pendingPowerup = G._pendingWheelResult;
       G._nextLevelNum = 0;
       G._pendingWheelResult = null;
+      trackNextLevel(nextLvl);
       startLevel(nextLvl);
       if (pendingPowerup) applyWheelPowerup(pendingPowerup);
       return;
@@ -8284,7 +8843,7 @@ function handleLevelMapTap() {
   if (!hasNextLevel && canResume) {
     if(tx>layout.resumeX && tx<layout.resumeX+layout.actionW && ty>layout.actionY && ty<layout.actionY+layout.actionH) {
       G.selectedChar = safeSelectedChar();
-      resumeFromSave();
+      resumeFromSave('map_resume');
       return;
     }
   }
@@ -8326,6 +8885,7 @@ function handleLevelMapTap() {
         G.wheelResult=null; G._nextLevelNum=0; G._pendingWheelResult=null;
         G.combo=0; G.comboTimer=0; G.comboMult=1; G.comboPulse=0;
         boss=null;
+        trackRetry('level_replay');
         startLevel(lvl);
       } else {
         // Current level — go to char select
@@ -8339,7 +8899,8 @@ function handleLevelMapTap() {
 // ============================================================
 // DEAD SCREEN HANDLERS
 // ============================================================
-function resumeFromSave() {
+function resumeFromSave(source) {
+  trackRetry(source || 'saved_run');
   G.runGems=save.savedGems; G.runScore=save.savedScore; G.gems=save.savedGems;
   G.score=save.savedScore;
   G.newHigh=false; G.lastUpgrade=-1;
@@ -8383,7 +8944,7 @@ function handleDeadTap() {
   } else {
     // "RETRY LEVEL X" button
     if(tx>W/2-btnW/2&&tx<W/2+btnW/2&&ty>H*.73-btnH/2&&ty<H*.73+btnH/2){
-      resumeFromSave();
+      resumeFromSave('dead_screen_retry');
       return;
     }
     // "LEVEL MAP" button
@@ -8792,7 +9353,7 @@ function loop(ts){
       G.runScore=(G.score+Math.floor(worldOffset/85)*8)*scoreMult;
 
       // Timer death
-      if(G.timeLeft<=0){G.timeLeft=0;if(p.alive)p.die();}
+      if(G.timeLeft<=0){G.timeLeft=0;if(p.alive)p.die('timeout');}
 
       // Level complete! (skipped in endless/daily challenge mode)
       if(!G.endless && !G.dailyChallenge && G.time>=G.levelDef.targetTime && p.alive){
@@ -8810,6 +9371,7 @@ function loop(ts){
         updateMissionProgress('levelsCompleted', 1);
         const timeBonus=Math.floor(G.timeLeft*10);
         G.score+=timeBonus; G.runScore+=timeBonus;
+        trackLevelComplete(G.levelNum, G.runScore, G._levelStarsEarned || 1, G.timeLeft);
         if(G.levelNum>save.highestLevel){save.highestLevel=G.levelNum;persistSave();}
         if(G.runScore>save.bestScore){save.bestScore=G.runScore;G.newHigh=true;persistSave();}
         addTrauma(.3);
@@ -8852,6 +9414,10 @@ function loop(ts){
       if(!p.alive){
         G.deathDelay+=DT;
         if(G.deathDelay>1.9){
+          if(!G._deathTracked){
+            trackDeath(G.levelNum, G._lastDeathCause || 'unknown', G.runScore);
+            G._deathTracked=true;
+          }
           if(G.dailyChallenge){
             // Daily challenge: no continues, update best
             adDeathCount++; G.phase='DEAD';
@@ -8956,6 +9522,7 @@ function loop(ts){
           } else {
             G.phase='LEVEL_COMPLETE'; G.levelCompleteTimer=0;
             calculateLevelStars();
+            trackLevelComplete(G.levelNum, G.runScore, G._levelStarsEarned || 1, G.timeLeft);
           }
           if(G.levelNum>save.highestLevel){save.highestLevel=G.levelNum;persistSave();}
           if(G.runScore>save.bestScore){save.bestScore=G.runScore;G.newHigh=true;persistSave();}
@@ -8969,6 +9536,7 @@ function loop(ts){
           } else {
             G.phase='LEVEL_COMPLETE'; G.levelCompleteTimer=0;
             calculateLevelStars();
+            trackLevelComplete(G.levelNum, G.runScore, G._levelStarsEarned || 1, G.timeLeft);
           }
           sfxLevelComplete();
           if(G.levelNum>save.highestLevel){save.highestLevel=G.levelNum;persistSave();}
@@ -8978,6 +9546,10 @@ function loop(ts){
         if(p&&!p.alive){
           G.deathDelay+=DT;
           if(G.deathDelay>1.9){
+            if(!G._deathTracked){
+              trackDeath(G.levelNum, G._lastDeathCause || 'boss', G.runScore);
+              G._deathTracked=true;
+            }
             boss=null;
             if(G.continuesLeft>0){G.phase='CONTINUE_PROMPT';G.continuePromptTimer=0;}
             else{adDeathCount++; G.phase='DEAD';save.savedLevel=G.levelNum;save.savedScore=G.runScore;save.savedGems=G.runGems;save.cooldownEnd=0;updateStatsEndRun();}
@@ -9064,6 +9636,9 @@ function loop(ts){
   }
 
   inp.tapped=false;
+  if (G._prevPhase !== G.phase) {
+    trackPhaseView(G.phase);
+  }
   G._prevPhase = G.phase;
   // Screen transition fade overlay
   updateFade(DT);updateDeathTumble(DT);updateAnnouncement(DT);
@@ -9153,6 +9728,102 @@ checkMissionResets();
 G.selectedChar=safeSelectedChar();
 resize();
 initBg();
+
+function roundSnapshotValue(value) {
+  return Number.isFinite(value) ? Math.round(value * 10) / 10 : null;
+}
+
+function snapshotEntity(entity) {
+  if (!entity) return null;
+  return {
+    x: roundSnapshotValue(entity.x),
+    y: roundSnapshotValue(entity.y),
+    vx: roundSnapshotValue(entity.vx),
+    vy: roundSnapshotValue(entity.vy),
+    hp: Number.isFinite(entity.hp) ? entity.hp : null,
+    kind: entity.kind || entity.type || entity.name || null,
+  };
+}
+
+window.render_game_to_text = function renderGameToText() {
+  const pendingGuideStep = getGuidedPendingStep();
+  const continuePrompt = G.phase === 'CONTINUE_PROMPT' ? getContinuePromptViewModel() : null;
+  const rewardReadyCount = getUnclaimedMissionCount();
+  const player = G.player ? {
+    alive: !!G.player.alive,
+    char: CHARS[G.selectedChar] ? CHARS[G.selectedChar].id : 'unknown',
+    grounded: !!G.player.onGround,
+    hp: Number.isFinite(G.player.hp) ? G.player.hp : null,
+    max_hp: Number.isFinite(G.player.maxHP) ? G.player.maxHP : null,
+    shield: !!G.player.shield,
+    x: roundSnapshotValue(G.player.x),
+    y: roundSnapshotValue(G.player.y),
+    vx: roundSnapshotValue(G.player.vx),
+    vy: roundSnapshotValue(G.player.vy),
+  } : null;
+
+  const hazards = [];
+  for (let i = 0; i < Math.min(chunks.length, 3); i++) {
+    const chunk = chunks[i];
+    if (!chunk || !Array.isArray(chunk.obstacles)) continue;
+    for (let j = 0; j < Math.min(chunk.obstacles.length, 4); j++) {
+      const hazard = snapshotEntity(chunk.obstacles[j]);
+      if (hazard) hazards.push(hazard);
+    }
+  }
+
+  return JSON.stringify({
+    coord_space: {
+      origin: 'top-left',
+      x_axis: 'right',
+      y_axis: 'down',
+    },
+    hud: {
+      continues_left: G.continuesLeft,
+      gems: G.runGems,
+      score: G.runScore,
+      time_left: roundSnapshotValue(G.timeLeft),
+    },
+    level: G.levelNum,
+    phase: G.phase,
+    onboarding: G.onboarding ? {
+      level: G.onboarding.level,
+      title: G.onboarding.title,
+      completed: !!G.onboarding.completed,
+      pending: pendingGuideStep ? pendingGuideStep.label : null,
+      guided_chunk_cursor: G.guidedChunkCursor || 0,
+      steps: G.onboarding.steps.map(function(step) {
+        return { label: step.label, done: !!step.done };
+      }),
+    } : null,
+    missions: {
+      rewards_ready: rewardReadyCount,
+    },
+    continue_prompt: continuePrompt ? {
+      title: continuePrompt.title,
+      lesson_chip: continuePrompt.lessonChip,
+      primary_label: continuePrompt.primaryLabel,
+      secondary_label: continuePrompt.secondaryLabel,
+    } : null,
+    player,
+    boss: boss ? snapshotEntity(boss) : null,
+    enemies: activeEnemies.slice(0, 8).map(snapshotEntity).filter(Boolean),
+    hazards,
+    particles: particles.length,
+    tooltip: tooltipState.active ? tooltipState.text : null,
+    viewport: {
+      height: roundSnapshotValue(H),
+      width: roundSnapshotValue(W),
+    },
+  });
+};
+
+window.advanceTime = function advanceTime(ms) {
+  return new Promise(function(resolve) {
+    setTimeout(resolve, Math.max(0, Number(ms) || 0));
+  });
+};
+
 requestAnimationFrame(loop);
 </script>
 </body>

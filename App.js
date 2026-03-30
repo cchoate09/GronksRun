@@ -3,6 +3,7 @@ import { View, StyleSheet, BackHandler, Text, Vibration, Share, Linking } from '
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as Sentry from '@sentry/react-native';
 import {
   RewardedInterstitialAd,
   AdEventType,
@@ -10,6 +11,15 @@ import {
   TestIds,
 } from 'react-native-google-mobile-ads';
 import gameHtml from './gameHtml';
+import {
+  bootstrapTelemetry,
+  captureError,
+  captureMessage,
+  initializeTelemetry,
+  trackEvent,
+} from './src/telemetry';
+
+bootstrapTelemetry();
 
 const AD_UNIT_ID = __DEV__
   ? TestIds.REWARDED_INTERSTITIAL
@@ -36,6 +46,10 @@ class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('App crash caught by ErrorBoundary:', error, errorInfo);
+    void captureError(error, {
+      source: 'native_error_boundary',
+      component_stack: errorInfo?.componentStack || '',
+    });
   }
 
   render() {
@@ -85,6 +99,16 @@ function GameApp() {
   }, []);
 
   useEffect(() => {
+    void initializeTelemetry().then((status) => {
+      return trackEvent('app_open', {
+        analytics_configured: status.analyticsConfigured,
+        crash_reporting_configured: status.crashReportingConfigured,
+        source: 'native_shell',
+      });
+    }).catch((error) => {
+      console.log('Telemetry init error:', error);
+    });
+
     ScreenOrientation.lockAsync(
       ScreenOrientation.OrientationLock.LANDSCAPE
     );
@@ -101,6 +125,9 @@ function GameApp() {
       () => {
         adLoadedRef.current = true;
         sendToGame('adReady', { ready: true });
+        void trackEvent('rewarded_interstitial_loaded', {
+          source: 'native_shell',
+        });
       }
     );
 
@@ -112,6 +139,16 @@ function GameApp() {
           rewardType: pendingRewardType.current,
           amount: reward.amount,
         });
+        void trackEvent('rewarded_interstitial_rewarded', {
+          amount: reward.amount,
+          reward_type: pendingRewardType.current || 'generic',
+          source: 'native_shell',
+        });
+        void trackEvent('ad_reward', {
+          amount: reward.amount,
+          reward_type: pendingRewardType.current || 'generic',
+          source: 'native_shell',
+        });
         pendingRewardType.current = null;
       }
     );
@@ -121,6 +158,9 @@ function GameApp() {
       () => {
         // Ad was closed — preload the next one
         sendToGame('adClosed', {});
+        void trackEvent('rewarded_interstitial_closed', {
+          source: 'native_shell',
+        });
         loadAd();
       }
     );
@@ -131,6 +171,16 @@ function GameApp() {
         console.log('Ad error:', error);
         adLoadedRef.current = false;
         sendToGame('adError', { message: error.message });
+        void trackEvent('rewarded_interstitial_error', {
+          code: error.code || 'unknown',
+          message: error.message || 'unknown',
+          source: 'native_shell',
+        });
+        void captureMessage('Rewarded interstitial error', {
+          ad_code: error.code || 'unknown',
+          ad_message: error.message || 'unknown',
+          source: 'native_shell',
+        }, 'warning');
         // Retry after a delay
         setTimeout(loadAd, 30000);
       }
@@ -154,16 +204,27 @@ function GameApp() {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'showAd') {
         pendingRewardType.current = msg.rewardType || 'generic';
+        void trackEvent('rewarded_interstitial_show_requested', {
+          reward_type: pendingRewardType.current,
+          source: 'webview_game',
+        });
         if (adLoadedRef.current) {
           rewardedInterstitial.show();
         } else {
           sendToGame('adNotReady', {});
+          void trackEvent('rewarded_interstitial_not_ready', {
+            reward_type: pendingRewardType.current,
+            source: 'native_shell',
+          });
           loadAd();
         }
       } else if (msg.type === 'checkAd') {
         sendToGame('adReady', { ready: adLoadedRef.current });
       } else if (msg.type === 'exitApp') {
         // Game sent exit request (back button at main menu)
+        void trackEvent('app_exit_requested', {
+          source: 'webview_game',
+        });
         BackHandler.exitApp();
       } else if (msg.type === 'share') {
         // Social sharing from game
@@ -171,19 +232,38 @@ function GameApp() {
           await Share.share({
             message: msg.text || "Check out Gronk's Run!",
           });
+          void trackEvent('share_sheet_opened', {
+            source: 'webview_game',
+          });
         } catch (e) {
           console.log('Share error:', e);
+          void captureError(e, {
+            action: 'share',
+            source: 'native_shell',
+          });
         }
       } else if (msg.type === 'rateApp') {
         // Open Play Store listing for rating
         try {
           await Linking.openURL('market://details?id=com.gronksrun.app');
+          void trackEvent('rate_app_opened', {
+            source: 'webview_game',
+            target: 'market',
+          });
         } catch (e) {
           // Fallback to web Play Store
           try {
             await Linking.openURL('https://play.google.com/store/apps/details?id=com.gronksrun.app');
+            void trackEvent('rate_app_opened', {
+              source: 'webview_game',
+              target: 'web_fallback',
+            });
           } catch (e2) {
             console.log('Could not open Play Store:', e2);
+            void captureError(e2, {
+              action: 'rate_app',
+              source: 'native_shell',
+            });
           }
         }
       } else if (msg.type === 'haptic') {
@@ -201,13 +281,10 @@ function GameApp() {
           Vibration.vibrate(15);
         }
       } else if (msg.type === 'analytics') {
-        // Analytics events from game — forward to Firebase when integrated
-        // For now, log in dev mode for debugging
-        if (__DEV__) {
-          console.log(`[Analytics] ${msg.event}`, msg.params);
-        }
-        // TODO: When Firebase is added:
-        // analytics().logEvent(msg.event, msg.params);
+        void trackEvent(msg.event, {
+          ...(msg.params || {}),
+          source: 'webview_game',
+        });
       } else if (msg.type === 'crash') {
         // Crash report from WebView game loop
         console.error(`[GameCrash] ${msg.phase}: ${msg.message}`, {
@@ -215,11 +292,24 @@ function GameApp() {
           particles: msg.particles,
           stack: msg.stack,
         });
-        // TODO: When Crashlytics is added:
-        // crashlytics().recordError(new Error(msg.message), msg.phase);
+        const error = new Error(msg.message || 'Unknown WebView crash');
+        error.name = 'WebViewGameError';
+        if (msg.stack) {
+          error.stack = msg.stack;
+        }
+        void captureError(error, {
+          fps: msg.fps,
+          particles: msg.particles,
+          phase: msg.phase || 'unknown',
+          source: 'webview_game',
+        });
       }
     } catch (e) {
       console.log('Message parse error:', e);
+      void captureError(e, {
+        source: 'native_shell',
+        action: 'parse_webview_message',
+      });
     }
   }, [sendToGame, loadAd]);
 
@@ -244,11 +334,40 @@ function GameApp() {
         showsVerticalScrollIndicator={false}
         onMessage={onMessage}
         androidLayerType="hardware"
+        onLoadStart={() => {
+          void trackEvent('webview_load_started', {
+            source: 'native_shell',
+          });
+        }}
+        onLoadEnd={() => {
+          void trackEvent('webview_load_finished', {
+            source: 'native_shell',
+          });
+        }}
         onError={(syntheticEvent) => {
           console.log('WebView error:', syntheticEvent.nativeEvent);
+          void trackEvent('webview_load_error', {
+            description: syntheticEvent.nativeEvent?.description || 'unknown',
+            source: 'native_shell',
+          });
+          void captureMessage('WebView load error', {
+            description: syntheticEvent.nativeEvent?.description || 'unknown',
+            source: 'native_shell',
+            url: syntheticEvent.nativeEvent?.url || 'inline_html',
+          }, 'error');
         }}
         onRenderProcessGone={(syntheticEvent) => {
           console.log('WebView process gone:', syntheticEvent.nativeEvent);
+          void trackEvent('webview_process_gone', {
+            did_crash: !!syntheticEvent.nativeEvent?.didCrash,
+            renderer_priority: syntheticEvent.nativeEvent?.rendererPriorityAtExit || 'unknown',
+            source: 'native_shell',
+          });
+          void captureMessage('WebView render process gone', {
+            did_crash: !!syntheticEvent.nativeEvent?.didCrash,
+            renderer_priority: syntheticEvent.nativeEvent?.rendererPriorityAtExit || 'unknown',
+            source: 'native_shell',
+          }, 'error');
           // WebView crashed — reload it
           if (webViewRef.current) {
             webViewRef.current.reload();
@@ -262,13 +381,15 @@ function GameApp() {
 // ============================================================
 // Export wrapped in ErrorBoundary
 // ============================================================
-export default function App() {
+function AppRoot() {
   return (
     <ErrorBoundary>
       <GameApp />
     </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(AppRoot);
 
 const styles = StyleSheet.create({
   container: {

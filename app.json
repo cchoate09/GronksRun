@@ -2,7 +2,7 @@
   "expo": {
     "name": "Gronk's Run",
     "slug": "gronks-run",
-  "version": "1.2.11",
+    "version": "1.2.12",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.gronksrun.app",
-    "versionCode": 14,
+      "versionCode": 15,
       "adaptiveIcon": {
         "backgroundColor": "#0a1628",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -35,7 +35,8 @@
         {
           "androidAppId": "ca-app-pub-8879184280264151~8722286751"
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {

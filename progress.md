@@ -19,3 +19,45 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Reworked the gameplay HUD to keep combo state inside the main top bar instead of spawning another floating box, turned saves into a compact inline chip, and slimmed/repositioned tooltip and announcement banners so they no longer stack directly under the HUD.
 - Rebuilt the level-clear card around a single centered panel with cleaner spacing, a dedicated bonus-spin CTA, and no detached share button.
 - Verification: `node --check game.js`, `node gen-gamehtmljs.js`, and a Puppeteer mobile-landscape screenshot pass against forced `PLAYING` and `LEVEL_COMPLETE` states using the same aspect ratio as playtest screenshots.
+2026-03-29
+- Batch 1 foundation implementation:
+- Added `@sentry/react-native` to the Expo app and wrapped Metro with `getSentryExpoConfig` for release/source-map compatibility.
+- Added `src/telemetry.js` to centralize native-shell crash reporting and analytics forwarding with safe defaults, persisted anonymous install IDs, Sentry bootstrapping, and direct PostHog capture support.
+- Rewired `App.js` so the existing WebView bridge now reports real events and crashes instead of console-only stubs. Native shell events now also track ad lifecycle, WebView load/process failures, share sheet opens, and rate-app attempts.
+- Strengthened game analytics in `game.js`: level completions, deaths, shop purchases, and skin purchases now emit events. Added machine-readable QA hooks via `window.render_game_to_text()` and `window.advanceTime()`.
+- Added `scripts/mobile_webview_smoke.js`, `.env.example`, `manifest.json`, and `docs/BATCH1_FOUNDATION.md`.
+- Verification: `node gen-gamehtmljs.js`, `node --check game.js`, `node --check scripts/mobile_webview_smoke.js`, `npm run smoke:mobile-webview`, and `npx expo export --platform android --output-dir .expo-export-check\\batch1`.
+- Smoke result after the harness cleanup: mobile WebView booted cleanly, `render_game_to_text` and `advanceTime` were present, and the bridge emitted `session_start` and `level_start` analytics with no page errors.
+- Remaining Batch 1 gaps after this pass: no telemetry credentials are configured yet, Sentry org/project/auth-token still need to be set in the build environment for symbolicated release uploads, and there is still no device matrix / automated Android runtime pass outside the WebView smoke coverage.
+- Follow-up Batch 1 tranche:
+- Expanded analytics semantics and context so events now carry biome, character, phase, run score, run gems, endless/daily flags, and native device metadata.
+- Corrected an analytics bug where requesting an ad was previously logged as if the ad had already been watched; the game now emits `ad_show`, while the native shell emits `ad_reward` on actual reward completion.
+- Added more funnel events and transitions: `app_open`, `menu_view`, `map_view`, `char_select_view`, `tutorial_step`, `tutorial_complete`, `continue_offer`, `retry`, and `next_level`.
+- Added `docs/ANDROID_TEST_BUILD_CHECKLIST.md` to give monitored Android test builds a repeatable release gate.
+- Tightened `scripts/mobile_webview_smoke.js` so it waits for an actionable phase instead of passing while still stuck in `LOADING`.
+- Verification: regenerated bundle, reran `node --check game.js`, `node --check scripts/mobile_webview_smoke.js`, `npm run smoke:mobile-webview`, and `npx expo export --platform android --output-dir .expo-export-check\\batch-check`.
+- Batch 1 closure pass:
+- Fixed `level_start` ordering so level and biome context are populated before the event fires.
+- Renamed the gameplay death event to the simpler launch-plan name `death`.
+- Expanded the smoke suite to force and validate the key Batch 1 states and events:
+  menu, map, char select, tutorial, playing, continue prompt, level complete, dead, plus analytics checks for `session_start`, `menu_view`, `map_view`, `char_select_view`, `tutorial_step`, `tutorial_complete`, `level_start`, `continue_offer`, `level_complete`, `death`, `retry`, `next_level`, and `ad_show`.
+- Re-ran `npx expo export --platform android --output-dir .expo-export-check\\batch1-final` successfully after the instrumentation changes.
+- Remaining after Batch 1 is no longer instrumentation plumbing: it is operational/device work for later batches, especially real telemetry credentials, real monitored device playtests, and broader Android device-matrix QA.
+- Batch 2 first-session onboarding pass:
+- Reframed levels 1-3 around guided lessons instead of timed tutorial banners alone.
+- Level 1 now teaches jump + dash, Level 2 teaches slide + stomp, and Level 3 teaches dash combat via a tracked enemy-hit objective.
+- Early progression tuning pass: shortened the first three target times, removed enemies from Levels 1-2, and delayed Level 3 combat to make the first session cleaner and more readable.
+- Added a guided onboarding state machine to `game.js`, wired it into player actions, surfaced it in `render_game_to_text`, and kept the live HUD centered on a small lesson strip instead of large floating text boxes.
+- Reworked the first-session framing on `drawLevelIntro`, `drawLevelComplete`, `drawLevelMap`, `drawCharSelect`, and `drawTutorial` so the next goal is explicit and the first run points the player toward the intended lesson.
+- Updated `scripts/mobile_webview_smoke.js` so the smoke suite now validates guided onboarding presence and completion in Level 1 in addition to the existing analytics funnel checks.
+- Verification for this pass: `node --check game.js`, `node gen-gamehtmljs.js`, `npm run smoke:mobile-webview`, and a Puppeteer screenshot QA pass for character select, level intro, playing HUD, map, and level-complete states.
+- Remaining Batch 2 work after this tranche: tune the actual obstacle patterns and chunk pacing for Levels 1-3 using real playtest footage, improve the first death/continue teaching beat, and add a clearer first mission / reward moment after the player clears early levels.
+2026-03-30
+- Batch 2 closure pass:
+- Added deterministic guided chunk pacing for Levels 1-3 so the onboarding lessons now run on authored safe terrain instead of falling back to the normal random chunk mix.
+- Upgraded the continue prompt into a lesson-aware recovery screen with shared tap-target/layout helpers, preserved run context, and explicit copy for the remaining guided action when the player fails during the first lessons.
+- Reframed the death screen around lesson recovery during early onboarding, including a checkpoint chip and retry copy that tells the player exactly what skill is still left to land.
+- Added stronger early reward guidance after clears by surfacing ready mission rewards on the level-clear flow, the map header, the mission chip, and the lower progress rail.
+- Expanded `render_game_to_text()` and `scripts/mobile_webview_smoke.js` so Batch 2 now validates guided chunk planning, a lesson-aware continue prompt, guided completion, and a reward-ready mission/map state in addition to the existing funnel analytics checks.
+- Verification for this closure pass: `node --check game.js`, `node --check scripts/mobile_webview_smoke.js`, `node gen-gamehtmljs.js`, and `npm run smoke:mobile-webview`.
+- Batch 2 is now complete from a code and harness standpoint; remaining onboarding work beyond this batch is tuning from real-device playtest footage rather than missing first-session UX systems.

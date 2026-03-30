@@ -1,0 +1,9 @@
+{
+  "name": "Gronk's Run",
+  "short_name": "Gronk's Run",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#0d1b3e",
+  "orientation": "landscape"
+}

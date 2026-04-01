@@ -1,12 +1,11 @@
 /**
  * Generate clean sprite sheets for enemies/obstacles that had broken AI-generated sheets.
- * Renders the procedural drawing code from the game into properly gridded sprite sheet PNGs.
- * Then converts them to Base64 and patches index.html.
+ * Renders the procedural drawing code from the game into properly gridded sprite sheet PNGs
+ * and writes a manifest that the enemy asset builder can consume.
  */
 const { createCanvas } = require('canvas');
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
 
 const FRAME_W = 256;
 const FRAME_H = 256;
@@ -97,6 +96,93 @@ function genTrollSheet() {
     ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
   }
   return { canvas, cols, rows, fps: 5, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
+}
+
+// ========== CHARGER ==========
+function drawChargerFrame(ctx, u, stepPhase, chargeLean) {
+  var stride = stepPhase || 0;
+  var lean = chargeLean || 0;
+  var bodyY = Math.sin(stride) * u * 0.06;
+
+  ctx.save();
+  ctx.translate(0, bodyY);
+  ctx.rotate(lean);
+
+  ctx.fillStyle = "#B87934";
+  ctx.beginPath(); ctx.ellipse(0, -u*0.95, u*1.3, u*0.78, 0, 0, PI2); ctx.fill();
+  ctx.strokeStyle = "#6B3D1C"; ctx.lineWidth = u*0.07; ctx.stroke();
+
+  ctx.fillStyle = "#D59842";
+  ctx.beginPath(); ctx.ellipse(u*0.1, -u*1.1, u*0.48, u*0.18, 0.08, 0, PI2); ctx.fill();
+
+  ctx.fillStyle = "#95582B";
+  ctx.beginPath(); ctx.ellipse(-u*0.92, -u*1.05, u*0.56, u*0.46, -0.15, 0, PI2); ctx.fill();
+  ctx.strokeStyle = "#6B3D1C"; ctx.lineWidth = u*0.06; ctx.stroke();
+
+  ctx.fillStyle = "#F7F1E4";
+  ctx.beginPath(); ctx.moveTo(-u*1.22, -u*0.9); ctx.lineTo(-u*1.12, -u*0.35); ctx.lineTo(-u*0.98, -u*0.86); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-u*0.92, -u*0.8); ctx.lineTo(-u*0.8, -u*0.3); ctx.lineTo(-u*0.68, -u*0.74); ctx.closePath(); ctx.fill();
+
+  ctx.fillStyle = "#FF3B30";
+  ctx.beginPath(); ctx.arc(-u*0.88, -u*1.18, u*0.09, 0, PI2); ctx.fill();
+  ctx.fillStyle = "#231A12";
+  ctx.beginPath(); ctx.arc(-u*0.88, -u*1.18, u*0.04, 0, PI2); ctx.fill();
+
+  ctx.strokeStyle = "#C8883F"; ctx.lineWidth = u*0.11; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(u*0.94, -u*0.98); ctx.quadraticCurveTo(u*1.48, -u*1.74, u*1.2, -u*1.34); ctx.stroke();
+
+  var legs = [
+    { x: -u*0.46, y: -u*0.08, dir: -1 },
+    { x: u*0.5, y: -u*0.08, dir: 1 }
+  ];
+  for (var li = 0; li < legs.length; li++) {
+    var leg = legs[li];
+    var swing = Math.sin(stride + li * Math.PI) * 0.28;
+    ctx.save();
+    ctx.translate(leg.x, leg.y);
+    ctx.rotate(swing + lean * 0.35);
+    ctx.fillStyle = "#6B3D1C";
+    ctx.fillRect(-u*0.12, 0, u*0.24, u*0.58);
+    ctx.beginPath(); ctx.ellipse(0, u*0.6, u*0.22, u*0.1, 0, 0, PI2); ctx.fill();
+    ctx.restore();
+  }
+
+  if (lean < -0.1) {
+    ctx.fillStyle = "rgba(210,140,60,0.18)";
+    ctx.beginPath(); ctx.ellipse(u*1.1, -u*0.66, u*0.52, u*0.22, 0, 0, PI2); ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function genChargerSheet() {
+  const cols = 4, rows = 2;
+  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
+  const ctx = canvas.getContext('2d');
+
+  for (let i = 0; i < 4; i++) {
+    const f = makeFrame((c, u) => drawChargerFrame(c, u, i * Math.PI / 2, 0), 48);
+    ctx.drawImage(f, i * FRAME_W, 0);
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const f = makeFrame((c, u) => drawChargerFrame(c, u, i * 0.9, -0.12 - i * 0.08), 48);
+    ctx.drawImage(f, i * FRAME_W, FRAME_H);
+  }
+
+  {
+    const f = makeFrame((c, u) => {
+      c.globalAlpha = 0.72;
+      drawChargerFrame(c, u, 0.4, -0.08);
+      c.globalAlpha = 0.36;
+      c.fillStyle = "#fff";
+      c.beginPath(); c.ellipse(0, -u*0.95, u*1.35, u*0.82, 0, 0, PI2); c.fill();
+      c.globalAlpha = 1;
+    }, 48);
+    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
+  }
+
+  return { canvas, cols, rows, fps: 8, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
 }
 
 // ========== WITCH ==========
@@ -297,6 +383,76 @@ function genDiverSheet() {
   return { canvas, cols, rows, fps: 6, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
 }
 
+// ========== BOMBER ==========
+function drawBomberFrame(ctx, u, wingPhase, bombDrop) {
+  const wf = wingPhase || 0;
+  ctx.fillStyle = "#9C5D31";
+  ctx.beginPath(); ctx.ellipse(0, -u*0.08, u*0.95, u*0.5, 0, 0, PI2); ctx.fill();
+  ctx.strokeStyle = "#6A3D1B"; ctx.lineWidth = u*0.06; ctx.stroke();
+
+  ctx.fillStyle = "#B97844";
+  for (let s = -1; s <= 1; s += 2) {
+    ctx.beginPath(); ctx.moveTo(s*u*0.42, -u*0.02);
+    ctx.bezierCurveTo(s*u*1.2, -u*(0.4+wf), s*u*1.55, -u*(0.1+wf), s*u*1.45, u*0.22);
+    ctx.bezierCurveTo(s*u*0.85, u*0.1, s*u*0.55, u*0.06, s*u*0.42, -u*0.02);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#7A4721"; ctx.lineWidth = u*0.05; ctx.stroke();
+  }
+
+  ctx.fillStyle = "#78411F";
+  ctx.beginPath(); ctx.moveTo(-u*0.12, -u*0.56); ctx.lineTo(u*0.12, -u*0.3); ctx.lineTo(-u*0.04, -u*0.28); ctx.closePath(); ctx.fill();
+
+  ctx.fillStyle = "#6A3D1B";
+  ctx.beginPath(); ctx.ellipse(-u*0.6, -u*0.12, u*0.28, u*0.24, 0.15, 0, PI2); ctx.fill();
+  ctx.fillStyle = "#FFE27A";
+  ctx.beginPath(); ctx.arc(-u*0.58, -u*0.16, u*0.08, 0, PI2); ctx.fill();
+  ctx.fillStyle = "#231A12";
+  ctx.beginPath(); ctx.arc(-u*0.58, -u*0.16, u*0.035, 0, PI2); ctx.fill();
+
+  ctx.fillStyle = "#D9480F";
+  ctx.beginPath(); ctx.ellipse(u*0.02, u*0.16, u*0.34, u*0.16, 0, 0, PI2); ctx.fill();
+
+  if (bombDrop) {
+    var drop = bombDrop;
+    ctx.fillStyle = "#333";
+    ctx.beginPath(); ctx.arc(u*0.08, u*(0.34 + drop), u*0.12, 0, PI2); ctx.fill();
+    ctx.fillStyle = "#FF6A2E";
+    ctx.beginPath(); ctx.arc(u*0.12, u*(0.18 + drop), u*0.04, 0, PI2); ctx.fill();
+  }
+}
+
+function genBomberSheet() {
+  const cols = 4, rows = 2;
+  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
+  const ctx = canvas.getContext('2d');
+
+  for (let i = 0; i < 4; i++) {
+    const wf = Math.sin(i * Math.PI / 2) * 0.3;
+    const f = makeFrame((c, u) => drawBomberFrame(c, u, wf, 0), 50);
+    ctx.drawImage(f, i * FRAME_W, 0);
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const drop = [0.15, 0.32, 0.44][i];
+    const f = makeFrame((c, u) => drawBomberFrame(c, u, -0.08 + i * 0.08, drop), 50);
+    ctx.drawImage(f, i * FRAME_W, FRAME_H);
+  }
+
+  {
+    const f = makeFrame((c, u) => {
+      c.globalAlpha = 0.72;
+      drawBomberFrame(c, u, 0.12, 0);
+      c.globalAlpha = 0.4;
+      c.fillStyle = "#fff";
+      c.beginPath(); c.ellipse(0, -u*0.08, u*1.0, u*0.54, 0, 0, PI2); c.fill();
+      c.globalAlpha = 1;
+    }, 50);
+    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
+  }
+
+  return { canvas, cols, rows, fps: 7, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
+}
+
 // ========== SERPENT ==========
 function drawSerpentFrame(ctx, u, slitherPhase) {
   ctx.fillStyle = "#2a8a3a";
@@ -457,16 +613,73 @@ function genSpikesSheet() {
   return { canvas, cols, rows, fps: 1, anims: { idle: [0] } };
 }
 
+// ========== FIRE GEYSER ==========
+function drawFireGeyserFrame(ctx, u, stage) {
+  var glow = [0.12, 0.18, 0.26, 0.34, 0.44, 0.7, 0.46, 0.22][stage];
+  var flameH = [0.02, 0.3, 0.65, 1.0, 1.28, 1.65, 1.02, 0.4][stage];
+
+  ctx.fillStyle = "#4A240E";
+  ctx.beginPath(); ctx.ellipse(0, 0, u*0.62, u*0.22, 0, 0, PI2); ctx.fill();
+  ctx.fillStyle = "#6B3212";
+  ctx.beginPath(); ctx.ellipse(0, -u*0.02, u*0.38, u*0.12, 0, 0, PI2); ctx.fill();
+  ctx.fillStyle = "rgba(255,180,40,0.35)";
+  ctx.beginPath(); ctx.ellipse(0, u*0.02, u*(0.42 + glow*0.4), u*0.14, 0, 0, PI2); ctx.fill();
+
+  if (flameH > 0.08) {
+    ctx.fillStyle = "#FF7A00";
+    ctx.beginPath();
+    ctx.moveTo(-u*0.22, 0);
+    ctx.bezierCurveTo(-u*0.18, -u*flameH*0.65, -u*0.08, -u*flameH, 0, -u*flameH);
+    ctx.bezierCurveTo(u*0.08, -u*flameH, u*0.18, -u*flameH*0.65, u*0.22, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#FFB323";
+    ctx.beginPath();
+    ctx.moveTo(-u*0.1, -u*0.02);
+    ctx.bezierCurveTo(-u*0.08, -u*flameH*0.45, -u*0.03, -u*flameH*0.82, 0, -u*flameH*0.82);
+    ctx.bezierCurveTo(u*0.03, -u*flameH*0.82, u*0.08, -u*flameH*0.45, u*0.1, -u*0.02);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  if (stage >= 1 && stage <= 6) {
+    ctx.fillStyle = "rgba(255,200,60,0.85)";
+    for (let i = 0; i < Math.max(2, stage); i++) {
+      let offset = -u*0.28 + i * u * 0.18;
+      ctx.beginPath(); ctx.arc(offset, u*0.02 - i*u*0.01, u*0.03, 0, PI2); ctx.fill();
+    }
+  }
+}
+
+function genFireGeyserSheet() {
+  const cols = 4, rows = 2;
+  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
+  const ctx = canvas.getContext('2d');
+
+  for (let i = 0; i < 8; i++) {
+    const f = makeFrame((c, u) => drawFireGeyserFrame(c, u, i), 62);
+    const x = (i % cols) * FRAME_W;
+    const y = Math.floor(i / cols) * FRAME_H;
+    ctx.drawImage(f, x, y);
+  }
+
+  return { canvas, cols, rows, fps: 5, anims: { idle: [0], attack: [0,1,2,3,4,5,6,7] } };
+}
+
 // ========== MAIN ==========
 async function main() {
   const outputDir = path.join(__dirname, 'assets', 'spritesheets', 'enemies', 'generated');
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
   const generators = {
+    bomber: genBomberSheet,
+    charger: genChargerSheet,
     troll: genTrollSheet,
     witch: genWitchSheet,
     golem: genGolemSheet,
     diver: genDiverSheet,
+    fire_geyser: genFireGeyserSheet,
     serpent: genSerpentSheet,
     ptero: genPteroSheet,
     log: genLogSheet,
@@ -485,79 +698,12 @@ async function main() {
     fs.writeFileSync(pngPath, buf);
     console.log(`  Saved ${pngPath} (${canvas.width}x${canvas.height}, ${(buf.length/1024).toFixed(1)}KB)`);
 
-    // Resize to reasonable size for Base64 embedding (max 512px wide for single-row sheets)
-    const maxW = cols <= 2 ? 256 : 512;
-    const scale = maxW / canvas.width;
-    const targetW = Math.round(canvas.width * scale);
-    const targetH = Math.round(canvas.height * scale);
-
-    const resized = await sharp(buf).resize(targetW, targetH, { kernel: 'lanczos3' }).png().toBuffer();
-    const b64 = resized.toString('base64');
-    console.log(`  Resized to ${targetW}x${targetH}, Base64: ${(b64.length/1024).toFixed(1)}KB`);
-
-    results[name] = { b64, cols, rows, fps, anims, w: targetW, h: targetH };
+    results[name] = { cols, rows, fps, anims, width: canvas.width, height: canvas.height };
   }
 
-  // Now patch index.html
-  console.log('\nPatching index.html...');
-  let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  const eol = html.includes('\r\n') ? '\r\n' : '\n';
-
-  // Find and replace ENEMY_SPRITE_B64 entries for the generated sprites
-  for (const [name, data] of Object.entries(results)) {
-    const b64Key = name === 'fire_geyser' ? 'fire_geyser' : name;
-
-    // Check if this sprite already has B64 data - replace it
-    const b64Pattern = new RegExp(`ENEMY_SPRITE_B64\\.${b64Key}\\s*=\\s*"[^"]*";`);
-    if (b64Pattern.test(html)) {
-      html = html.replace(b64Pattern, `ENEMY_SPRITE_B64.${b64Key}="data:image/png;base64,${data.b64}";`);
-      console.log(`  Replaced B64 for ${name}`);
-    } else {
-      // Need to insert it - find the ENEMY_SPRITE_B64 block
-      const insertPoint = html.indexOf('var ENEMY_SPRITE_DEFS');
-      if (insertPoint > -1) {
-        const insertion = `ENEMY_SPRITE_B64.${b64Key}="data:image/png;base64,${data.b64}";${eol}`;
-        html = html.slice(0, insertPoint) + insertion + html.slice(insertPoint);
-        console.log(`  Inserted B64 for ${name}`);
-      }
-    }
-  }
-
-  // Now update ENEMY_SPRITE_DEFS for these sprites
-  // We need to keep bomber, charger, fire_geyser defs as they were (they work), and update the rest
-  const defsPattern = /var ENEMY_SPRITE_DEFS\s*=\s*\{[^}]+\};/;
-  const defsMatch = html.match(defsPattern);
-
-  if (defsMatch) {
-    // Build new defs including all sprites
-    const allDefs = {};
-
-    // Keep working original sprites
-    allDefs.bomber = { cols:8, rows:2, fps:7, anims:{"idle":[0,1,2,3,4,5],"attack":[9,10],"hit":[14]} };
-    allDefs.charger = { cols:4, rows:4, fps:8, anims:{"idle":[0,1,2,3],"attack":[4,5,6,7],"hit":[12]} };
-    allDefs.fire_geyser = { cols:8, rows:3, fps:5, anims:{"idle":[8,9,10],"attack":[0,1,2,3,4,5,6,7]} };
-
-    // Add generated sprites
-    for (const [name, data] of Object.entries(results)) {
-      allDefs[name] = { cols: data.cols, rows: data.rows, fps: data.fps, anims: data.anims };
-    }
-
-    const newDefs = 'var ENEMY_SPRITE_DEFS = ' + JSON.stringify(allDefs) + ';';
-    html = html.replace(defsPattern, newDefs);
-    console.log('  Updated ENEMY_SPRITE_DEFS');
-  }
-
-  fs.writeFileSync(path.join(__dirname, 'index.html'), html);
-  console.log('index.html patched successfully!');
-
-  // Report file size
-  const stat = fs.statSync(path.join(__dirname, 'index.html'));
-  console.log(`index.html size: ${(stat.size / 1024 / 1024).toFixed(2)} MB`);
-
-  // Generate gameHtml.js
-  console.log('\nRegenerating gameHtml.js...');
-  require('child_process').execSync('node gen-gamehtmljs.js', { cwd: __dirname, stdio: 'inherit' });
-  console.log('Done!');
+  const manifestPath = path.join(outputDir, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(results, null, 2) + '\n');
+  console.log(`\nWrote sprite manifest to ${manifestPath}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

@@ -61,3 +61,17 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Expanded `render_game_to_text()` and `scripts/mobile_webview_smoke.js` so Batch 2 now validates guided chunk planning, a lesson-aware continue prompt, guided completion, and a reward-ready mission/map state in addition to the existing funnel analytics checks.
 - Verification for this closure pass: `node --check game.js`, `node --check scripts/mobile_webview_smoke.js`, `node gen-gamehtmljs.js`, and `npm run smoke:mobile-webview`.
 - Batch 2 is now complete from a code and harness standpoint; remaining onboarding work beyond this batch is tuning from real-device playtest footage rather than missing first-session UX systems.
+2026-03-31
+- High-impact polish pass:
+- Rebuilt the remaining older meta surfaces around the shared card system: missions now split daily and weekly goals into cleaner columns with real claim buttons and readable progress bars, and daily reward now uses the same scaffold/footer flow as the rest of the polished UI.
+- Added a new `spawnImpactBurst()` feedback helper and used it to strengthen enemy hits, shield breaks, player damage, dash starts, and ground-pound landings so core actions read more clearly and feel more responsive.
+- Restyled floating announcements and combat text so they sit in cleaner panels, avoid the tutorial lane more gracefully, and stay legible during crowded gameplay moments.
+- Expanded `scripts/mobile_webview_smoke.js` to force-render the missions, shop, stats, settings, and daily reward screens in addition to the existing onboarding/gameplay funnel states.
+- Verification for this pass: `node --check game.js`, `node --check scripts/mobile_webview_smoke.js`, `node gen-gamehtmljs.js`, plus regenerated bundle-string checks against `gameHtml.js` and `index.html`.
+- The browser smoke launch itself is currently blocked in this workspace by a local Windows `spawn EPERM` when Puppeteer tries to open Chrome, so the harness changes are in place but the full automated browser pass could not complete here.
+- Art consistency batch:
+- Added maintained procedural sheets for `charger`, `bomber`, and `fire_geyser` in `gen_sprite_sheets.js`, alongside a generated manifest at `assets/spritesheets/enemies/generated/manifest.json`.
+- Added `gen_enemy_assets.js` so generated enemy sheets are normalized into the runtime `128x128` frame grid and patched directly into `game.js` instead of drifting out of sync by hand.
+- Re-enabled the live enemy sprite path in `game.js` and rebuilt the runtime sprite asset block from generated sheets so the enemy cast now shares a single consistent pipeline with explicit animation metadata.
+- Regenerated the shipped WebView bundle in `index.html`, `gameHtml.js`, and `assets/gameHtml.js`.
+- Verification for this pass: `node --check game.js`, `node --check gen_enemy_assets.js`, `node gen_sprite_sheets.js`, `node gen_enemy_assets.js`, `node gen-gamehtmljs.js`, `npm run smoke:mobile-webview`, and a targeted browser check confirming all generated enemy/hazard sheets load successfully with valid `128x128` frames and animation lookups.

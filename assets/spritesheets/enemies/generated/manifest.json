@@ -1,0 +1,224 @@
+{
+  "bomber": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 7,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "attack": [
+        4,
+        5,
+        6
+      ],
+      "hit": [
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "charger": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 8,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "attack": [
+        4,
+        5,
+        6
+      ],
+      "hit": [
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "troll": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 5,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "attack": [
+        4,
+        5,
+        6
+      ],
+      "hit": [
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "witch": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 5,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "attack": [
+        4,
+        5,
+        6
+      ],
+      "hit": [
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "golem": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 3,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "attack": [
+        4,
+        5,
+        6
+      ],
+      "hit": [
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "diver": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 6,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "attack": [
+        4,
+        5,
+        6
+      ],
+      "hit": [
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "fire_geyser": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 5,
+    "anims": {
+      "idle": [
+        0
+      ],
+      "attack": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "serpent": {
+    "cols": 4,
+    "rows": 2,
+    "fps": 5,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "attack": [
+        4,
+        5,
+        6
+      ],
+      "hit": [
+        7
+      ]
+    },
+    "width": 1024,
+    "height": 512
+  },
+  "ptero": {
+    "cols": 4,
+    "rows": 1,
+    "fps": 6,
+    "anims": {
+      "idle": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "width": 1024,
+    "height": 256
+  },
+  "log": {
+    "cols": 1,
+    "rows": 1,
+    "fps": 1,
+    "anims": {
+      "idle": [
+        0
+      ]
+    },
+    "width": 256,
+    "height": 256
+  },
+  "spikes": {
+    "cols": 1,
+    "rows": 1,
+    "fps": 1,
+    "anims": {
+      "idle": [
+        0
+      ]
+    },
+    "width": 256,
+    "height": 256
+  }
+}

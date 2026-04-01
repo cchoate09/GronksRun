@@ -214,6 +214,31 @@ function startServer() {
       await localDelay(120);
       snapshots.push(snapshot('map_reward_ready'));
 
+      G.phase = 'MISSIONS';
+      await localDelay(120);
+      snapshots.push(snapshot('missions'));
+
+      G.phase = 'SHOP';
+      await localDelay(120);
+      snapshots.push(snapshot('shop'));
+
+      G.phase = 'STATS';
+      await localDelay(120);
+      snapshots.push(snapshot('stats'));
+
+      G.phase = 'SETTINGS';
+      await localDelay(120);
+      snapshots.push(snapshot('settings'));
+
+      save.dailyStreak = Math.max(1, save.dailyStreak || 1);
+      G.dailyCalendarDay = 1;
+      G.dailyRewardType = DAILY_CALENDAR[0];
+      G.dailyRewardClaimed = false;
+      G.dailyRewardTimer = 1;
+      G.phase = 'DAILY_REWARD';
+      await localDelay(120);
+      snapshots.push(snapshot('daily_reward'));
+
       G.phase = 'DEAD';
       trackDeath(G.levelNum, 'smoke', 1234);
       await localDelay(120);
@@ -237,6 +262,7 @@ function startServer() {
         hasGuidedContinuePrompt: !!(snapshots.find((entry) => entry.label === 'continue_prompt_guided' && entry.state && entry.state.continue_prompt && entry.state.continue_prompt.title === 'SAVE THE LESSON')),
         hasGuidedOnboarding: !!(snapshots.find((entry) => entry.label === 'playing' && entry.state && entry.state.onboarding)),
         hasGuidedCompletion: !!(snapshots.find((entry) => entry.label === 'guided_complete' && entry.state && entry.state.onboarding && entry.state.onboarding.completed)),
+        hasMetaPolishScreens: ['missions', 'shop', 'stats', 'settings', 'daily_reward'].every((label) => snapshots.some((entry) => entry.label === label && entry.phase)),
         hasRewardReadyMapState: !!(snapshots.find((entry) => entry.label === 'map_reward_ready' && entry.state && entry.state.missions && entry.state.missions.rewards_ready > 0)),
         hasRenderGameToText: typeof window.render_game_to_text === 'function',
         missingEvents: requiredEvents.filter((eventName) => !analyticsEvents.includes(eventName)),
@@ -273,6 +299,9 @@ function startServer() {
     }
     if (!report.hasRewardReadyMapState) {
       throw new Error('Expected reward-ready mission guidance after the early clear smoke flow');
+    }
+    if (!report.hasMetaPolishScreens) {
+      throw new Error('Expected the polished meta screens to render during smoke coverage');
     }
     if (!report.nativeMessages.some((entry) => entry.type === 'analytics')) {
       throw new Error('Expected at least one analytics message from the WebView bridge');

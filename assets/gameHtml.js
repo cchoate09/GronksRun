@@ -8192,6 +8192,7 @@ function getLevelMapLayout() {
 
 function drawLevelMap(dt) {
   const u = UNIT;
+  const compact = W < 1100 || H < 560;
   const layout = getLevelMapLayout();
   const dlToday = localDateStr(new Date());
   const dlClaimed = save.lastLoginDate === dlToday;

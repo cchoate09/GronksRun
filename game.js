@@ -164,7 +164,17 @@ function drawMiniChip(x, y, w, h, label, opts) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = opts.textColor || '#F5F7FF';
-  ctx.fillText(label, x + w / 2, y + h / 2);
+  // Auto-shrink text to fit chip width with padding
+  const _chipPad = UNIT * 0.35;
+  const _maxTW = w - _chipPad * 2;
+  if (ctx.measureText(label).width > _maxTW && _maxTW > 10) {
+    const _m = ctx.measureText(label).width;
+    const _scale = _maxTW / _m;
+    ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(_scale, 1);
+    ctx.fillText(label, 0, 0); ctx.restore();
+  } else {
+    ctx.fillText(label, x + w / 2, y + h / 2);
+  }
 }
 
 function drawProgressBar(x, y, w, h, frac, colors) {
@@ -357,8 +367,9 @@ function loadSave() {
     if (!save.activeSkins || typeof save.activeSkins !== 'object') save.activeSkins = {};
   } catch(e) { /* corrupted save — defaults remain */ }
 }
+let _saveFailWarning = 0;
 function persistSave() {
-  try { localStorage.setItem('gronk2', JSON.stringify(save)); } catch(e) {}
+  try { localStorage.setItem('gronk2', JSON.stringify(save)); _saveFailWarning = 0; } catch(e) { _saveFailWarning = 5; }
 }
 function _hitStop(dur) { G.hitStop = Math.max(G.hitStop || 0, dur); }
 function safeSelectedChar() {
@@ -902,11 +913,11 @@ function drawTooltip() {
   const u = UNIT;
   const compact = W < 1100 || H < 560;
   const a = tooltipState.alpha;
-  ctx.font = `bold ${u * (compact ? 0.42 : 0.48)}px monospace`;
+  ctx.font = `bold ${u * (compact ? 0.36 : 0.42)}px monospace`;
   const tw = ctx.measureText(tooltipState.text).width;
-  const padX = u * (compact ? 0.56 : 0.66);
-  const bw = Math.min(W - SAFE_LEFT - SAFE_RIGHT - u * 1.3, tw + padX * 2 + u * 1.15);
-  const bh = u * (compact ? 0.94 : 1.04);
+  const padX = u * (compact ? 0.44 : 0.55);
+  const bw = Math.min(W - SAFE_LEFT - SAFE_RIGHT - u * 1.3, tw + padX * 2 + u * 1.0);
+  const bh = u * (compact ? 0.82 : 0.92);
   const bx = W / 2 - bw / 2;
   const by = Math.max(SAFE_TOP + u * 3.05, H * (compact ? 0.29 : 0.25));
 
@@ -1326,7 +1337,7 @@ function getLevelDef(n) {
   const d = { ...LEVEL_DEFS[idx], id: n };
   const cycle = Math.floor((n - 1) / LEVEL_DEFS.length);
   d.targetTime = Math.round(d.targetTime * (1 + cycle * 0.3));
-  if (cycle > 0) d.name = d.name + ' ' + ['II','III','IV','V','VI','VII','VIII','IX','X'][Math.min(cycle - 1, 8)];
+  if (cycle > 0) { const numerals = ['II','III','IV','V','VI','VII','VIII','IX','X']; d.name = d.name + ' ' + (cycle <= numerals.length ? numerals[cycle - 1] : 'C' + (cycle + 1)); }
   if (cycle >= 1 && !d.enemies.includes('BOMBER')) d.enemies = [...d.enemies, 'BOMBER'];
   if (cycle >= 2 && !d.enemies.includes('WITCH')) d.enemies = [...d.enemies, 'WITCH'];
   return d;
@@ -1455,6 +1466,7 @@ function updateMaxParticles() {
 }
 
 const _particlePool = [];
+const _particlePoolMax = 300;
 
 class Particle {
   constructor(x, y, c) {
@@ -2396,8 +2408,9 @@ const BOSS_TYPES = [
 let boss = null;
 class Boss {
   constructor(levelNum) {
-    const idx = ((levelNum / 5) - 1) % 5;
-    const def = BOSS_TYPES[Math.floor(idx)];
+    const idx = Math.floor(((levelNum / 5) - 1) % BOSS_TYPES.length);
+    const safeIdx = Math.max(0, Math.min(idx, BOSS_TYPES.length - 1));
+    const def = BOSS_TYPES[safeIdx];
     this.name = def.name; this.color = def.color;
     this.maxHP = def.hp; this.hp = def.hp;
     this.attacks = def.attacks;
@@ -2410,7 +2423,7 @@ class Boss {
     this.defeated = false;
     this.flashTimer = 0;
     this.bossTimer = 15; // 15 second fight
-    this.typeIdx = Math.floor(idx);
+    this.typeIdx = safeIdx;
     this.phase3atk = def.phase3atk;
     this.bossPhase = 1; // HP-based phases: 1 (100-66%), 2 (66-33%), 3 (33-0%)
     this.shockwaveCD = 0; // phase 3 periodic shockwave
@@ -2755,7 +2768,9 @@ class Enemy {
     this.screenX = 0; this.worldX = 0; this.y = 0;
     this.state = 'IDLE'; this.timer = 0; this.fireCD = 0;
     // HP system
-    this.maxHP = ENEMY_HP[type] || 30;
+    const baseHP = ENEMY_HP[type] || 30;
+    const diffScale = G.levelDef ? levelDiffMult(G.levelDef.id) : 1;
+    this.maxHP = Math.round(baseHP * (1 + (diffScale - 1) * 0.5));
     this.hp = this.maxHP;
     this.hpFlash = 0;
     this.dying = false;
@@ -3614,6 +3629,7 @@ function startLevel(levelNum) {
   G.time=0; G.timeLeft=28; G.deathDelay=0;
   G._deathTracked=false; G._lastDeathCause=null;
   G.diff=getDiff(0,getLevelOpeningMultiplier(G.levelDef));
+  G.selectedChar = clamp(G.selectedChar || 0, 0, CHARS.length - 1);
   G.speed=G.diff.speed*CHARS[G.selectedChar].spdM;
   G.rng=new RNG(Date.now()^(Math.random()*0x7FFFFFFF|0));
   G.announce=null; G.flashColor=null; G.flashLife=0;
@@ -3842,7 +3858,9 @@ function checkCollisions(dt) {
         var _gemSX = cx+gem.lx, _gemSY = gem.ly;
         spawnFloatingText(_gemSX, _gemSY, '+1', `hsl(${G.theme.gemH},100%,70%)`, 0.8);
         updateMissionProgress('gemsCollected', 1);
+        const _prevTime = G.timeLeft;
         G.timeLeft=Math.min(G.timeLeft+(G.endless?3:5),99);
+        if (G.timeLeft >= 99 && _prevTime < 99) spawnFloatingText(W/2, H*0.15, 'TIME MAX!', '#4488FF', 1.2);
         comboAction(50, 'gem');
         sfxGem();
         // Heal 5 HP per gem
@@ -3863,7 +3881,8 @@ function checkCollisions(dt) {
     // Projectile collision (with parry deflection)
     for(let i=en.projectiles.length-1;i>=0;i--){
       const pr=en.projectiles[i];
-      const prHB={x:pr.x-UNIT*.4,y:pr.y-UNIT*.4,w:UNIT*.8,h:UNIT*.8};
+      const prSz=pr.type==='BOULDER_P'?1.2:pr.type==='BOMB'?1.0:pr.type==='ROCK_P'?0.9:pr.type==='SKULL'?0.7:pr.type==='VENOM'?0.6:pr.type==='FEATHER'?0.5:0.8;
+      const prHB={x:pr.x-UNIT*prSz*.5,y:pr.y-UNIT*prSz*.5,w:UNIT*prSz,h:UNIT*prSz};
       // Parry: deflect nearby projectiles
       if(p.parryTimer>0){
         const dx=pr.x-p.screenX, dy=pr.y-(p.y-UNIT);
@@ -3876,7 +3895,7 @@ function checkCollisions(dt) {
           _hitStop(isPerfect ? 0.12 : 0.04);
           // Damage the enemy
           if(en.alive&&!en.dying){
-            en.takeDamage(isPerfect ? en.maxHP * 2 : en.maxHP);
+            en.takeDamage(isPerfect ? Math.ceil(en.maxHP * 0.5) : Math.ceil(en.maxHP * 0.25));
             comboAction(isPerfect ? 100 : 50, 'parry_kill');
             if (isPerfect) {
                // Perfect parry shockwave (visual)
@@ -6690,7 +6709,7 @@ function drawSpinWheel(dt) {
   if(G.player)drawChar(G.player,false);
   drawPteros(G.theme);ctx.restore();
   drawParticles();
-  for(let i=particles.length-1;i>=0;i--){particles[i].update(dt);if(!particles[i].alive){_particlePool.push(particles[i]);particles.splice(i,1);}}
+  for(let i=particles.length-1;i>=0;i--){particles[i].update(dt);if(!particles[i].alive){if(_particlePool.length<_particlePoolMax)_particlePool.push(particles[i]);particles.splice(i,1);}}
 
   ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';ctx.textBaseline='middle';
@@ -6773,6 +6792,11 @@ function handleSpinWheelTap() {
     // Save wheel result for next level, go to level map
     G._pendingWheelResult = G.wheelResult;
     G._nextLevelNum = G.levelNum + 1;
+    // Persist to save so it survives app close
+    if (!save.nextRunPowerups.includes(G.wheelResult)) {
+      save.nextRunPowerups.push(G.wheelResult);
+      persistSave();
+    }
     G.phase = 'LEVEL_MAP';
     // Scroll to the next level node
     const u = UNIT;
@@ -7485,8 +7509,8 @@ function drawGuidedLessonStrip(baseY, compact) {
   if (!guide || G.phase !== 'PLAYING') return 0;
 
   const u = UNIT;
-  const panelW = Math.min(W * (compact ? 0.62 : 0.56), u * (compact ? 9.8 : 11.2));
-  const panelH = u * (compact ? 1.28 : 1.38);
+  const panelW = Math.min(W * (compact ? 0.56 : 0.5), u * (compact ? 8.8 : 10.2));
+  const panelH = u * (compact ? 1.18 : 1.28);
   const panelX = W / 2 - panelW / 2;
   const panelY = baseY;
   const pending = getGuidedPendingStep();
@@ -7503,24 +7527,24 @@ function drawGuidedLessonStrip(baseY, compact) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
+  ctx.font = FONTS['n0.22'] || (Math.round(u * 0.22) + 'px monospace');
   ctx.fillStyle = 'rgba(218,230,250,0.7)';
-  ctx.fillText(guide.header, W / 2, panelY + u * 0.26);
+  ctx.fillText(guide.header, W / 2, panelY + u * 0.2);
 
-  ctx.font = FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace');
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.34) + 'px monospace') : (FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace'));
   ctx.fillStyle = guide.completed ? '#7DF09B' : '#F5F7FF';
-  ctx.fillText(guide.completed ? 'KEEP THE RHYTHM' : guide.title.toUpperCase(), W / 2, panelY + u * 0.58);
+  ctx.fillText(guide.completed ? 'KEEP THE RHYTHM' : guide.title.toUpperCase(), W / 2, panelY + u * 0.48);
 
-  const chipGap = u * 0.16;
-  const chipW = (panelW - u * 0.42 - chipGap) / 2;
-  const chipY = panelY + u * 0.78;
+  const chipGap = u * 0.12;
+  const chipW = (panelW - u * 0.36 - chipGap) / 2;
+  const chipY = panelY + u * 0.68;
   for (let i = 0; i < guide.steps.length; i++) {
     const step = guide.steps[i];
-    const chipX = panelX + u * 0.21 + i * (chipW + chipGap);
+    const chipX = panelX + u * 0.18 + i * (chipW + chipGap);
     const done = !!step.done;
     const current = !done && pending === step;
-    drawMiniChip(chipX, chipY, chipW, u * 0.42, (done ? 'OK ' : '') + step.short, {
-      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
+    drawMiniChip(chipX, chipY, chipW, u * 0.38, (done ? 'OK ' : '') + step.short, {
+      font: compact ? ('bold ' + Math.round(u * 0.22) + 'px monospace') : (FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace')),
       accent: done ? 'rgba(125,240,155,0.28)' : (current ? step.accent : 'rgba(110,126,152,0.16)'),
       textColor: done ? '#DFFFE9' : (current ? '#FFF7E6' : 'rgba(228,236,248,0.78)'),
       top: done ? 'rgba(16,38,26,0.94)' : 'rgba(16,24,40,0.92)',
@@ -7547,7 +7571,7 @@ function drawHUD(dt){
   const hudX = left + (compact ? u * 1.02 : u * 1.18);
   const hudY = top;
   const hudW = Math.max(u * (compact ? 9.8 : 10.8), right - hudX - (compact ? u * 1.18 : u * 1.45));
-  const hudH = compact ? u * 1.94 : u * 2.1;
+  const hudH = compact ? u * 1.7 : u * 1.9;
   const innerPad = compact ? u * 0.28 : u * 0.34;
   const gap = compact ? u * 0.24 : u * 0.34;
   const leftW = Math.min(u * (compact ? 4.2 : 4.6), hudW * (compact ? 0.32 : 0.34));
@@ -7571,106 +7595,109 @@ function drawHUD(dt){
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(hudX + leftW + gap * 0.5, hudY + u * 0.34);
-  ctx.lineTo(hudX + leftW + gap * 0.5, hudY + hudH - u * 0.34);
-  ctx.moveTo(centerX + centerW + gap * 0.5, hudY + u * 0.34);
-  ctx.lineTo(centerX + centerW + gap * 0.5, hudY + hudH - u * 0.34);
+  ctx.moveTo(hudX + leftW + gap * 0.5, hudY + u * 0.24);
+  ctx.lineTo(hudX + leftW + gap * 0.5, hudY + hudH - u * 0.24);
+  ctx.moveTo(centerX + centerW + gap * 0.5, hudY + u * 0.24);
+  ctx.lineTo(centerX + centerW + gap * 0.5, hudY + hudH - u * 0.24);
   ctx.stroke();
   ctx.restore();
 
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
-  ctx.font = FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace');
+  ctx.font = FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace');
   ctx.fillStyle = 'rgba(192,208,234,0.72)';
-  ctx.fillText('LEVEL ' + G.levelNum, hudX + innerPad, hudY + u * 0.22);
-  ctx.font = FONTS['b0.5'] || ('bold ' + Math.round(u * 0.5) + 'px monospace');
+  ctx.fillText('LEVEL ' + G.levelNum, hudX + innerPad, hudY + u * 0.18);
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.38) + 'px monospace') : (FONTS['b0.44'] || ('bold ' + Math.round(u * 0.44) + 'px monospace'));
   ctx.fillStyle = '#F5F7FF';
-  ctx.fillText(G.levelDef.name.toUpperCase(), hudX + innerPad, hudY + u * 0.58);
-  ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace');
+  let _lvlName = G.levelDef.name.toUpperCase();
+  const _maxLvlW = leftW - innerPad * 2;
+  while (_lvlName.length > 3 && ctx.measureText(_lvlName).width > _maxLvlW) _lvlName = _lvlName.slice(0, -1);
+  ctx.fillText(_lvlName, hudX + innerPad, hudY + u * 0.48);
+  ctx.font = FONTS['n0.26'] || (Math.round(u * 0.26) + 'px monospace');
   ctx.fillStyle = 'rgba(176,194,220,0.62)';
-  ctx.fillText('HP', hudX + innerPad, hudY + u * 1.14);
-  drawProgressBar(hudX + innerPad, hudY + u * 1.44, leftW - innerPad * 2, u * 0.26, hpPct, [
+  ctx.fillText('HP', hudX + innerPad, hudY + u * 1.0);
+  drawProgressBar(hudX + innerPad, hudY + u * 1.26, leftW - innerPad * 2, u * 0.24, hpPct, [
     `hsl(${lerp(6,88,hpPct)},92%,58%)`,
     `hsl(${lerp(16,118,hpPct)},88%,40%)`
   ]);
   if (p.hpFlash > 0) {
     ctx.save();
     ctx.globalAlpha = clamp(p.hpFlash, 0, 1) * 0.38;
-    fillRR(hudX + innerPad, hudY + u * 1.44, leftW - innerPad * 2, u * 0.26, u * 0.14, '#FF5252', null, 0);
+    fillRR(hudX + innerPad, hudY + u * 1.26, leftW - innerPad * 2, u * 0.24, u * 0.12, '#FF5252', null, 0);
     ctx.restore();
   }
   ctx.textAlign = 'right';
-  ctx.font = FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace');
+  ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
   ctx.fillStyle = 'rgba(255,255,255,0.84)';
-  ctx.fillText(`${Math.ceil(p.hp)}/${p.maxHP}`, hudX + leftW - innerPad, hudY + u * 1.12);
+  ctx.fillText(`${Math.ceil(p.hp)}/${p.maxHP}`, hudX + leftW - innerPad, hudY + u * 0.98);
 
   const pulse = tl < 5 ? 1 + Math.sin(G.time * 12) * 0.08 : 1;
   ctx.save();
-  ctx.translate(centerX + centerW / 2, hudY + u * 0.78);
+  ctx.translate(centerX + centerW / 2, hudY + u * 0.62);
   ctx.scale(pulse, pulse);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['b1.1'] || ('bold ' + Math.round(u * 1.1) + 'px monospace');
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.82) + 'px monospace') : (FONTS['b1.0'] || ('bold ' + Math.round(u * 1.0) + 'px monospace'));
   ctx.fillStyle = tCol;
   ctx.fillText(`${Math.ceil(tl)}s`, 0, 0);
   ctx.restore();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace');
+  ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px monospace');
   ctx.fillStyle = 'rgba(196,208,232,0.66)';
-  ctx.fillText('TIME LEFT', centerX + centerW / 2, hudY + u * 1.0);
-  drawProgressBar(centerX + u * 0.18, hudY + u * 1.44, centerW - u * 0.36, u * 0.26, prog, [
+  ctx.fillText('TIME LEFT', centerX + centerW / 2, hudY + u * 0.86);
+  drawProgressBar(centerX + u * 0.14, hudY + u * 1.26, centerW - u * 0.28, u * 0.24, prog, [
     `hsl(${lerp(12,92,prog)},90%,58%)`,
     `hsl(${lerp(32,132,prog)},92%,48%)`
   ]);
-  ctx.font = FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace');
+  ctx.font = FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace');
   ctx.fillStyle = 'rgba(255,255,255,0.62)';
-  ctx.fillText(`${Math.round(prog * 100)}% CLEAR`, centerX + centerW / 2, hudY + u * 1.8);
+  ctx.fillText(`${Math.round(prog * 100)}% CLEAR`, centerX + centerW / 2, hudY + u * 1.58);
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
+  ctx.font = FONTS['n0.26'] || (Math.round(u * 0.26) + 'px monospace');
   ctx.fillStyle = 'rgba(188,204,228,0.72)';
-  ctx.fillText('SCORE', rightX + innerPad, hudY + u * 0.22);
-  ctx.font = FONTS['b0.7'] || ('bold ' + Math.round(u * 0.7) + 'px monospace');
+  ctx.fillText('SCORE', rightX + innerPad, hudY + u * 0.18);
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.52) + 'px monospace') : (FONTS['b0.6'] || ('bold ' + Math.round(u * 0.6) + 'px monospace'));
   ctx.fillStyle = '#FFE27A';
-  ctx.fillText(`${G.runScore}`, rightX + innerPad, hudY + u * 0.56);
-  const statChipW = Math.min(u * (compact ? 2.5 : 2.75), rightW * 0.34);
+  ctx.fillText(`${G.runScore}`, rightX + innerPad, hudY + u * 0.42);
+  const statChipW = Math.min(u * (compact ? 2.2 : 2.5), rightW * 0.34);
   const statChipX = rightX + rightW - innerPad - statChipW;
-  drawMiniChip(statChipX, hudY + u * 0.2, statChipW, u * 0.56, `SAVE ${Math.max(0, G.continuesLeft)}`, {
-    font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace'),
+  drawMiniChip(statChipX, hudY + u * 0.16, statChipW, u * 0.48, `SAVE ${Math.max(0, G.continuesLeft)}`, {
+    font: FONTS['b0.22'] || ('bold ' + Math.round(u * 0.22) + 'px monospace'),
     accent: G.continuesLeft > 0 ? 'rgba(255,143,112,0.28)' : 'rgba(110,118,138,0.18)',
     textColor: G.continuesLeft > 0 ? '#FFD9C9' : 'rgba(182,188,210,0.72)',
     top: G.continuesLeft > 0 ? 'rgba(42,24,20,0.92)' : 'rgba(18,22,34,0.9)',
     bottom: G.continuesLeft > 0 ? 'rgba(20,10,10,0.9)' : 'rgba(10,14,24,0.88)'
   });
-  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
+  ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px monospace');
   ctx.fillStyle = 'rgba(184,198,224,0.64)';
-  ctx.fillText('GEMS', rightX + innerPad, hudY + u * 1.16);
-  drawDiamondShape(rightX + innerPad + u * 0.18, hudY + u * 1.62, u * 0.16, `hsl(${G.theme.gemH},100%,68%)`, 'rgba(255,255,255,0.18)');
-  ctx.font = FONTS['b0.44'] || ('bold ' + Math.round(u * 0.44) + 'px monospace');
+  ctx.fillText('GEMS', rightX + innerPad, hudY + u * 1.0);
+  drawDiamondShape(rightX + innerPad + u * 0.15, hudY + u * 1.38, u * 0.14, `hsl(${G.theme.gemH},100%,68%)`, 'rgba(255,255,255,0.18)');
+  ctx.font = FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace');
   ctx.fillStyle = `hsl(${G.theme.gemH},100%,68%)`;
-  ctx.fillText(`${G.runGems}`, rightX + innerPad + u * 0.44, hudY + u * 1.38);
+  ctx.fillText(`${G.runGems}`, rightX + innerPad + u * 0.38, hudY + u * 1.2);
   if (comboVisible) {
     const colors = ['#FFD766', '#FFAE47', '#FF6F61', '#FF53CF', '#61EDFF', '#FF5B87'];
     const cIdx = Math.min(Math.max(0, Math.floor((G.combo - 5) / 5)), colors.length - 1);
     let comboCol = colors[cIdx];
     if (G.combo >= 30) comboCol = `hsl(${(G.time * 360) % 360},100%,65%)`;
     const comboPulse = 1 + G.comboPulse * 0.16;
-    const comboChipW = Math.min(u * (compact ? 3.05 : 3.45), rightW * 0.46);
+    const comboChipW = Math.min(u * (compact ? 2.6 : 3.0), rightW * 0.46);
     const comboChipX = rightX + rightW - innerPad - comboChipW;
     ctx.save();
-    ctx.translate(comboChipX + comboChipW / 2, hudY + u * 1.62);
+    ctx.translate(comboChipX + comboChipW / 2, hudY + u * 1.42);
     ctx.scale(comboPulse, comboPulse);
-    drawPanel(-comboChipW / 2, -u * 0.28, comboChipW, u * 0.56, {
-      radius: u * 0.24,
+    drawPanel(-comboChipW / 2, -u * 0.24, comboChipW, u * 0.48, {
+      radius: u * 0.2,
       top: 'rgba(28,18,24,0.92)',
       bottom: 'rgba(12,8,16,0.9)',
       stroke: 'rgba(255,255,255,0.07)',
       accent: comboCol,
       blur: 10
     });
-    ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
+    ctx.font = FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = comboCol;
@@ -7678,8 +7705,8 @@ function drawHUD(dt){
     ctx.restore();
   }
 
-  drawMiniChip(W - SAFE_RIGHT - u * 1.48, hudY + u * 0.16, u * 1.1, u * 0.98, '||', {
-    font: FONTS['b0.55'] || ('bold ' + Math.round(u * 0.55) + 'px monospace'),
+  drawMiniChip(W - SAFE_RIGHT - u * 1.48, hudY + u * 0.12, u * 1.0, u * 0.88, '||', {
+    font: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px monospace'),
     accent: 'rgba(255,255,255,0.12)'
   });
   drawSpeakerIcon(SAFE_LEFT + u * 0.3, hudY + u * 0.14, u * 1.0);
@@ -7746,6 +7773,16 @@ function drawHUD(dt){
       textColor: '#F5F7FF'
     });
     chipX += chipW + u * 0.18;
+  }
+  // Save failure warning
+  if (_saveFailWarning > 0) {
+    _saveFailWarning -= dt;
+    ctx.save(); ctx.globalAlpha = clamp(_saveFailWarning, 0, 1);
+    ctx.font = FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#FF4444';
+    ctx.fillText('STORAGE FULL - PROGRESS MAY NOT SAVE', W / 2, H - SAFE_BOTTOM - u * 2);
+    ctx.restore();
   }
 }
 
@@ -7899,7 +7936,7 @@ function drawLevelComplete(dt){
   ctx.save();
   ctx.translate(W / 2, panelY + u * 1.0);
   ctx.scale(pulse, pulse);
-  ctx.font = FONTS['b1.35'] || ('bold ' + Math.round(u * 1.35) + 'px monospace');
+  ctx.font = compact ? ('bold ' + Math.round(u * 1.0) + 'px monospace') : (FONTS['b1.2'] || ('bold ' + Math.round(u * 1.2) + 'px monospace'));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#FFD45E';
@@ -7935,19 +7972,19 @@ function drawLevelComplete(dt){
   });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['n0.36'] || (Math.round(u * 0.36) + 'px monospace');
+  ctx.font = compact ? (Math.round(u * 0.28) + 'px monospace') : (FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace'));
   ctx.fillStyle = 'rgba(188,202,228,0.68)';
-  ctx.fillText('RUN SCORE', panelX + innerPad + statW / 2, statY + u * 0.42);
-  ctx.fillText('TIME BONUS', panelX + panelW - innerPad - statW / 2, statY + u * 0.42);
-  ctx.font = FONTS['b0.68'] || ('bold ' + Math.round(u * 0.68) + 'px monospace');
+  ctx.fillText('SCORE', panelX + innerPad + statW / 2, statY + u * 0.38);
+  ctx.fillText('TIME BONUS', panelX + panelW - innerPad - statW / 2, statY + u * 0.38);
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.52) + 'px monospace') : (FONTS['b0.6'] || ('bold ' + Math.round(u * 0.6) + 'px monospace'));
   ctx.fillStyle = '#FFE27A';
-  ctx.fillText(`${G.runScore}`, panelX + innerPad + statW / 2, statY + u * 0.98);
+  ctx.fillText(`${G.runScore}`, panelX + innerPad + statW / 2, statY + u * 0.92);
   ctx.fillStyle = '#7FFAA0';
-  ctx.fillText(`+${timeBonus}`, panelX + panelW - innerPad - statW / 2, statY + u * 0.98);
+  ctx.fillText(`+${timeBonus}`, panelX + panelW - innerPad - statW / 2, statY + u * 0.92);
 
-  ctx.font = FONTS['n0.36'] || (Math.round(u * 0.36) + 'px monospace');
+  ctx.font = compact ? (Math.round(u * 0.28) + 'px monospace') : (FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace'));
   ctx.fillStyle = 'rgba(188,202,228,0.7)';
-  ctx.fillText(stars === 3 ? 'THREE STAR CLEAR' : (stars === 2 ? 'SOLID CLEAR' : 'LEVEL SURVIVED'), W / 2, panelY + u * 5.25);
+  ctx.fillText(stars === 3 ? 'THREE STAR CLEAR' : (stars === 2 ? 'SOLID CLEAR' : 'LEVEL SURVIVED'), W / 2, panelY + u * 5.15);
   for (let s = 0; s < 3; s++) {
     const sx = W / 2 + (s - 1) * u * 1.35;
     const ready = stars > s && G.levelCompleteTimer > 0.55 + s * 0.25;
@@ -8124,18 +8161,24 @@ function drawLevelMap(dt) {
   });
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = FONTS['b0.86'] || ('bold ' + Math.round(u * 0.86) + 'px monospace');
+  const _headerInner = layout.headerW - u * 1.0;
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.62) + 'px monospace') : (FONTS['b0.72'] || ('bold ' + Math.round(u * 0.72) + 'px monospace'));
   ctx.fillStyle = '#FFE27A';
-  ctx.fillText("GRONK'S JOURNEY", layout.headerX + u * 0.5, layout.headerY + u * 0.36);
-  ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
+  ctx.fillText("GRONK'S JOURNEY", layout.headerX + u * 0.5, layout.headerY + u * 0.3);
+  ctx.font = FONTS['n0.28'] || (Math.round(u * 0.28) + 'px monospace');
   ctx.fillStyle = 'rgba(192,208,232,0.7)';
-  ctx.fillText(`BEST ${save.bestScore}  |  TOTAL GEMS ${save.totalGems}`, layout.headerX + u * 0.5, layout.headerY + u * 1.02);
+  ctx.fillText(`BEST ${save.bestScore}  |  TOTAL GEMS ${save.totalGems}`, layout.headerX + u * 0.5, layout.headerY + u * 1.12);
   ctx.textAlign = 'right';
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.3) + 'px monospace') : (FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'));
   ctx.fillStyle = 'rgba(244,247,255,0.78)';
-  ctx.fillText(`CURRENT LEVEL ${save.highestLevel + 1}`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.42);
-  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
+  ctx.fillText(`CURRENT LEVEL ${save.highestLevel + 1}`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.36);
+  ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px monospace');
   ctx.fillStyle = 'rgba(160,182,210,0.66)';
-  ctx.fillText(rewardReadyHint || (guidedGoal ? guidedGoal.mapHint : 'Tap a node to replay or push forward.'), layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.98);
+  let _mapHint = rewardReadyHint || (guidedGoal ? guidedGoal.mapHint : 'Tap a node to replay or push forward.');
+  const _maxHintW = _headerInner * 0.52;
+  while (_mapHint.length > 10 && ctx.measureText(_mapHint).width > _maxHintW) _mapHint = _mapHint.slice(0, -1);
+  if (_mapHint.length < (rewardReadyHint || (guidedGoal ? guidedGoal.mapHint : '')).length) _mapHint += '...';
+  ctx.fillText(_mapHint, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.88);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -9837,7 +9880,7 @@ function loop(ts){
         G.endlessBossTimer-=DT;
         if(G.endlessBossTimer<=0 && !boss && p.alive){
           G.endlessBossTimer=180;
-          const bossLvl = 5*(1+Math.floor(G.endlessTime/180));
+          const bossLvl = 5*(1+Math.floor(G.endlessTime/180)%BOSS_TYPES.length);
           boss=new Boss(bossLvl);
           G.phase='BOSS_FIGHT';
           G.announce={text:`BOSS: ${boss.name}!`,life:2.5};
@@ -9915,7 +9958,7 @@ function loop(ts){
 
       p.update(DT);
       if(p.alive && G.hitStop <= 0) checkCollisions(DT);
-      for(let i=particles.length-1;i>=0;i--){particles[i].update(DT);if(!particles[i].alive){_particlePool.push(particles[i]);particles.splice(i,1);}}
+      for(let i=particles.length-1;i>=0;i--){particles[i].update(DT);if(!particles[i].alive){if(_particlePool.length<_particlePoolMax)_particlePool.push(particles[i]);particles.splice(i,1);}}
 
       // Death transition
       if(!p.alive){
@@ -10011,7 +10054,7 @@ function loop(ts){
         p.update(DT);
         updateShake(DT);
         // Ground stays flat during boss fight
-        for(let i=particles.length-1;i>=0;i--){particles[i].update(DT);if(!particles[i].alive){_particlePool.push(particles[i]);particles.splice(i,1);}}
+        for(let i=particles.length-1;i>=0;i--){particles[i].update(DT);if(!particles[i].alive){if(_particlePool.length<_particlePoolMax)_particlePool.push(particles[i]);particles.splice(i,1);}}
         checkBossCollisions(DT);
 
         // Boss defeated
@@ -10113,7 +10156,7 @@ function loop(ts){
       drawPteros(G.theme);ctx.restore();
       drawParticles();
       drawPostEffects(G.levelDef.theme);
-      for(let i=particles.length-1;i>=0;i--){particles[i].update(DT);if(!particles[i].alive){_particlePool.push(particles[i]);particles.splice(i,1);}}
+      for(let i=particles.length-1;i>=0;i--){particles[i].update(DT);if(!particles[i].alive){if(_particlePool.length<_particlePoolMax)_particlePool.push(particles[i]);particles.splice(i,1);}}
       updateShake(DT);
       drawLevelComplete(DT);
       if(inp.tapped&&G.levelCompleteTimer>2){

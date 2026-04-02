@@ -911,7 +911,7 @@ function updateTooltip(dt) {
 function drawTooltip() {
   if (!tooltipState.active || tooltipState.alpha <= 0) return;
   const u = UNIT;
-  const compact = W < 1100 || H < 560;
+  const compact = W < 1100 || H < 560 || (W / H > 1.8);
   const a = tooltipState.alpha;
   ctx.font = `bold ${u * (compact ? 0.36 : 0.42)}px monospace`;
   const tw = ctx.measureText(tooltipState.text).width;
@@ -5521,7 +5521,7 @@ function handleCharSelectTap(){
 function drawLevelIntro(dt){
   G.introTimer+=dt;
   const u=UNIT;
-  const compact = W < 1100 || H < 560;
+  const compact = W < 1100 || H < 560 || (W / H > 1.8);
   const guide = G.onboarding && G.onboarding.level === G.levelNum ? G.onboarding : null;
   drawBg(G.theme);
   ctx.fillStyle='rgba(6,8,14,0.68)';ctx.fillRect(0,0,W,H);
@@ -7559,7 +7559,7 @@ function drawHUD(dt){
   const u = UNIT;
   const p = G.player;
   const tl = G.timeLeft;
-  const compact = W < 1100 || H < 560;
+  const compact = W < 1100 || H < 560 || (W / H > 1.8);
   const edge = Math.max(10, u * 0.45);
   const top = SAFE_TOP + edge;
   const left = SAFE_LEFT + edge;
@@ -7604,10 +7604,10 @@ function drawHUD(dt){
 
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
-  ctx.font = FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace');
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.24) + 'px monospace') : (FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'));
   ctx.fillStyle = 'rgba(192,208,234,0.72)';
-  ctx.fillText('LEVEL ' + G.levelNum, hudX + innerPad, hudY + u * 0.18);
-  ctx.font = compact ? ('bold ' + Math.round(u * 0.38) + 'px monospace') : (FONTS['b0.44'] || ('bold ' + Math.round(u * 0.44) + 'px monospace'));
+  ctx.fillText('LEVEL ' + G.levelNum, hudX + innerPad, hudY + u * 0.16);
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.32) + 'px monospace') : (FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'));
   ctx.fillStyle = '#F5F7FF';
   let _lvlName = G.levelDef.name.toUpperCase();
   const _maxLvlW = leftW - innerPad * 2;
@@ -7637,7 +7637,7 @@ function drawHUD(dt){
   ctx.scale(pulse, pulse);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = compact ? ('bold ' + Math.round(u * 0.82) + 'px monospace') : (FONTS['b1.0'] || ('bold ' + Math.round(u * 1.0) + 'px monospace'));
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.68) + 'px monospace') : (FONTS['b0.9'] || ('bold ' + Math.round(u * 0.9) + 'px monospace'));
   ctx.fillStyle = tCol;
   ctx.fillText(`${Math.ceil(tl)}s`, 0, 0);
   ctx.restore();
@@ -7659,11 +7659,16 @@ function drawHUD(dt){
   ctx.font = FONTS['n0.26'] || (Math.round(u * 0.26) + 'px monospace');
   ctx.fillStyle = 'rgba(188,204,228,0.72)';
   ctx.fillText('SCORE', rightX + innerPad, hudY + u * 0.18);
-  ctx.font = compact ? ('bold ' + Math.round(u * 0.52) + 'px monospace') : (FONTS['b0.6'] || ('bold ' + Math.round(u * 0.6) + 'px monospace'));
-  ctx.fillStyle = '#FFE27A';
-  ctx.fillText(`${G.runScore}`, rightX + innerPad, hudY + u * 0.42);
   const statChipW = Math.min(u * (compact ? 2.2 : 2.5), rightW * 0.34);
   const statChipX = rightX + rightW - innerPad - statChipW;
+  const _scoreMaxW = statChipX - rightX - innerPad * 2;
+  let _scoreFontSz = compact ? u * 0.48 : u * 0.56;
+  ctx.font = 'bold ' + Math.round(_scoreFontSz) + 'px monospace';
+  const _scoreStr = `${G.runScore}`;
+  if (ctx.measureText(_scoreStr).width > _scoreMaxW) _scoreFontSz = _scoreFontSz * _scoreMaxW / ctx.measureText(_scoreStr).width;
+  ctx.font = 'bold ' + Math.round(_scoreFontSz) + 'px monospace';
+  ctx.fillStyle = '#FFE27A';
+  ctx.fillText(_scoreStr, rightX + innerPad, hudY + u * 0.42);
   drawMiniChip(statChipX, hudY + u * 0.16, statChipW, u * 0.48, `SAVE ${Math.max(0, G.continuesLeft)}`, {
     font: FONTS['b0.22'] || ('bold ' + Math.round(u * 0.22) + 'px monospace'),
     accent: G.continuesLeft > 0 ? 'rgba(255,143,112,0.28)' : 'rgba(110,118,138,0.18)',
@@ -7902,7 +7907,7 @@ function drawMenu(){
 function drawLevelComplete(dt){
   G.levelCompleteTimer += dt;
   const u = UNIT;
-  const compact = W < 1100 || H < 560;
+  const compact = W < 1100 || H < 560 || (W / H > 1.8);
   const postGuidance = getPostLevelGuidance(G.levelNum);
   const rewardReadyHint = getRewardReadyHint(G.levelNum);
   const guideCopy = rewardReadyHint || postGuidance;
@@ -7936,15 +7941,15 @@ function drawLevelComplete(dt){
   ctx.save();
   ctx.translate(W / 2, panelY + u * 1.0);
   ctx.scale(pulse, pulse);
-  ctx.font = compact ? ('bold ' + Math.round(u * 1.0) + 'px monospace') : (FONTS['b1.2'] || ('bold ' + Math.round(u * 1.2) + 'px monospace'));
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.82) + 'px monospace') : (FONTS['b1.0'] || ('bold ' + Math.round(u * 1.0) + 'px monospace'));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#FFD45E';
   ctx.fillText('LEVEL CLEAR', 0, 0);
   ctx.restore();
 
-  drawMiniChip(panelX + innerPad, panelY + u * 1.55, panelW - innerPad * 2, u * 0.78, G.levelDef.name.toUpperCase(), {
-    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
+  drawMiniChip(panelX + innerPad, panelY + u * 1.55, panelW - innerPad * 2, u * 0.68, G.levelDef.name.toUpperCase(), {
+    font: compact ? ('bold ' + Math.round(u * 0.32) + 'px monospace') : (FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace')),
     accent: 'rgba(120,210,255,0.24)'
   });
 
@@ -7976,11 +7981,17 @@ function drawLevelComplete(dt){
   ctx.fillStyle = 'rgba(188,202,228,0.68)';
   ctx.fillText('SCORE', panelX + innerPad + statW / 2, statY + u * 0.38);
   ctx.fillText('TIME BONUS', panelX + panelW - innerPad - statW / 2, statY + u * 0.38);
-  ctx.font = compact ? ('bold ' + Math.round(u * 0.52) + 'px monospace') : (FONTS['b0.6'] || ('bold ' + Math.round(u * 0.6) + 'px monospace'));
+  const _lcValPad = statW - u * 0.6;
+  let _lcFontSz = compact ? u * 0.46 : u * 0.54;
+  ctx.font = 'bold ' + Math.round(_lcFontSz) + 'px monospace';
+  const _lcScoreStr = `${G.runScore}`, _lcBonusStr = `+${timeBonus}`;
+  const _lcMaxStr = _lcScoreStr.length > _lcBonusStr.length ? _lcScoreStr : _lcBonusStr;
+  if (ctx.measureText(_lcMaxStr).width > _lcValPad) _lcFontSz = _lcFontSz * _lcValPad / ctx.measureText(_lcMaxStr).width;
+  ctx.font = 'bold ' + Math.round(_lcFontSz) + 'px monospace';
   ctx.fillStyle = '#FFE27A';
-  ctx.fillText(`${G.runScore}`, panelX + innerPad + statW / 2, statY + u * 0.92);
+  ctx.fillText(_lcScoreStr, panelX + innerPad + statW / 2, statY + u * 0.92);
   ctx.fillStyle = '#7FFAA0';
-  ctx.fillText(`+${timeBonus}`, panelX + panelW - innerPad - statW / 2, statY + u * 0.92);
+  ctx.fillText(_lcBonusStr, panelX + panelW - innerPad - statW / 2, statY + u * 0.92);
 
   ctx.font = compact ? (Math.round(u * 0.28) + 'px monospace') : (FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace'));
   ctx.fillStyle = 'rgba(188,202,228,0.7)';
@@ -8096,7 +8107,7 @@ function getLevelMapLayout() {
 
 function drawLevelMap(dt) {
   const u = UNIT;
-  const compact = W < 1100 || H < 560;
+  const compact = W < 1100 || H < 560 || (W / H > 1.8);
   const layout = getLevelMapLayout();
   const dlToday = localDateStr(new Date());
   const dlClaimed = save.lastLoginDate === dlToday;

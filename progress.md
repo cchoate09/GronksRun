@@ -75,3 +75,49 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Re-enabled the live enemy sprite path in `game.js` and rebuilt the runtime sprite asset block from generated sheets so the enemy cast now shares a single consistent pipeline with explicit animation metadata.
 - Regenerated the shipped WebView bundle in `index.html`, `gameHtml.js`, and `assets/gameHtml.js`.
 - Verification for this pass: `node --check game.js`, `node --check gen_enemy_assets.js`, `node gen_sprite_sheets.js`, `node gen_enemy_assets.js`, `node gen-gamehtmljs.js`, `npm run smoke:mobile-webview`, and a targeted browser check confirming all generated enemy/hazard sheets load successfully with valid `128x128` frames and animation lookups.
+2026-04-04
+- HUD and level-complete deep scrub:
+- Added shared text fitting helpers in `game.js` so panel and chip text now shrinks to the available box instead of overflowing or relying on horizontal squish.
+- Rebuilt the live gameplay HUD around three inner cards for level/HP, timer/progress, and score/resources, with wider compact detection for Android landscape aspect ratios and cleaner spacing between labels, values, and bars.
+- Reworked the level-complete card so the title, biome name, stat cards, rating, new-best badge, guidance chip, and CTA all sit in fixed lanes with fitted typography instead of stacking into one another.
+- Updated announcement text to use the same fit logic so transient banners no longer spill outside their panel on smaller devices.
+- Regenerated the shipped WebView bundle in `index.html`, `gameHtml.js`, and `assets/gameHtml.js`.
+- Verification for this pass: `node --check game.js`, `node gen-gamehtmljs.js`, `npm run smoke:mobile-webview`, and targeted Puppeteer screenshot QA for forced `PLAYING` and `LEVEL_COMPLETE` states using the user-provided bad states as reference.
+- Follow-up readability sweep:
+- Reduced the live timer and score typography again, gave the HUD cards more vertical breathing room, and lowered the timer baseline so value text no longer crowds the lane labels on wide Android landscape screens.
+- Simplified the level-clear guidance and CTA copy, widened the result card slightly, and shrank the title/stat/badge fonts so the end-of-level card stays readable without text pressing against its panel edges.
+- Verification for this follow-up: `node --check game.js`, `node gen-gamehtmljs.js`, `npm run smoke:mobile-webview`, plus forced screenshot QA at `1280x720` and `1920x720` for both `PLAYING` and `LEVEL_COMPLETE` with exaggerated timer/score values.
+2026-04-06
+- Steam load-path packaging fix:
+- Found a packaging regression rather than a gameplay/runtime crash. The root `index.html` entrypoint had drifted into a giant fully bundled file, and `assets.js` had also been regenerated once into an abnormally huge payload by the local high-res asset script.
+- Regenerated `assets.js` from the maintained character asset pipeline so it returned to normal size, then restored `index.html` to a lean external-script template for desktop/Steam instead of rewriting it into a multi-megabyte blob on every bundle pass.
+- Updated `gen-gamehtmljs.js` so it now keeps `index.html` as the stable external-script entrypoint and only regenerates `gameHtml.js` / `assets/gameHtml.js` as the self-contained WebView payloads.
+- Added a clean-checkout safety net to `gen-gamehtmljs.js`: if `enemy_assets.js` is missing, it now regenerates it automatically via `gen_enemy_assets.js` before bundling.
+- Removed the manifest dependency from the root template, which also avoids `file://` manifest CORS noise in desktop-style local loads.
+- Verification for this fix: direct Puppeteer load of `file:///.../index.html` reached `LEVEL_INTRO` with no page errors, `node --check game.js`, `node gen-gamehtmljs.js`, and `npm run smoke:mobile-webview` all passed.
+- Also verified the clean-checkout fallback by temporarily moving `enemy_assets.js` aside, letting `node gen-gamehtmljs.js` regenerate it automatically, and confirming the bundle rebuilt successfully.
+2026-04-07
+- Deep reset tranche driven by the new product audit:
+- Added shared text-fitting and stat-card helpers so the active UI surfaces now use one consistent layout language instead of one-off font sizing and overflow behavior.
+- Rebuilt the live menu around a proper runner spotlight, progression summary, and one clear map/start CTA instead of a stack of disconnected boxes and labels.
+- Simplified and tightened the gameplay HUD so level, time, score, gems, health, saves, combo, prompts, and announcements read in a cleaner hierarchy with less label noise.
+- Rebuilt the level-clear card into a reward-first summary with three stat cards, cleaner star presentation, tighter guidance copy, and a single bonus-spin CTA lane.
+- Refreshed the level map header around clearer progress framing and a cleaner current-goal hierarchy without changing the overall map interaction model.
+- Rebuilt character select around a selected-runner spotlight panel plus smaller roster cards, then aligned the tap handling to the new on-screen layout via stored layout rects.
+- Rebuilt the active death, pause, and tutorial screens around the same card/button grammar and updated their tap handling so the visual layout and touch targets finally match.
+- Added scripted guided-level gem arcs to the onboarding chunk plans and support for scripted chunk gem placement, so the first three levels feel more intentionally staged instead of looking like generic safe chunks.
+- Tightened early-level pacing in `LEVEL_DEFS` and added stronger gem pickup feedback with visible time-gain text and impact bursts to make the run feel more rewarding moment to moment.
+- Verification for this tranche: `node --check game.js`, `node gen-gamehtmljs.js`, `npm run smoke:mobile-webview`, and a visual spot-check of the regenerated smoke screenshot after the reset pass.
+- Follow-up product-reset pass:
+- Removed the remaining legacy function-name collisions from `game.js` so the file now has one live owner for the menu, level map, level-complete, pause, tutorial, death, daily reward, and obstacle renderer paths. Also switched the in-run dead-state tap handler over to the current `handleDeadTap()` layout path.
+- Added authored setpiece data for Levels 4-10 via `LEVEL_OVERRIDES` plus `SCRIPTED_LEVEL_CHUNK_PLANS`, including custom ptero placements, more intentional hazard/gem rhythms, and unique midgame level names/focus text instead of relying only on the old theme cycle.
+- Tightened biome coherence by preventing random `FIRE_GEYSER` hazards from leaking into non-volcano stages, then added stronger per-biome art treatment: new foreground props in all themes, richer sky/backdrop signatures, theme-specific screen-space atmosphere, and a more coherent hazard pass for rocks, spikes, boulders, logs/temple beams, geysers, and pteros.
+- Expanded `render_game_to_text()` with `level_plan` and `chunk_types` so authored-level verification is easier in future smoke runs.
+- Verification for this pass: `node --check game.js`, `node gen-gamehtmljs.js`, `npm run smoke:mobile-webview`, a targeted browser verification that Levels 4-10 all boot with `level_plan: scripted`, and manual screenshot review of `output/scripted-level-7.png` and `output/scripted-level-10.png`.
+- Next-pass campaign / boss / Android hardening tranche:
+- Added authored level names, tuning, and scripted chunk plans for Levels 11-20 so the midgame now extends beyond the first reset loop with real setpieces instead of falling back to repeated procedural structure.
+- Rebuilt the boss runtime around readable telegraphs, staged phase escalation, boss-specific body shapes, attack cue cards, stronger hit feedback, and richer defeat rewards/time payout so boss fights read more like authored encounters.
+- Added native shell -> WebView app-state and viewport messaging so Android background/resume and resize behavior can pause the game more safely and re-sync layout/ad readiness on return.
+- Added adaptive performance stepping plus particle trimming so sustained low-FPS runs can fall back gracefully on weaker Android hardware instead of staying pinned to a too-expensive effects budget.
+- Finished the boss-fight HUD pass by removing the overlapping standard gameplay HUD during boss encounters and replacing the cramped inline player readout with a dedicated compact stat row inside the boss panel.
+- Upgraded the smoke harness and runtime text snapshot so coverage now asserts an authored scripted midgame level plus boss cue / telegraph state in addition to the earlier onboarding and meta-screen checks.

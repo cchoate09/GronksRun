@@ -239,6 +239,21 @@ function startServer() {
       await localDelay(120);
       snapshots.push(snapshot('daily_reward'));
 
+      startLevel(11);
+      await localDelay(160);
+      G.phase = 'PLAYING';
+      await localDelay(160);
+      snapshots.push(snapshot('scripted_level_11'));
+
+      startLevel(15);
+      await localDelay(160);
+      boss = new Boss(15);
+      G.phase = 'BOSS_FIGHT';
+      boss.setCue('SMOKE BOSS', 'Verify boss cue readability.', '#FFAA44', 1.2);
+      boss.telegraphs = buildBossTelegraphs(boss, 'GROUND_POUND', G.player, 0.8);
+      await localDelay(120);
+      snapshots.push(snapshot('boss_fight'));
+
       G.phase = 'DEAD';
       trackDeath(G.levelNum, 'smoke', 1234);
       await localDelay(120);
@@ -263,8 +278,11 @@ function startServer() {
         hasGuidedOnboarding: !!(snapshots.find((entry) => entry.label === 'playing' && entry.state && entry.state.onboarding)),
         hasGuidedCompletion: !!(snapshots.find((entry) => entry.label === 'guided_complete' && entry.state && entry.state.onboarding && entry.state.onboarding.completed)),
         hasMetaPolishScreens: ['missions', 'shop', 'stats', 'settings', 'daily_reward'].every((label) => snapshots.some((entry) => entry.label === label && entry.phase)),
+        hasBossCue: !!(snapshots.find((entry) => entry.label === 'boss_fight' && entry.state && entry.state.boss && entry.state.boss.cue)),
+        hasBossTelegraph: !!(snapshots.find((entry) => entry.label === 'boss_fight' && entry.state && entry.state.boss && entry.state.boss.telegraphs > 0)),
         hasRewardReadyMapState: !!(snapshots.find((entry) => entry.label === 'map_reward_ready' && entry.state && entry.state.missions && entry.state.missions.rewards_ready > 0)),
         hasRenderGameToText: typeof window.render_game_to_text === 'function',
+        hasScriptedMidgame: !!(snapshots.find((entry) => entry.label === 'scripted_level_11' && entry.state && entry.state.level_plan === 'scripted' && entry.state.level === 11)),
         missingEvents: requiredEvents.filter((eventName) => !analyticsEvents.includes(eventName)),
         nativeMessages,
         phase: snapshots[snapshots.length - 1] ? snapshots[snapshots.length - 1].phase : 'unknown',
@@ -302,6 +320,12 @@ function startServer() {
     }
     if (!report.hasMetaPolishScreens) {
       throw new Error('Expected the polished meta screens to render during smoke coverage');
+    }
+    if (!report.hasScriptedMidgame) {
+      throw new Error('Expected authored scripted coverage for level 11');
+    }
+    if (!report.hasBossCue || !report.hasBossTelegraph) {
+      throw new Error('Expected boss cue and telegraph state during boss smoke coverage');
     }
     if (!report.nativeMessages.some((entry) => entry.type === 'analytics')) {
       throw new Error('Expected at least one analytics message from the WebView bridge');

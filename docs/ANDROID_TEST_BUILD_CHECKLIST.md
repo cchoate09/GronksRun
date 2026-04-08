@@ -33,6 +33,8 @@ Expected result:
 - the smoke script passes
 - the Android bundle export completes
 - no new runtime errors appear in the smoke output
+- scripted midgame coverage still reports `level_plan=scripted` for authored levels
+- boss smoke coverage shows a readable boss cue plus active telegraph state
 
 ## 3. Build metadata
 
@@ -54,6 +56,7 @@ Install the build and verify:
 - continue-offer analytics event
 - retry and next-level analytics events
 - ad request and native `ad_reward` events
+- at least one boss fight shows readable attack telegraphs and a readable cue card
 - no red in-game error overlay
 - no WebView crash / process-gone loop
 
@@ -62,9 +65,11 @@ Install the build and verify:
 - hardware back behavior
 - pause / resume after backgrounding
 - audio pause and resume behavior
+- resume from background during a boss fight leaves the game paused instead of resuming mid-attack
 - safe-area layout on gesture-nav devices
 - ad unavailable / loaded / rewarded / closed flow
 - offline launch behavior
+- low-end device quality fallback reaches a stable performance tier instead of stuttering indefinitely
 
 ## 6. Release notes to record
 

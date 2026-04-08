@@ -1,11 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const rootDir = __dirname;
 const indexPath = path.join(rootDir, 'index.html');
-const gamePath = path.join(rootDir, 'game.js');
 const assetsPath = path.join(rootDir, 'assets.js');
+const enemyAssetsPath = path.join(rootDir, 'enemy_assets.js');
 const audioAssetsPath = path.join(rootDir, 'audio_assets.js');
+const gamePath = path.join(rootDir, 'game.js');
 const outputs = [
   path.join(rootDir, 'gameHtml.js'),
   path.join(rootDir, 'assets', 'gameHtml.js'),
@@ -15,16 +17,17 @@ function read(filePath) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-function replaceMainScript(html, scriptContent) {
-  const scriptPattern = /<script>\s*[\s\S]*?\s*<\/script>\s*<\/body>/;
-  if (!scriptPattern.test(html)) {
-    throw new Error('Could not find the main inline <script> block in index.html');
+function ensureGeneratedFile(filePath, generatorScript) {
+  if (fs.existsSync(filePath)) {
+    return;
   }
 
-  return html.replace(
-    scriptPattern,
-    `<script>\n${scriptContent.trim()}\n</script>\n</body>`
-  );
+  const generatorPath = path.join(rootDir, generatorScript);
+  console.log(`Missing ${path.basename(filePath)}. Regenerating via ${generatorScript}...`);
+  execFileSync(process.execPath, [generatorPath], {
+    cwd: rootDir,
+    stdio: 'inherit',
+  });
 }
 
 function inlineScript(html, scriptFileName, scriptContent) {
@@ -44,23 +47,26 @@ function escapeForTemplateLiteral(content) {
     .replace(/\$\{/g, '\\${');
 }
 
+ensureGeneratedFile(enemyAssetsPath, 'gen_enemy_assets.js');
+
 const indexTemplate = read(indexPath);
-const gameSource = read(gamePath);
-const assetSource = read(assetsPath);
-const audioAssetSource = read(audioAssetsPath);
+const scriptSources = [
+  ['assets.js', read(assetsPath)],
+  ['enemy_assets.js', read(enemyAssetsPath)],
+  ['audio_assets.js', read(audioAssetsPath)],
+  ['game.js', read(gamePath)],
+];
 
-const repairedIndexHtml = replaceMainScript(indexTemplate, gameSource);
-fs.writeFileSync(indexPath, repairedIndexHtml);
+let webViewHtml = indexTemplate;
+for (const [scriptFileName, scriptContent] of scriptSources) {
+  webViewHtml = inlineScript(webViewHtml, scriptFileName, scriptContent);
+}
 
-let webViewHtml = repairedIndexHtml;
-webViewHtml = inlineScript(webViewHtml, 'assets.js', assetSource);
-webViewHtml = inlineScript(webViewHtml, 'audio_assets.js', audioAssetSource);
-
-const moduleSource = `export default \`${escapeForTemplateLiteral(webViewHtml)}\`;\n`;
+const moduleSource = `const html = \`${escapeForTemplateLiteral(webViewHtml)}\`;\nexport default html;\n`;
 for (const outputPath of outputs) {
   fs.writeFileSync(outputPath, moduleSource);
 }
 
-console.log('Rebuilt index.html from game.js and regenerated self-contained gameHtml.js outputs.');
+console.log('Kept index.html as the external-script template and regenerated self-contained gameHtml.js outputs.');
 console.log('index.html size:', fs.statSync(indexPath).size, 'bytes');
 console.log('gameHtml.js size:', fs.statSync(outputs[0]).size, 'bytes');

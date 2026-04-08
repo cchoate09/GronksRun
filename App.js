@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, Component } from 'react';
-import { View, StyleSheet, BackHandler, Text, Vibration, Share, Linking } from 'react-native';
+import { View, StyleSheet, BackHandler, Text, Vibration, Share, Linking, AppState, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -80,6 +80,7 @@ function GameApp() {
   const webViewRef = useRef(null);
   const adLoadedRef = useRef(false);
   const pendingRewardType = useRef(null);
+  const appStateRef = useRef(AppState.currentState || 'active');
 
   // Send message to WebView
   const sendToGame = useCallback((type, data) => {
@@ -87,6 +88,15 @@ function GameApp() {
       webViewRef.current.postMessage(JSON.stringify({ type, ...data }));
     }
   }, []);
+
+  const sendWindowMetrics = useCallback(() => {
+    const window = Dimensions.get('window');
+    sendToGame('windowMetrics', {
+      width: window.width,
+      height: window.height,
+      scale: window.scale || 1,
+    });
+  }, [sendToGame]);
 
   // Load an ad
   const loadAd = useCallback(() => {
@@ -117,6 +127,29 @@ function GameApp() {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       sendToGame('backButton', {});
       return true; // prevent default (app exit)
+    });
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
+      sendToGame('appState', { state: nextState, previousState: prevState });
+      void trackEvent(nextState === 'active' ? 'app_foregrounded' : 'app_backgrounded', {
+        previous_state: prevState,
+        next_state: nextState,
+        source: 'native_shell',
+      });
+      if (nextState === 'active') {
+        sendWindowMetrics();
+        if (!adLoadedRef.current) {
+          loadAd();
+        } else {
+          sendToGame('adReady', { ready: true });
+        }
+      }
+    });
+
+    const dimensionsSub = Dimensions.addEventListener('change', () => {
+      sendWindowMetrics();
     });
 
     // Ad event listeners
@@ -188,15 +221,19 @@ function GameApp() {
 
     // Start loading the first ad
     loadAd();
+    sendWindowMetrics();
+    sendToGame('appState', { state: appStateRef.current });
 
     return () => {
       backHandler.remove();
+      appStateSub.remove();
+      dimensionsSub.remove();
       onAdLoaded();
       onAdEarned();
       onAdClosed();
       onAdError();
     };
-  }, [loadAd, sendToGame]);
+  }, [loadAd, sendToGame, sendWindowMetrics]);
 
   // Handle messages from WebView
   const onMessage = useCallback(async (event) => {
@@ -343,6 +380,8 @@ function GameApp() {
           void trackEvent('webview_load_finished', {
             source: 'native_shell',
           });
+          sendWindowMetrics();
+          sendToGame('appState', { state: appStateRef.current });
         }}
         onError={(syntheticEvent) => {
           console.log('WebView error:', syntheticEvent.nativeEvent);

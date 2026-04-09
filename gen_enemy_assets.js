@@ -24,11 +24,11 @@ async function buildEnemyAssets() {
 
   for (const id of Object.keys(manifest)) {
     const meta = manifest[id];
-    let pngPath = path.join(REGENERATED_DIR, `${id}.png`);
-    
+    let pngPath = path.join(GENERATED_DIR, `${id}.png`);
+
     if (!fs.existsSync(pngPath)) {
-      console.warn(`High-res source missing for ${id}, falling back to generated.`);
-      pngPath = path.join(GENERATED_DIR, `${id}.png`);
+      console.warn(`Maintained generated sheet missing for ${id}, falling back to regenerated source.`);
+      pngPath = path.join(REGENERATED_DIR, `${id}.png`);
     }
 
     if (!fs.existsSync(pngPath)) {

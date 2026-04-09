@@ -1,8 +1,3 @@
-/**
- * Generate clean sprite sheets for enemies/obstacles that had broken AI-generated sheets.
- * Renders the procedural drawing code from the game into properly gridded sprite sheet PNGs
- * and writes a manifest that the enemy asset builder can consume.
- */
 const { createCanvas } = require('canvas');
 const fs = require('fs');
 const path = require('path');
@@ -11,699 +6,474 @@ const FRAME_W = 256;
 const FRAME_H = 256;
 const PI2 = Math.PI * 2;
 
-// Helper: create a canvas context centered at (FRAME_W/2, FRAME_H*0.85) with unit size
-function makeFrame(drawFn, unit) {
+function hexToRgb(hex) {
+  const clean = hex.replace('#', '');
+  const value = parseInt(clean, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
+}
+
+function mixColor(a, b, amount) {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  const t = Math.max(0, Math.min(1, amount));
+  return `rgb(${Math.round(ca.r + (cb.r - ca.r) * t)},${Math.round(ca.g + (cb.g - ca.g) * t)},${Math.round(ca.b + (cb.b - ca.b) * t)})`;
+}
+
+function ensureDir(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function ellipse(ctx, x, y, rx, ry, fill, stroke, lineWidth, rotation = 0) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, rotation, 0, PI2);
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth || 1;
+    ctx.stroke();
+  }
+}
+
+function polygon(ctx, points, fill, stroke, lineWidth) {
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+  ctx.closePath();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth || 1;
+    ctx.stroke();
+  }
+}
+
+function strokeLine(ctx, points, stroke, lineWidth) {
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+function bodyGradient(ctx, x, y, h, top, bottom) {
+  const g = ctx.createLinearGradient(x, y - h, x, y + h * 0.2);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
+  return g;
+}
+
+function glowCircle(ctx, x, y, r, color, alpha) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, color);
+  g.addColorStop(1, `rgba(255,255,255,0)`);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, PI2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function withFrame(drawFn, unit, options) {
   const canvas = createCanvas(FRAME_W, FRAME_H);
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, FRAME_W, FRAME_H);
+  ctx.imageSmoothingEnabled = true;
   ctx.save();
-  ctx.translate(FRAME_W / 2, FRAME_H * 0.85);
-  drawFn(ctx, unit || 50);
+  ctx.translate(FRAME_W / 2, FRAME_H * ((options && options.anchorY) || 0.84));
+  drawFn(ctx, unit || 46);
   ctx.restore();
   return canvas;
 }
 
-// ========== TROLL ==========
-function drawTrollFrame(ctx, u, phase) {
-  // Body
-  ctx.fillStyle = "#3a7a3a";
-  ctx.beginPath(); ctx.ellipse(0, -u*1.3, u*1.1, u*1.4, 0, 0, PI2); ctx.fill();
-  // Belly
-  ctx.fillStyle = "#5a9a5a";
-  ctx.beginPath(); ctx.ellipse(0, -u*1, u*0.6, u*0.7, 0, 0, PI2); ctx.fill();
-  // Eyes
-  ctx.fillStyle = "#ff0";
-  ctx.beginPath(); ctx.ellipse(-u*0.35, -u*1.9, u*0.22, u*0.18, -0.3, 0, PI2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(u*0.35, -u*1.9, u*0.22, u*0.18, 0.3, 0, PI2); ctx.fill();
-  // Pupils
-  ctx.fillStyle = "#200";
-  ctx.beginPath(); ctx.arc(-u*0.3, -u*1.88, u*0.1, 0, PI2); ctx.fill();
-  ctx.beginPath(); ctx.arc(u*0.4, -u*1.88, u*0.1, 0, PI2); ctx.fill();
-  // Tusks
-  ctx.fillStyle = "#ffe";
-  ctx.beginPath(); ctx.moveTo(-u*0.5, -u*0.9); ctx.lineTo(-u*0.35, -u*0.5); ctx.lineTo(-u*0.2, -u*0.9); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(u*0.5, -u*0.9); ctx.lineTo(u*0.35, -u*0.5); ctx.lineTo(u*0.2, -u*0.9); ctx.fill();
-  // Brows
-  ctx.strokeStyle = "#2a4a2a"; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(-u*0.55, -u*2.1); ctx.lineTo(-u*0.25, -u*2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(u*0.55, -u*2.1); ctx.lineTo(u*0.25, -u*2); ctx.stroke();
-  // Arms with phase-based animation
-  const armAngle = Math.sin(phase) * 0.3;
-  ctx.fillStyle = "#3a7a3a";
-  ctx.save(); ctx.translate(-u*1.0, -u*1.3); ctx.rotate(-0.5 + armAngle);
-  ctx.fillRect(-u*0.2, 0, u*0.4, u*0.8); ctx.restore();
-  ctx.save(); ctx.translate(u*1.0, -u*1.3); ctx.rotate(0.5 - armAngle);
-  ctx.fillRect(-u*0.2, 0, u*0.4, u*0.8); ctx.restore();
-}
-
-function genTrollSheet() {
-  // 4 cols x 2 rows = 8 frames: row0=idle(4), row1=attack(3)+hit(1)
-  const cols = 4, rows = 2;
+function composeSheet(frames, cols, rows) {
   const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
   const ctx = canvas.getContext('2d');
-
-  // Idle frames (row 0): gentle sway
-  for (let i = 0; i < 4; i++) {
-    const f = makeFrame((c, u) => drawTrollFrame(c, u, i * Math.PI / 2), 50);
-    ctx.drawImage(f, i * FRAME_W, 0);
-  }
-  // Attack frames (row 1, cols 0-2): arms raised
-  for (let i = 0; i < 3; i++) {
-    const f = makeFrame((c, u) => {
-      drawTrollFrame(c, u, 0);
-      // Attack overlay - raised club
-      c.fillStyle = "#6a4a2a"; c.lineWidth = 3;
-      const raise = [0.8, 1.2, 0.5][i];
-      c.save(); c.translate(u*0.8, -u*1.5);
-      c.rotate(-0.8 - raise);
-      c.fillRect(-u*0.12, -u*0.8, u*0.24, u*1.0);
-      c.fillStyle = "#5a3a1a";
-      c.beginPath(); c.arc(0, -u*0.8, u*0.25, 0, PI2); c.fill();
-      c.restore();
-    }, 50);
-    ctx.drawImage(f, i * FRAME_W, FRAME_H);
-  }
-  // Hit frame (row 1, col 3)
-  {
-    const f = makeFrame((c, u) => {
-      c.globalAlpha = 0.7;
-      drawTrollFrame(c, u, 0);
-      c.globalAlpha = 0.4;
-      c.fillStyle = "#fff";
-      c.beginPath(); c.ellipse(0, -u*1.3, u*1.1, u*1.4, 0, 0, PI2); c.fill();
-      c.globalAlpha = 1;
-    }, 50);
-    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
-  }
-  return { canvas, cols, rows, fps: 5, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
+  frames.forEach((frame, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    ctx.drawImage(frame, col * FRAME_W, row * FRAME_H);
+  });
+  return canvas;
 }
 
-// ========== CHARGER ==========
-function drawChargerFrame(ctx, u, stepPhase, chargeLean) {
-  var stride = stepPhase || 0;
-  var lean = chargeLean || 0;
-  var bodyY = Math.sin(stride) * u * 0.06;
+function drawShadow(ctx, u, w = 1.0) {
+  ellipse(ctx, 0, u * 0.16, u * w, u * 0.18, 'rgba(6,10,18,0.22)', null, 0);
+}
 
+function drawTrollFrame(ctx, u, phase, mode) {
+  const bob = Math.sin(phase) * u * 0.05;
+  const swing = Math.sin(phase) * 0.26;
+  const attack = mode === 'attack';
+  const hit = mode === 'hit';
+  const fill = hit ? '#8BE7A4' : bodyGradient(ctx, 0, -u * 1.0, u * 1.4, '#8AD06D', '#356F38');
+  const dark = hit ? '#4AA966' : '#224B29';
+  drawShadow(ctx, u, 1.2);
   ctx.save();
-  ctx.translate(0, bodyY);
-  ctx.rotate(lean);
-
-  ctx.fillStyle = "#B87934";
-  ctx.beginPath(); ctx.ellipse(0, -u*0.95, u*1.3, u*0.78, 0, 0, PI2); ctx.fill();
-  ctx.strokeStyle = "#6B3D1C"; ctx.lineWidth = u*0.07; ctx.stroke();
-
-  ctx.fillStyle = "#D59842";
-  ctx.beginPath(); ctx.ellipse(u*0.1, -u*1.1, u*0.48, u*0.18, 0.08, 0, PI2); ctx.fill();
-
-  ctx.fillStyle = "#95582B";
-  ctx.beginPath(); ctx.ellipse(-u*0.92, -u*1.05, u*0.56, u*0.46, -0.15, 0, PI2); ctx.fill();
-  ctx.strokeStyle = "#6B3D1C"; ctx.lineWidth = u*0.06; ctx.stroke();
-
-  ctx.fillStyle = "#F7F1E4";
-  ctx.beginPath(); ctx.moveTo(-u*1.22, -u*0.9); ctx.lineTo(-u*1.12, -u*0.35); ctx.lineTo(-u*0.98, -u*0.86); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(-u*0.92, -u*0.8); ctx.lineTo(-u*0.8, -u*0.3); ctx.lineTo(-u*0.68, -u*0.74); ctx.closePath(); ctx.fill();
-
-  ctx.fillStyle = "#FF3B30";
-  ctx.beginPath(); ctx.arc(-u*0.88, -u*1.18, u*0.09, 0, PI2); ctx.fill();
-  ctx.fillStyle = "#231A12";
-  ctx.beginPath(); ctx.arc(-u*0.88, -u*1.18, u*0.04, 0, PI2); ctx.fill();
-
-  ctx.strokeStyle = "#C8883F"; ctx.lineWidth = u*0.11; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.moveTo(u*0.94, -u*0.98); ctx.quadraticCurveTo(u*1.48, -u*1.74, u*1.2, -u*1.34); ctx.stroke();
-
-  var legs = [
-    { x: -u*0.46, y: -u*0.08, dir: -1 },
-    { x: u*0.5, y: -u*0.08, dir: 1 }
-  ];
-  for (var li = 0; li < legs.length; li++) {
-    var leg = legs[li];
-    var swing = Math.sin(stride + li * Math.PI) * 0.28;
+  ctx.translate(0, bob);
+  for (const side of [-1, 1]) {
     ctx.save();
-    ctx.translate(leg.x, leg.y);
-    ctx.rotate(swing + lean * 0.35);
-    ctx.fillStyle = "#6B3D1C";
-    ctx.fillRect(-u*0.12, 0, u*0.24, u*0.58);
-    ctx.beginPath(); ctx.ellipse(0, u*0.6, u*0.22, u*0.1, 0, 0, PI2); ctx.fill();
+    ctx.translate(side * u * 0.62, -u * 0.18);
+    ctx.rotate(side * -swing * 0.5);
+    ellipse(ctx, 0, u * 0.32, u * 0.18, u * 0.5, dark, '#16211A', u * 0.05);
+    ellipse(ctx, side * u * 0.06, u * 0.82, u * 0.24, u * 0.12, '#4A2B18', '#24140E', u * 0.04, side * 0.14);
     ctx.restore();
   }
-
-  if (lean < -0.1) {
-    ctx.fillStyle = "rgba(210,140,60,0.18)";
-    ctx.beginPath(); ctx.ellipse(u*1.1, -u*0.66, u*0.52, u*0.22, 0, 0, PI2); ctx.fill();
+  for (const side of [-1, 1]) {
+    ctx.save();
+    ctx.translate(side * u * 1.0, -u * 1.26);
+    let armRot = side * (attack ? (side === 1 ? -0.8 : 0.45) : swing * 0.8);
+    if (hit) armRot = side * 0.2;
+    ctx.rotate(armRot);
+    ellipse(ctx, 0, 0, u * 0.32, u * 0.18, dark, '#16211A', u * 0.05, side * 0.2);
+    if (attack && side === 1) {
+      ctx.fillStyle = '#6F4B2A';
+      ctx.fillRect(-u * 0.08, -u * 0.8, u * 0.16, u * 0.9);
+      ellipse(ctx, 0, -u * 0.86, u * 0.22, u * 0.2, '#7B5A35', '#3F2C1A', u * 0.04);
+    }
+    ctx.restore();
   }
-
+  ellipse(ctx, 0, -u * 1.0, u * 0.94, u * 1.18, fill, '#16211A', u * 0.06);
+  ellipse(ctx, 0, -u * 0.62, u * 0.5, u * 0.56, 'rgba(220,255,225,0.18)', null, 0);
+  ellipse(ctx, -u * 0.16, -u * 1.36, u * 0.46, u * 0.24, 'rgba(255,255,255,0.14)', null, 0, -0.35);
+  for (const side of [-1, 1]) {
+    polygon(ctx, [[side * u * 0.32, -u * 2.06], [side * u * 0.08, -u * 1.56], [side * u * 0.42, -u * 1.54]], '#F0E9CF', '#655B44', u * 0.03);
+  }
+  ellipse(ctx, -u * 0.34, -u * 1.2, u * 0.18, u * 0.22, '#FFF4B5', '#22301F', u * 0.04);
+  ellipse(ctx, u * 0.34, -u * 1.18, u * 0.18, u * 0.22, '#FFF4B5', '#22301F', u * 0.04);
+  ellipse(ctx, -u * 0.31, -u * 1.16, u * 0.08, u * 0.1, '#1D1A12', null, 0);
+  ellipse(ctx, u * 0.37, -u * 1.16, u * 0.08, u * 0.1, '#1D1A12', null, 0);
+  strokeLine(ctx, [[-u * 0.56, -u * 1.5], [-u * 0.2, -u * 1.38]], '#1C2A19', u * 0.08);
+  strokeLine(ctx, [[u * 0.2, -u * 1.36], [u * 0.56, -u * 1.5]], '#1C2A19', u * 0.08);
+  polygon(ctx, [[-u * 0.42, -u * 0.5], [-u * 0.22, -u * 0.12], [-u * 0.04, -u * 0.52]], '#F7EED8', '#6A5E49', u * 0.03);
+  polygon(ctx, [[u * 0.42, -u * 0.5], [u * 0.22, -u * 0.12], [u * 0.04, -u * 0.52]], '#F7EED8', '#6A5E49', u * 0.03);
+  strokeLine(ctx, [[-u * 0.24, -u * 0.2], [0, attack ? u * 0.08 : -u * 0.02], [u * 0.24, -u * 0.2]], '#1C2A19', u * 0.07);
   ctx.restore();
 }
 
-function genChargerSheet() {
-  const cols = 4, rows = 2;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-
-  for (let i = 0; i < 4; i++) {
-    const f = makeFrame((c, u) => drawChargerFrame(c, u, i * Math.PI / 2, 0), 48);
-    ctx.drawImage(f, i * FRAME_W, 0);
+function drawChargerFrame(ctx, u, phase, mode) {
+  const run = Math.sin(phase) * 0.22;
+  const lean = mode === 'attack' ? -0.16 : 0;
+  const hit = mode === 'hit';
+  drawShadow(ctx, u, 1.26);
+  ctx.save();
+  ctx.rotate(lean);
+  const bodyFill = hit ? '#F1B66D' : bodyGradient(ctx, 0, -u * 1.0, u, '#D99A57', '#7A4A25');
+  ellipse(ctx, 0, -u * 0.9, u * 1.18, u * 0.72, bodyFill, '#372012', u * 0.06);
+  ellipse(ctx, -u * 0.88, -u * 1.02, u * 0.46, u * 0.4, '#8A552D', '#372012', u * 0.05);
+  ellipse(ctx, u * 0.52, -u * 1.0, u * 0.34, u * 0.16, 'rgba(255,216,164,0.24)', null, 0, 0.12);
+  for (const side of [-1, 1]) {
+    polygon(ctx, [[-u * 1.1, -u * 0.9 + side * u * 0.02], [-u * 0.96, -u * 0.3], [-u * 0.82, -u * 0.82]], '#F6EFDE', '#6A5E49', u * 0.03);
   }
-
-  for (let i = 0; i < 3; i++) {
-    const f = makeFrame((c, u) => drawChargerFrame(c, u, i * 0.9, -0.12 - i * 0.08), 48);
-    ctx.drawImage(f, i * FRAME_W, FRAME_H);
+  ellipse(ctx, -u * 0.86, -u * 1.12, u * 0.08, u * 0.08, '#FF5A4E', null, 0);
+  ellipse(ctx, -u * 0.84, -u * 1.1, u * 0.03, u * 0.03, '#1D1410', null, 0);
+  for (const side of [-1, 1]) {
+    ctx.save();
+    ctx.translate(side * u * 0.42, -u * 0.14);
+    ctx.rotate(side * run * 0.9 + lean * 0.45);
+    ctx.fillStyle = '#4F2F18';
+    ctx.fillRect(-u * 0.11, 0, u * 0.22, u * 0.56);
+    ellipse(ctx, side * u * 0.04, u * 0.6, u * 0.22, u * 0.1, '#3A2214', '#1A110B', u * 0.03, side * 0.1);
+    ctx.restore();
   }
-
-  {
-    const f = makeFrame((c, u) => {
-      c.globalAlpha = 0.72;
-      drawChargerFrame(c, u, 0.4, -0.08);
-      c.globalAlpha = 0.36;
-      c.fillStyle = "#fff";
-      c.beginPath(); c.ellipse(0, -u*0.95, u*1.35, u*0.82, 0, 0, PI2); c.fill();
-      c.globalAlpha = 1;
-    }, 48);
-    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
-  }
-
-  return { canvas, cols, rows, fps: 8, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
-}
-
-// ========== WITCH ==========
-function drawWitchFrame(ctx, u, armPhase) {
-  // Robe body
-  ctx.fillStyle = "#2a0a3a";
-  ctx.beginPath(); ctx.moveTo(-u*0.5, 0); ctx.lineTo(-u*0.7, u*0.5); ctx.lineTo(u*0.7, u*0.5);
-  ctx.lineTo(u*0.5, 0); ctx.lineTo(u*0.3, -u*1.2); ctx.lineTo(-u*0.3, -u*1.2); ctx.closePath(); ctx.fill();
-  // Hat
-  ctx.fillStyle = "#3a1a4a";
-  ctx.beginPath(); ctx.moveTo(-u*0.5, -u*1.2); ctx.lineTo(u*0.5, -u*1.2); ctx.lineTo(0, -u*2.5); ctx.closePath(); ctx.fill();
-  // Eyes
-  ctx.shadowColor = "#aa00ff"; ctx.shadowBlur = 10;
-  ctx.fillStyle = "#cc44ff";
-  ctx.beginPath(); ctx.arc(-u*0.18, -u*0.9, u*0.1, 0, PI2); ctx.fill();
-  ctx.beginPath(); ctx.arc(u*0.18, -u*0.9, u*0.1, 0, PI2); ctx.fill();
-  ctx.shadowBlur = 0;
-  // Staff
-  const staffAngle = armPhase || 0;
-  ctx.save(); ctx.translate(u*0.6, -u*0.5); ctx.rotate(staffAngle);
-  ctx.strokeStyle = "#6a4a2a"; ctx.lineWidth = u*0.1;
-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, u*1.0); ctx.stroke();
-  // Orb
-  ctx.fillStyle = "#aa00ff"; ctx.shadowColor = "#aa00ff"; ctx.shadowBlur = 8;
-  ctx.beginPath(); ctx.arc(0, -u*0.1, u*0.18, 0, PI2); ctx.fill();
-  ctx.shadowBlur = 0;
+  strokeLine(ctx, [[u * 0.82, -u * 0.98], [u * 1.22, -u * 1.48], [u * 1.1, -u * 1.18]], '#C58C54', u * 0.1);
   ctx.restore();
 }
 
-function genWitchSheet() {
-  const cols = 4, rows = 2;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-
-  // Idle (4 frames): subtle staff sway
-  for (let i = 0; i < 4; i++) {
-    const f = makeFrame((c, u) => drawWitchFrame(c, u, Math.sin(i * Math.PI / 2) * 0.15), 50);
-    ctx.drawImage(f, i * FRAME_W, 0);
-  }
-  // Attack (3 frames): staff raised, casting
-  for (let i = 0; i < 3; i++) {
-    const f = makeFrame((c, u) => {
-      drawWitchFrame(c, u, -0.5 - i * 0.3);
-      // Magic particles
-      c.fillStyle = "#cc44ff"; c.shadowColor = "#aa00ff"; c.shadowBlur = 12;
-      const spread = (i + 1) * 0.4;
-      for (let p = 0; p < 3 + i; p++) {
-        const px = u * 0.6 + Math.cos(p * 2.1) * u * spread;
-        const py = -u * 1.2 + Math.sin(p * 1.7) * u * spread * 0.5;
-        c.beginPath(); c.arc(px, py, u * 0.08, 0, PI2); c.fill();
-      }
-      c.shadowBlur = 0;
-    }, 50);
-    ctx.drawImage(f, i * FRAME_W, FRAME_H);
-  }
-  // Hit frame
-  {
-    const f = makeFrame((c, u) => {
-      c.globalAlpha = 0.7;
-      drawWitchFrame(c, u, 0.4);
-      c.globalAlpha = 0.4; c.fillStyle = "#fff";
-      c.beginPath(); c.ellipse(0, -u*0.8, u*0.8, u*1.2, 0, 0, PI2); c.fill();
-      c.globalAlpha = 1;
-    }, 50);
-    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
-  }
-  return { canvas, cols, rows, fps: 5, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
-}
-
-// ========== GOLEM ==========
-function drawGolemFrame(ctx, u, armPhase) {
-  // Main body
-  ctx.fillStyle = "#5a5a5a";
-  ctx.beginPath(); ctx.ellipse(0, -u*1.6, u*1.3, u*1.7, 0, 0, PI2); ctx.fill();
-  // Cracks
-  ctx.strokeStyle = "#3a3a3a"; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-u*0.4, -u*2.5); ctx.lineTo(-u*0.1, -u*1.8); ctx.lineTo(-u*0.3, -u*1); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(u*0.3, -u*2.3); ctx.lineTo(u*0.5, -u*1.5); ctx.stroke();
-  // Eyes
-  ctx.shadowColor = "#ff4400"; ctx.shadowBlur = 12;
-  ctx.fillStyle = "#ff6600";
-  ctx.beginPath(); ctx.arc(-u*0.35, -u*2.2, u*0.15, 0, PI2); ctx.fill();
-  ctx.beginPath(); ctx.arc(u*0.35, -u*2.2, u*0.15, 0, PI2); ctx.fill();
-  ctx.shadowBlur = 0;
-  // Arms
-  const aPhase = armPhase || 0;
-  ctx.fillStyle = "#4a4a4a";
-  ctx.save(); ctx.translate(-u*1.3, -u*1.5); ctx.rotate(-0.4 + aPhase);
-  ctx.beginPath(); ctx.ellipse(0, 0, u*0.5, u*0.3, 0, 0, PI2); ctx.fill();
-  ctx.fillRect(-u*0.15, u*0.1, u*0.3, u*0.6);
-  ctx.beginPath(); ctx.ellipse(0, u*0.7, u*0.3, u*0.25, 0, 0, PI2); ctx.fill();
+function drawWitchFrame(ctx, u, phase, mode) {
+  const hit = mode === 'hit';
+  const cast = mode === 'attack';
+  const sway = Math.sin(phase) * 0.06;
+  drawShadow(ctx, u, 0.9);
+  ctx.save();
+  ctx.translate(0, Math.sin(phase) * u * 0.04);
+  polygon(ctx, [[-u * 0.7, 0], [-u * 0.4, -u * 1.6], [u * 0.4, -u * 1.6], [u * 0.7, 0]], hit ? '#A98CCB' : bodyGradient(ctx, 0, -u, u * 1.3, '#5D347A', '#241237'), '#130A1E', u * 0.05);
+  polygon(ctx, [[-u * 0.64, -u * 1.58], [0, -u * 2.38], [u * 0.64, -u * 1.58]], '#3A1A52', '#130A1E', u * 0.05);
+  polygon(ctx, [[-u * 0.82, -u * 1.58], [u * 0.82, -u * 1.58], [u * 0.62, -u * 1.72], [-u * 0.62, -u * 1.72]], '#26113A', '#130A1E', u * 0.04);
+  ellipse(ctx, -u * 0.22, -u * 1.08, u * 0.12, u * 0.14, '#F6EEFF', '#1D1428', u * 0.03);
+  ellipse(ctx, u * 0.22, -u * 1.06, u * 0.12, u * 0.14, '#F6EEFF', '#1D1428', u * 0.03);
+  ellipse(ctx, -u * 0.2, -u * 1.08, u * 0.05, u * 0.06, '#26113A', null, 0);
+  ellipse(ctx, u * 0.24, -u * 1.06, u * 0.05, u * 0.06, '#26113A', null, 0);
+  strokeLine(ctx, [[-u * 0.16, -u * 0.76], [0, -u * 0.64], [u * 0.16, -u * 0.76]], '#1A0D22', u * 0.06);
+  ctx.save();
+  ctx.translate(u * 0.68, -u * 0.82);
+  ctx.rotate(cast ? -0.6 : sway);
+  ctx.fillStyle = '#7B5836';
+  ctx.fillRect(-u * 0.06, -u * 0.64, u * 0.12, u * 1.16);
+  glowCircle(ctx, 0, -u * 0.78, u * 0.34, '#A95BFF', cast ? 0.34 : 0.24);
+  ellipse(ctx, 0, -u * 0.78, u * 0.14, u * 0.14, '#EED8FF', '#A95BFF', u * 0.04);
   ctx.restore();
-  ctx.save(); ctx.translate(u*1.3, -u*1.5); ctx.rotate(0.4 - aPhase);
-  ctx.beginPath(); ctx.ellipse(0, 0, u*0.5, u*0.3, 0, 0, PI2); ctx.fill();
-  ctx.fillRect(-u*0.15, u*0.1, u*0.3, u*0.6);
-  ctx.beginPath(); ctx.ellipse(0, u*0.7, u*0.3, u*0.25, 0, 0, PI2); ctx.fill();
+  if (cast) {
+    const offsets = [[-0.88, -1.06], [0.84, -1.14], [0.06, -1.54]];
+    for (const [ox, oy] of offsets) {
+      glowCircle(ctx, ox * u, oy * u, u * 0.28, '#8D43FF', 0.22);
+    }
+  }
   ctx.restore();
-  // Legs
-  ctx.fillStyle = "#4a4a4a";
-  ctx.fillRect(-u*0.8, -u*0.15, u*0.5, u*0.5);
-  ctx.fillRect(u*0.3, -u*0.15, u*0.5, u*0.5);
-  // Mouth
-  ctx.strokeStyle = "#ff4400"; ctx.lineWidth = u*0.08;
-  ctx.beginPath(); ctx.moveTo(-u*0.3, -u*1.7); ctx.lineTo(-u*0.1, -u*1.5); ctx.lineTo(u*0.1, -u*1.7); ctx.lineTo(u*0.3, -u*1.5); ctx.stroke();
 }
 
-function genGolemSheet() {
-  const cols = 4, rows = 2;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
+function drawGolemFrame(ctx, u, phase, mode) {
+  const smash = mode === 'attack';
+  const hit = mode === 'hit';
+  const swing = Math.sin(phase) * 0.14;
+  drawShadow(ctx, u, 1.24);
+  ctx.save();
+  ellipse(ctx, 0, -u * 1.12, u * 1.08, u * 1.22, hit ? '#B6B0A7' : bodyGradient(ctx, 0, -u * 1.2, u * 1.4, '#8D867F', '#504A46'), '#292523', u * 0.06);
+  strokeLine(ctx, [[-u * 0.42, -u * 1.8], [-u * 0.12, -u * 1.24], [-u * 0.28, -u * 0.48]], '#3C3532', u * 0.05);
+  strokeLine(ctx, [[u * 0.3, -u * 1.72], [u * 0.5, -u * 1.1]], '#3C3532', u * 0.05);
+  ellipse(ctx, -u * 0.28, -u * 1.42, u * 0.12, u * 0.12, '#FFAC59', '#5A2B11', u * 0.04);
+  ellipse(ctx, u * 0.28, -u * 1.42, u * 0.12, u * 0.12, '#FFAC59', '#5A2B11', u * 0.04);
+  strokeLine(ctx, [[-u * 0.24, -u * 1.02], [-u * 0.06, -u * 0.84], [u * 0.06, -u * 1.02], [u * 0.24, -u * 0.84]], '#FF7A38', u * 0.06);
+  for (const side of [-1, 1]) {
+    ctx.save();
+    ctx.translate(side * u * 1.04, -u * 1.0);
+    ctx.rotate(side * (smash ? (side === -1 ? -0.76 : 0.42) : swing));
+    ellipse(ctx, 0, 0, u * 0.36, u * 0.24, '#5A534E', '#292523', u * 0.05);
+    ctx.fillStyle = '#4C4642';
+    ctx.fillRect(-u * 0.14, 0, u * 0.28, u * 0.82);
+    ellipse(ctx, 0, u * 0.88, u * 0.26, u * 0.18, '#4A443F', '#292523', u * 0.04);
+    ctx.restore();
+  }
+  ctx.fillStyle = '#4D4843';
+  ctx.fillRect(-u * 0.68, -u * 0.02, u * 0.32, u * 0.46);
+  ctx.fillRect(u * 0.36, -u * 0.02, u * 0.32, u * 0.46);
+  if (smash) ellipse(ctx, 0, u * 0.14, u * 1.28, u * 0.16, 'rgba(255,130,60,0.24)', null, 0);
+  ctx.restore();
+}
 
-  // Idle (4 frames): slow breathing/sway
+function drawBirdFrame(ctx, u, cfg) {
+  const wing = cfg.wing;
+  const attack = cfg.attack;
+  const hit = cfg.hit;
+  drawShadow(ctx, u, 0.96);
+  ctx.save();
+  ctx.translate(0, cfg.bob || 0);
+  ellipse(ctx, 0, -u * 0.22, u * 0.8, u * 0.46, hit ? mixColor(cfg.body, '#FFFFFF', 0.35) : bodyGradient(ctx, 0, -u * 0.28, u, cfg.bodyLight, cfg.body), '#231A12', u * 0.05);
+  for (const side of [-1, 1]) {
+    ctx.save();
+    ctx.translate(side * u * 0.34, -u * 0.12);
+    ctx.rotate(side * (-0.18 - wing));
+    polygon(ctx, [
+      [0, 0],
+      [side * u * 1.18, -u * (0.5 + wing)],
+      [side * u * 1.44, u * 0.12],
+      [side * u * 0.42, u * 0.1]
+    ], cfg.wingFill, '#3A2413', u * 0.04);
+    ctx.restore();
+  }
+  ellipse(ctx, -u * 0.54, -u * 0.24, u * 0.28, u * 0.24, cfg.head, '#231A12', u * 0.04);
+  polygon(ctx, [[-u * 0.78, -u * 0.24], [-u * 1.12, -u * 0.1], [-u * 0.78, -u * 0.02]], cfg.beak, '#5A4114', u * 0.03);
+  ellipse(ctx, -u * 0.5, -u * 0.28, u * 0.06, u * 0.06, '#FFF0A8', '#231A12', u * 0.02);
+  ellipse(ctx, -u * 0.49, -u * 0.28, u * 0.025, u * 0.025, '#1B140F', null, 0);
+  if (attack) {
+    ctx.fillStyle = cfg.payload;
+    ellipse(ctx, u * 0.12, u * 0.3, u * 0.24, u * 0.14, cfg.payload, '#2A1D17', u * 0.03);
+  }
+  ctx.restore();
+}
+
+function drawSerpentFrame(ctx, u, phase, mode) {
+  const rise = mode === 'attack' ? 0.18 : 0;
+  const hit = mode === 'hit';
+  drawShadow(ctx, u, 1.0);
+  ctx.save();
+  ctx.translate(0, Math.sin(phase) * u * 0.03);
+  ctx.strokeStyle = hit ? '#B8FFDB' : '#1C3A22';
+  ctx.lineWidth = u * 0.26;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-u * 0.8, u * 0.06);
+  ctx.bezierCurveTo(-u * 1.1, -u * 0.7, u * 0.2, -u * 1.12, u * 0.04, -u * 1.92 - u * rise);
+  ctx.stroke();
+  ellipse(ctx, 0, -u * 1.96 - u * rise, u * 0.42, u * 0.46, hit ? '#84F7B0' : bodyGradient(ctx, 0, -u * 2.0, u * 0.8, '#6FE08A', '#2F8651'), '#17331E', u * 0.05);
+  polygon(ctx, [[-u * 0.28, -u * 2.2 - u * rise], [0, -u * 2.56 - u * rise], [u * 0.28, -u * 2.2 - u * rise]], '#A1F1B7', '#17331E', u * 0.03);
+  ellipse(ctx, -u * 0.12, -u * 2.0 - u * rise, u * 0.06, u * 0.08, '#F9FFDE', '#17331E', u * 0.02);
+  ellipse(ctx, u * 0.12, -u * 2.0 - u * rise, u * 0.06, u * 0.08, '#F9FFDE', '#17331E', u * 0.02);
+  ellipse(ctx, -u * 0.11, -u * 1.98 - u * rise, u * 0.025, u * 0.03, '#172012', null, 0);
+  ellipse(ctx, u * 0.13, -u * 1.98 - u * rise, u * 0.025, u * 0.03, '#172012', null, 0);
+  strokeLine(ctx, [[0, -u * 1.78 - u * rise], [0, -u * 1.52 - u * rise], [u * 0.14, -u * 1.36 - u * rise]], '#FF7060', u * 0.04);
+  strokeLine(ctx, [[0, -u * 1.52 - u * rise], [-u * 0.14, -u * 1.36 - u * rise]], '#FF7060', u * 0.04);
+  ctx.restore();
+}
+
+function drawPteroFrame(ctx, u, phase) {
+  const flap = Math.sin(phase) * 0.44;
+  drawShadow(ctx, u, 0.84);
+  ctx.save();
+  ctx.translate(0, Math.cos(phase) * u * 0.04);
+  ellipse(ctx, 0, -u * 0.12, u * 0.56, u * 0.26, bodyGradient(ctx, 0, -u * 0.2, u * 0.6, '#7B5BC6', '#452D78'), '#1B1630', u * 0.05);
+  for (const side of [-1, 1]) {
+    polygon(ctx, [
+      [side * u * 0.22, -u * 0.16],
+      [side * u * 1.3, -u * (0.92 + flap)],
+      [side * u * 1.52, -u * 0.06],
+      [side * u * 0.48, u * 0.08]
+    ], '#5D43A6', '#1B1630', u * 0.04);
+  }
+  polygon(ctx, [[u * 0.08, -u * 0.36], [u * 0.42, -u * 0.74], [u * 0.26, -u * 0.16]], '#AA88F0', '#1B1630', u * 0.03);
+  ellipse(ctx, -u * 0.48, -u * 0.16, u * 0.22, u * 0.18, '#5D43A6', '#1B1630', u * 0.03);
+  polygon(ctx, [[-u * 0.64, -u * 0.14], [-u * 0.94, -u * 0.02], [-u * 0.64, 0]], '#F1D8B3', '#5A4114', u * 0.02);
+  ellipse(ctx, -u * 0.44, -u * 0.18, u * 0.05, u * 0.05, '#FFF4B8', '#1B1630', u * 0.02);
+  ellipse(ctx, -u * 0.43, -u * 0.18, u * 0.02, u * 0.02, '#1A131B', null, 0);
+  ctx.restore();
+}
+
+function drawLogFrame(ctx, u) {
+  drawShadow(ctx, u, 0.92);
+  ctx.save();
+  ellipse(ctx, 0, -u * 0.42, u * 1.0, u * 0.42, bodyGradient(ctx, 0, -u * 0.5, u * 0.6, '#9E6D39', '#5A341B'), '#2B180D', u * 0.05);
+  ellipse(ctx, -u * 0.92, -u * 0.42, u * 0.18, u * 0.3, '#6F4526', '#2B180D', u * 0.04);
+  ellipse(ctx, u * 0.92, -u * 0.42, u * 0.18, u * 0.3, '#6F4526', '#2B180D', u * 0.04);
+  ellipse(ctx, 0, -u * 0.42, u * 0.46, u * 0.2, 'rgba(255,224,178,0.18)', null, 0);
+  strokeLine(ctx, [[-u * 0.62, -u * 0.74], [-u * 0.32, -u * 0.18]], '#3A2413', u * 0.04);
+  strokeLine(ctx, [[u * 0.14, -u * 0.72], [u * 0.38, -u * 0.12]], '#3A2413', u * 0.04);
+  polygon(ctx, [[-u * 0.34, -u * 0.86], [-u * 0.12, -u * 1.36], [u * 0.04, -u * 0.8]], '#8BC26E', '#27411F', u * 0.03);
+  polygon(ctx, [[u * 0.2, -u * 0.9], [u * 0.4, -u * 1.28], [u * 0.5, -u * 0.72]], '#8BC26E', '#27411F', u * 0.03);
+  ctx.restore();
+}
+
+function drawSpikesFrame(ctx, u) {
+  drawShadow(ctx, u, 0.84);
+  const baseY = -u * 0.1;
+  polygon(ctx, [[-u * 0.86, baseY], [-u * 0.52, -u * 1.24], [-u * 0.18, baseY]], '#92A4B8', '#1E2B38', u * 0.04);
+  polygon(ctx, [[-u * 0.18, baseY], [0, -u * 1.64], [u * 0.18, baseY]], '#D7E4F1', '#1E2B38', u * 0.04);
+  polygon(ctx, [[u * 0.18, baseY], [u * 0.52, -u * 1.24], [u * 0.86, baseY]], '#92A4B8', '#1E2B38', u * 0.04);
+  ellipse(ctx, 0, -u * 0.08, u * 0.94, u * 0.12, 'rgba(255,255,255,0.08)', null, 0);
+}
+
+function drawFireGeyserFrame(ctx, u, progress) {
+  drawShadow(ctx, u, 0.9);
+  ellipse(ctx, 0, -u * 0.08, u * 0.42, u * 0.14, '#4E2614', '#201008', u * 0.04);
+  ellipse(ctx, 0, -u * 0.18, u * 0.3, u * 0.08, '#6A331A', null, 0);
+  if (progress <= 0.02) return;
+  const flameH = u * (0.4 + progress * 2.2);
+  polygon(ctx, [[-u * 0.24, -u * 0.1], [0, -flameH], [u * 0.24, -u * 0.12], [u * 0.12, -u * 0.56], [0, -u * 0.24], [-u * 0.12, -u * 0.56]], '#FF8B2A', '#6E2B10', u * 0.03);
+  polygon(ctx, [[-u * 0.1, -u * 0.08], [0, -flameH * 0.72], [u * 0.1, -u * 0.08]], '#FFE07A', null, 0);
+  if (progress > 0.45) {
+    glowCircle(ctx, 0, -flameH * 0.56, u * 0.46, '#FF7724', 0.18);
+  }
+}
+
+function genHumanoidSheet(drawer, fps) {
+  const frames = [];
+  for (let i = 0; i < 4; i++) frames.push(withFrame((ctx, u) => drawer(ctx, u, i * (Math.PI / 2), 'idle'), 46));
+  for (let i = 0; i < 3; i++) frames.push(withFrame((ctx, u) => drawer(ctx, u, i * 0.8, 'attack'), 46));
+  frames.push(withFrame((ctx, u) => drawer(ctx, u, 0.2, 'hit'), 46));
+  return { canvas: composeSheet(frames, 4, 2), cols: 4, rows: 2, fps, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
+}
+
+function genBirdSheet(drawer, cfg, fps) {
+  const frames = [];
   for (let i = 0; i < 4; i++) {
-    const f = makeFrame((c, u) => drawGolemFrame(c, u, Math.sin(i * Math.PI / 2) * 0.15), 45);
-    ctx.drawImage(f, i * FRAME_W, 0);
+    frames.push(withFrame((ctx, u) => drawer(ctx, u, { ...cfg, wing: Math.sin(i * Math.PI / 2) * 0.44, bob: Math.cos(i * Math.PI / 2) * u * 0.04, attack: false, hit: false }), 44));
   }
-  // Attack (3 frames): arm slam
   for (let i = 0; i < 3; i++) {
-    const f = makeFrame((c, u) => {
-      const smashPhase = [-0.8, -1.2, 0.3][i];
-      drawGolemFrame(c, u, smashPhase);
-      if (i === 2) { // Ground impact
-        c.fillStyle = "rgba(255,120,0,0.4)";
-        c.beginPath(); c.ellipse(0, u*0.1, u*1.5, u*0.3, 0, 0, PI2); c.fill();
-      }
-    }, 45);
-    ctx.drawImage(f, i * FRAME_W, FRAME_H);
+    frames.push(withFrame((ctx, u) => drawer(ctx, u, { ...cfg, wing: -0.18 + i * 0.16, bob: -u * 0.04, attack: true, hit: false }), 44));
   }
-  // Hit
-  {
-    const f = makeFrame((c, u) => {
-      c.globalAlpha = 0.7;
-      drawGolemFrame(c, u, 0.2);
-      c.globalAlpha = 0.4; c.fillStyle = "#fff";
-      c.beginPath(); c.ellipse(0, -u*1.6, u*1.3, u*1.7, 0, 0, PI2); c.fill();
-      c.globalAlpha = 1;
-    }, 45);
-    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
-  }
-  return { canvas, cols, rows, fps: 3, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
-}
-
-// ========== DIVER (Eagle) ==========
-function drawDiverFrame(ctx, u, wingPhase) {
-  const wf = wingPhase;
-  // Body
-  ctx.fillStyle = "#6a3a20";
-  ctx.beginPath(); ctx.ellipse(0, 0, u*0.7, u*0.45, 0, 0, PI2); ctx.fill();
-  // Wings
-  ctx.fillStyle = "#8a5a30";
-  for (let s = -1; s <= 1; s += 2) {
-    ctx.beginPath(); ctx.moveTo(s*u*0.4, 0);
-    ctx.bezierCurveTo(s*u*1.8, -u*wf, s*u*2.4, u*(0.4-wf), s*u*2.2, u*0.6);
-    ctx.bezierCurveTo(s*u*1.2, u*0.35, s*u*0.6, u*0.18, s*u*0.4, 0);
-    ctx.fill();
-  }
-  // Head
-  ctx.fillStyle = "#5a2a10";
-  ctx.beginPath(); ctx.ellipse(-u*0.8, -u*0.15, u*0.4, u*0.3, 0.3, 0, PI2); ctx.fill();
-  // Beak
-  ctx.fillStyle = "#cc8800";
-  ctx.beginPath(); ctx.moveTo(-u*1, -u*0.15); ctx.lineTo(-u*1.6, 0); ctx.lineTo(-u*1, -u*0.05); ctx.fill();
-  // Eye
-  ctx.fillStyle = "#ff0";
-  ctx.beginPath(); ctx.arc(-u*0.75, -u*0.25, u*0.08, 0, PI2); ctx.fill();
-}
-
-function genDiverSheet() {
-  const cols = 4, rows = 2;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-
-  // Idle: wing flap cycle
-  for (let i = 0; i < 4; i++) {
-    const wf = Math.sin(i * Math.PI / 2) * 0.6;
-    const f = makeFrame((c, u) => drawDiverFrame(c, u, wf), 50);
-    ctx.drawImage(f, i * FRAME_W, 0);
-  }
-  // Attack: dive pose (3 frames)
-  for (let i = 0; i < 3; i++) {
-    const f = makeFrame((c, u) => {
-      c.rotate(-0.3 - i * 0.15); // Diving angle
-      drawDiverFrame(c, u, -0.3 + i * 0.2);
-    }, 50);
-    ctx.drawImage(f, i * FRAME_W, FRAME_H);
-  }
-  // Hit
-  {
-    const f = makeFrame((c, u) => {
-      c.globalAlpha = 0.7;
-      drawDiverFrame(c, u, 0.3);
-      c.globalAlpha = 0.4; c.fillStyle = "#fff";
-      c.beginPath(); c.ellipse(0, 0, u*1.0, u*0.6, 0, 0, PI2); c.fill();
-      c.globalAlpha = 1;
-    }, 50);
-    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
-  }
-  return { canvas, cols, rows, fps: 6, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
-}
-
-// ========== BOMBER ==========
-function drawBomberFrame(ctx, u, wingPhase, bombDrop) {
-  const wf = wingPhase || 0;
-  ctx.fillStyle = "#9C5D31";
-  ctx.beginPath(); ctx.ellipse(0, -u*0.08, u*0.95, u*0.5, 0, 0, PI2); ctx.fill();
-  ctx.strokeStyle = "#6A3D1B"; ctx.lineWidth = u*0.06; ctx.stroke();
-
-  ctx.fillStyle = "#B97844";
-  for (let s = -1; s <= 1; s += 2) {
-    ctx.beginPath(); ctx.moveTo(s*u*0.42, -u*0.02);
-    ctx.bezierCurveTo(s*u*1.2, -u*(0.4+wf), s*u*1.55, -u*(0.1+wf), s*u*1.45, u*0.22);
-    ctx.bezierCurveTo(s*u*0.85, u*0.1, s*u*0.55, u*0.06, s*u*0.42, -u*0.02);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = "#7A4721"; ctx.lineWidth = u*0.05; ctx.stroke();
-  }
-
-  ctx.fillStyle = "#78411F";
-  ctx.beginPath(); ctx.moveTo(-u*0.12, -u*0.56); ctx.lineTo(u*0.12, -u*0.3); ctx.lineTo(-u*0.04, -u*0.28); ctx.closePath(); ctx.fill();
-
-  ctx.fillStyle = "#6A3D1B";
-  ctx.beginPath(); ctx.ellipse(-u*0.6, -u*0.12, u*0.28, u*0.24, 0.15, 0, PI2); ctx.fill();
-  ctx.fillStyle = "#FFE27A";
-  ctx.beginPath(); ctx.arc(-u*0.58, -u*0.16, u*0.08, 0, PI2); ctx.fill();
-  ctx.fillStyle = "#231A12";
-  ctx.beginPath(); ctx.arc(-u*0.58, -u*0.16, u*0.035, 0, PI2); ctx.fill();
-
-  ctx.fillStyle = "#D9480F";
-  ctx.beginPath(); ctx.ellipse(u*0.02, u*0.16, u*0.34, u*0.16, 0, 0, PI2); ctx.fill();
-
-  if (bombDrop) {
-    var drop = bombDrop;
-    ctx.fillStyle = "#333";
-    ctx.beginPath(); ctx.arc(u*0.08, u*(0.34 + drop), u*0.12, 0, PI2); ctx.fill();
-    ctx.fillStyle = "#FF6A2E";
-    ctx.beginPath(); ctx.arc(u*0.12, u*(0.18 + drop), u*0.04, 0, PI2); ctx.fill();
-  }
-}
-
-function genBomberSheet() {
-  const cols = 4, rows = 2;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-
-  for (let i = 0; i < 4; i++) {
-    const wf = Math.sin(i * Math.PI / 2) * 0.3;
-    const f = makeFrame((c, u) => drawBomberFrame(c, u, wf, 0), 50);
-    ctx.drawImage(f, i * FRAME_W, 0);
-  }
-
-  for (let i = 0; i < 3; i++) {
-    const drop = [0.15, 0.32, 0.44][i];
-    const f = makeFrame((c, u) => drawBomberFrame(c, u, -0.08 + i * 0.08, drop), 50);
-    ctx.drawImage(f, i * FRAME_W, FRAME_H);
-  }
-
-  {
-    const f = makeFrame((c, u) => {
-      c.globalAlpha = 0.72;
-      drawBomberFrame(c, u, 0.12, 0);
-      c.globalAlpha = 0.4;
-      c.fillStyle = "#fff";
-      c.beginPath(); c.ellipse(0, -u*0.08, u*1.0, u*0.54, 0, 0, PI2); c.fill();
-      c.globalAlpha = 1;
-    }, 50);
-    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
-  }
-
-  return { canvas, cols, rows, fps: 7, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
-}
-
-// ========== SERPENT ==========
-function drawSerpentFrame(ctx, u, slitherPhase) {
-  ctx.fillStyle = "#2a8a3a";
-  const segCount = 6;
-  for (let i = 0; i < segCount; i++) {
-    const sx = i * u * 0.55;
-    const sy = Math.sin(slitherPhase + i * 1.2) * u * 0.3;
-    const r = u * (0.35 - i * 0.03);
-    ctx.beginPath(); ctx.arc(sx, sy - u*0.4, r, 0, PI2); ctx.fill();
-  }
-  // Head
-  ctx.fillStyle = "#1a6a2a";
-  ctx.beginPath(); ctx.ellipse(-u*0.3, -u*0.4, u*0.45, u*0.35, 0.2, 0, PI2); ctx.fill();
-  // Eye
-  ctx.fillStyle = "#ffcc00";
-  ctx.beginPath(); ctx.arc(-u*0.5, -u*0.55, u*0.08, 0, PI2); ctx.fill();
-  // Fang
-  ctx.fillStyle = "#fff";
-  ctx.beginPath(); ctx.moveTo(-u*0.7, -u*0.35); ctx.lineTo(-u*0.65, -u*0.1); ctx.lineTo(-u*0.6, -u*0.35); ctx.fill();
-  // Tongue
-  ctx.strokeStyle = "#ff3366"; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-u*0.75, -u*0.4); ctx.lineTo(-u*1.1, -u*0.5); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-u*0.9, -u*0.42); ctx.lineTo(-u*1.1, -u*0.3); ctx.stroke();
+  frames.push(withFrame((ctx, u) => drawer(ctx, u, { ...cfg, wing: 0.12, bob: 0, attack: false, hit: true }), 44));
+  return { canvas: composeSheet(frames, 4, 2), cols: 4, rows: 2, fps, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
 }
 
 function genSerpentSheet() {
-  const cols = 4, rows = 2;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-
-  // Idle: slithering
-  for (let i = 0; i < 4; i++) {
-    const f = makeFrame((c, u) => drawSerpentFrame(c, u, i * 1.5), 50);
-    ctx.drawImage(f, i * FRAME_W, 0);
-  }
-  // Attack: rearing up / striking
-  for (let i = 0; i < 3; i++) {
-    const f = makeFrame((c, u) => {
-      const rearAngle = [0.2, 0.4, 0.1][i];
-      c.rotate(rearAngle);
-      c.translate(0, -u * [0.3, 0.5, 0.1][i]);
-      drawSerpentFrame(c, u, i * 0.8);
-      // Venom drip
-      if (i >= 1) {
-        c.fillStyle = "rgba(80,220,50,0.7)";
-        for (let v = 0; v < i + 1; v++) {
-          c.beginPath(); c.arc(-u*0.7 - v*u*0.15, -u*0.1 + v*u*0.2, u*0.06, 0, PI2); c.fill();
-        }
-      }
-    }, 50);
-    ctx.drawImage(f, i * FRAME_W, FRAME_H);
-  }
-  // Hit
-  {
-    const f = makeFrame((c, u) => {
-      c.globalAlpha = 0.7;
-      drawSerpentFrame(c, u, 0);
-      c.globalAlpha = 0.4; c.fillStyle = "#fff";
-      c.beginPath(); c.ellipse(u*0.5, -u*0.3, u*1.5, u*0.6, 0, 0, PI2); c.fill();
-      c.globalAlpha = 1;
-    }, 50);
-    ctx.drawImage(f, 3 * FRAME_W, FRAME_H);
-  }
-  return { canvas, cols, rows, fps: 5, anims: { idle: [0,1,2,3], attack: [4,5,6], hit: [7] } };
-}
-
-// ========== PTERO ==========
-function drawPteroFrame(ctx, u, wingPhase) {
-  const wf = wingPhase;
-  // Body
-  ctx.fillStyle = "#4a2050";
-  ctx.beginPath(); ctx.ellipse(0, 0, u*0.65, u*0.42, 0, 0, PI2); ctx.fill();
-  // Wings
-  ctx.fillStyle = "#6a3070";
-  for (let s = -1; s <= 1; s += 2) {
-    ctx.beginPath(); ctx.moveTo(s*u*0.35, 0);
-    ctx.bezierCurveTo(s*u*1.6, -u*wf, s*u*2.1, u*(0.4-wf), s*u*1.9, u*0.55);
-    ctx.bezierCurveTo(s*u*1, u*0.3, s*u*0.55, u*0.15, s*u*0.35, 0);
-    ctx.fill();
-  }
-  // Crest
-  ctx.fillStyle = "#8a4070";
-  ctx.beginPath(); ctx.moveTo(-u*0.3, -u*0.3); ctx.lineTo(0, -u*0.8); ctx.lineTo(u*0.2, -u*0.3); ctx.fill();
-  // Eye
-  ctx.fillStyle = "#ff3333";
-  ctx.beginPath(); ctx.arc(u*0.3, -u*0.15, u*0.07, 0, PI2); ctx.fill();
-  // Beak
-  ctx.fillStyle = "#aa6050";
-  ctx.beginPath(); ctx.moveTo(u*0.5, 0); ctx.lineTo(u*0.9, 0.05*u); ctx.lineTo(u*0.5, u*0.1); ctx.fill();
+  return genHumanoidSheet(drawSerpentFrame, 5);
 }
 
 function genPteroSheet() {
-  const cols = 4, rows = 1;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-
-  // Idle: wing flap cycle (4 frames)
-  for (let i = 0; i < 4; i++) {
-    const wf = Math.sin(i * Math.PI / 2) * 0.5;
-    const f = makeFrame((c, u) => drawPteroFrame(c, u, wf), 50);
-    ctx.drawImage(f, i * FRAME_W, 0);
-  }
-  return { canvas, cols, rows, fps: 6, anims: { idle: [0,1,2,3] } };
-}
-
-// ========== LOG ==========
-function drawLogFrame(ctx, u) {
-  // Cross section
-  ctx.fillStyle = "#6a4a28";
-  ctx.beginPath(); ctx.ellipse(0, -u*0.5, u*0.9, u*0.55, 0, 0, PI2); ctx.fill();
-  // Rings
-  ctx.strokeStyle = "#4a3018"; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.ellipse(0, -u*0.5, u*0.55, u*0.35, 0, 0, PI2); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(0, -u*0.5, u*0.25, u*0.15, 0, 0, PI2); ctx.stroke();
-  // Base
-  ctx.fillStyle = "#5a3a18";
-  ctx.fillRect(-u*0.9, -u*0.15, u*1.8, u*0.15);
-  // Bark texture
-  ctx.strokeStyle = "#3a2a10"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(-u*0.85, -u*0.08); ctx.lineTo(-u*0.85, -u*0.14); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(u*0.7, -u*0.06); ctx.lineTo(u*0.7, -u*0.13); ctx.stroke();
+  const frames = [];
+  for (let i = 0; i < 4; i++) frames.push(withFrame((ctx, u) => drawPteroFrame(ctx, u, i * Math.PI / 2), 42, { anchorY: 0.72 }));
+  return { canvas: composeSheet(frames, 4, 1), cols: 4, rows: 1, fps: 6, anims: { idle: [0,1,2,3] } };
 }
 
 function genLogSheet() {
-  const cols = 1, rows = 1;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-  const f = makeFrame((c, u) => drawLogFrame(c, u), 50);
-  ctx.drawImage(f, 0, 0);
-  return { canvas, cols, rows, fps: 1, anims: { idle: [0] } };
-}
-
-// ========== SPIKES ==========
-function drawSpikesFrame(ctx, u) {
-  const spkCol = "#888";
-  const spkDk = "#555";
-  // Back spikes
-  ctx.fillStyle = spkDk;
-  ctx.beginPath(); ctx.moveTo(-u*0.45, 0); ctx.lineTo(-u*0.15, 0); ctx.lineTo(-u*0.35, -u*0.85); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(u*0.15, 0); ctx.lineTo(u*0.45, 0); ctx.lineTo(u*0.35, -u*0.9); ctx.closePath(); ctx.fill();
-  // Main spike
-  ctx.fillStyle = spkCol;
-  ctx.beginPath(); ctx.moveTo(-u*0.25, 0); ctx.lineTo(u*0.25, 0); ctx.lineTo(u*0.05, -u*1.35); ctx.lineTo(-u*0.05, -u*1.35); ctx.closePath(); ctx.fill();
-  // Highlight
-  ctx.fillStyle = "rgba(255,255,255,0.25)";
-  ctx.beginPath(); ctx.moveTo(-u*0.15, 0); ctx.lineTo(-u*0.05, 0); ctx.lineTo(-u*0.02, -u*1.3); ctx.closePath(); ctx.fill();
-  // Tip glow
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.beginPath(); ctx.arc(0, -u*1.3, u*0.06, 0, PI2); ctx.fill();
+  const frame = withFrame((ctx, u) => drawLogFrame(ctx, u), 46);
+  return { canvas: composeSheet([frame], 1, 1), cols: 1, rows: 1, fps: 1, anims: { idle: [0] } };
 }
 
 function genSpikesSheet() {
-  const cols = 1, rows = 1;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-  const f = makeFrame((c, u) => drawSpikesFrame(c, u), 50);
-  ctx.drawImage(f, 0, 0);
-  return { canvas, cols, rows, fps: 1, anims: { idle: [0] } };
-}
-
-// ========== FIRE GEYSER ==========
-function drawFireGeyserFrame(ctx, u, stage) {
-  var glow = [0.12, 0.18, 0.26, 0.34, 0.44, 0.7, 0.46, 0.22][stage];
-  var flameH = [0.02, 0.3, 0.65, 1.0, 1.28, 1.65, 1.02, 0.4][stage];
-
-  ctx.fillStyle = "#4A240E";
-  ctx.beginPath(); ctx.ellipse(0, 0, u*0.62, u*0.22, 0, 0, PI2); ctx.fill();
-  ctx.fillStyle = "#6B3212";
-  ctx.beginPath(); ctx.ellipse(0, -u*0.02, u*0.38, u*0.12, 0, 0, PI2); ctx.fill();
-  ctx.fillStyle = "rgba(255,180,40,0.35)";
-  ctx.beginPath(); ctx.ellipse(0, u*0.02, u*(0.42 + glow*0.4), u*0.14, 0, 0, PI2); ctx.fill();
-
-  if (flameH > 0.08) {
-    ctx.fillStyle = "#FF7A00";
-    ctx.beginPath();
-    ctx.moveTo(-u*0.22, 0);
-    ctx.bezierCurveTo(-u*0.18, -u*flameH*0.65, -u*0.08, -u*flameH, 0, -u*flameH);
-    ctx.bezierCurveTo(u*0.08, -u*flameH, u*0.18, -u*flameH*0.65, u*0.22, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = "#FFB323";
-    ctx.beginPath();
-    ctx.moveTo(-u*0.1, -u*0.02);
-    ctx.bezierCurveTo(-u*0.08, -u*flameH*0.45, -u*0.03, -u*flameH*0.82, 0, -u*flameH*0.82);
-    ctx.bezierCurveTo(u*0.03, -u*flameH*0.82, u*0.08, -u*flameH*0.45, u*0.1, -u*0.02);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  if (stage >= 1 && stage <= 6) {
-    ctx.fillStyle = "rgba(255,200,60,0.85)";
-    for (let i = 0; i < Math.max(2, stage); i++) {
-      let offset = -u*0.28 + i * u * 0.18;
-      ctx.beginPath(); ctx.arc(offset, u*0.02 - i*u*0.01, u*0.03, 0, PI2); ctx.fill();
-    }
-  }
+  const frame = withFrame((ctx, u) => drawSpikesFrame(ctx, u), 46);
+  return { canvas: composeSheet([frame], 1, 1), cols: 1, rows: 1, fps: 1, anims: { idle: [0] } };
 }
 
 function genFireGeyserSheet() {
-  const cols = 4, rows = 2;
-  const canvas = createCanvas(FRAME_W * cols, FRAME_H * rows);
-  const ctx = canvas.getContext('2d');
-
-  for (let i = 0; i < 8; i++) {
-    const f = makeFrame((c, u) => drawFireGeyserFrame(c, u, i), 62);
-    const x = (i % cols) * FRAME_W;
-    const y = Math.floor(i / cols) * FRAME_H;
-    ctx.drawImage(f, x, y);
-  }
-
-  return { canvas, cols, rows, fps: 5, anims: { idle: [0], attack: [0,1,2,3,4,5,6,7] } };
+  const frames = [];
+  const phases = [0, 0.16, 0.32, 0.52, 0.72, 0.92, 0.66, 0.3];
+  phases.forEach((phase) => {
+    frames.push(withFrame((ctx, u) => drawFireGeyserFrame(ctx, u, phase), 42));
+  });
+  return { canvas: composeSheet(frames, 4, 2), cols: 4, rows: 2, fps: 5, anims: { idle: [0], attack: [0,1,2,3,4,5,6,7] } };
 }
 
-// ========== MAIN ==========
+function genSheets() {
+  return {
+    bomber: genBirdSheet(drawBirdFrame, {
+      body: '#744422',
+      bodyLight: '#C98B54',
+      wingFill: '#9E6235',
+      head: '#6A3D1F',
+      beak: '#E0A52B',
+      payload: '#E04A1A'
+    }, 7),
+    charger: genHumanoidSheet(drawChargerFrame, 8),
+    troll: genHumanoidSheet(drawTrollFrame, 5),
+    witch: genHumanoidSheet(drawWitchFrame, 5),
+    golem: genHumanoidSheet(drawGolemFrame, 3),
+    diver: genBirdSheet(drawBirdFrame, {
+      body: '#5D7B3B',
+      bodyLight: '#A8C861',
+      wingFill: '#7B9B4E',
+      head: '#49602F',
+      beak: '#E5AA3B',
+      payload: '#78B94D'
+    }, 6),
+    fire_geyser: genFireGeyserSheet(),
+    serpent: genSerpentSheet(),
+    ptero: genPteroSheet(),
+    log: genLogSheet(),
+    spikes: genSpikesSheet()
+  };
+}
+
 async function main() {
   const outputDir = path.join(__dirname, 'assets', 'spritesheets', 'enemies', 'generated');
-  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+  ensureDir(outputDir);
 
-  const generators = {
-    bomber: genBomberSheet,
-    charger: genChargerSheet,
-    troll: genTrollSheet,
-    witch: genWitchSheet,
-    golem: genGolemSheet,
-    diver: genDiverSheet,
-    fire_geyser: genFireGeyserSheet,
-    serpent: genSerpentSheet,
-    ptero: genPteroSheet,
-    log: genLogSheet,
-    spikes: genSpikesSheet,
-  };
+  const sheets = genSheets();
+  const manifest = {};
 
-  const results = {};
-
-  for (const [name, genFn] of Object.entries(generators)) {
-    console.log(`Generating ${name} sprite sheet...`);
-    const { canvas, cols, rows, fps, anims } = genFn();
-
-    // Save full-size PNG
-    const pngPath = path.join(outputDir, `${name}.png`);
-    const buf = canvas.toBuffer('image/png');
-    fs.writeFileSync(pngPath, buf);
-    console.log(`  Saved ${pngPath} (${canvas.width}x${canvas.height}, ${(buf.length/1024).toFixed(1)}KB)`);
-
-    results[name] = { cols, rows, fps, anims, width: canvas.width, height: canvas.height };
+  for (const [id, meta] of Object.entries(sheets)) {
+    const pngPath = path.join(outputDir, `${id}.png`);
+    fs.writeFileSync(pngPath, meta.canvas.toBuffer('image/png'));
+    manifest[id] = {
+      cols: meta.cols,
+      rows: meta.rows,
+      fps: meta.fps,
+      anims: meta.anims,
+      width: meta.canvas.width,
+      height: meta.canvas.height
+    };
+    console.log(`Generated ${id} -> ${pngPath}`);
   }
 
   const manifestPath = path.join(outputDir, 'manifest.json');
-  fs.writeFileSync(manifestPath, JSON.stringify(results, null, 2) + '\n');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`\nWrote sprite manifest to ${manifestPath}`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

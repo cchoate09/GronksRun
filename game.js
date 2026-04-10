@@ -99,14 +99,58 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smooth = t => t * t * (3 - 2 * t);
 const PI2   = Math.PI * 2;
 
+function normalizeRectMetrics(x, y, w, h) {
+  x = Number.isFinite(x) ? x : 0;
+  y = Number.isFinite(y) ? y : 0;
+  w = Number.isFinite(w) ? w : 0;
+  h = Number.isFinite(h) ? h : 0;
+  if (w < 0) { x += w; w = Math.abs(w); }
+  if (h < 0) { y += h; h = Math.abs(h); }
+  return { x, y, w, h };
+}
+
+function insetRectMetrics(x, y, w, h, insetX, insetY) {
+  const rect = normalizeRectMetrics(x, y, w, h);
+  insetX = Math.max(0, Number.isFinite(insetX) ? insetX : 0);
+  insetY = Math.max(0, Number.isFinite(insetY) ? insetY : insetX);
+  const safeInsetX = Math.min(insetX, rect.w / 2);
+  const safeInsetY = Math.min(insetY, rect.h / 2);
+  return normalizeRectMetrics(
+    rect.x + safeInsetX,
+    rect.y + safeInsetY,
+    rect.w - safeInsetX * 2,
+    rect.h - safeInsetY * 2
+  );
+}
+
+function clampCornerRadius(r, w, h) {
+  r = Number.isFinite(r) ? r : 0;
+  return clamp(r, 0, Math.max(0, Math.min(w / 2, h / 2)));
+}
+
 // Rounded rectangle path (uses arcTo for WebView compat)
 function rrPath(x,y,w,h,r){
-  r=Math.min(r,w/2,h/2);
-  ctx.beginPath();ctx.moveTo(x+r,y);
+  const rect = normalizeRectMetrics(x, y, w, h);
+  x = rect.x; y = rect.y; w = rect.w; h = rect.h;
+  r = clampCornerRadius(r, w, h);
+  ctx.beginPath();
+  if (w <= 0 || h <= 0) {
+    ctx.rect(x, y, Math.max(0, w), Math.max(0, h));
+    return rect;
+  }
+  if (r <= 0.5) {
+    ctx.rect(x, y, w, h);
+    ctx.closePath();
+    return { x, y, w, h, r: 0 };
+  }
+  ctx.moveTo(x+r,y);
   ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
   ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+  return { x, y, w, h, r };
 }
 function fillRR(x,y,w,h,r,fill,stroke,lw){
+  const rect = normalizeRectMetrics(x, y, w, h);
+  if (rect.w <= 0 || rect.h <= 0) return;
   rrPath(x,y,w,h,r);
   if(fill){ctx.fillStyle=fill;ctx.fill();}
   if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||2;ctx.stroke();}
@@ -122,6 +166,11 @@ function ellipse(x, y, rx, ry, fill, stroke, lw, rotation) {
     lw = rotation;
     rotation = arguments[8];
   }
+  x = Number.isFinite(x) ? x : 0;
+  y = Number.isFinite(y) ? y : 0;
+  rx = Math.max(0, Number.isFinite(rx) ? Math.abs(rx) : 0);
+  ry = Math.max(0, Number.isFinite(ry) ? Math.abs(ry) : 0);
+  if (rx <= 0 || ry <= 0) return;
   ctx.beginPath();
   ctx.ellipse(x, y, rx, ry, rotation || 0, 0, PI2);
   if (fill) {
@@ -202,7 +251,13 @@ function drawButton(x,y,w,h,label,opts){
 
 function drawPanel(x, y, w, h, opts) {
   opts = opts || {};
-  const radius = opts.radius || UNIT * 0.35;
+  const rect = normalizeRectMetrics(x, y, w, h);
+  x = rect.x; y = rect.y; w = rect.w; h = rect.h;
+  if (w <= 0 || h <= 0) return;
+  const radius = clampCornerRadius(opts.radius == null ? UNIT * 0.35 : opts.radius, w, h);
+  const clipInset = Math.max(0, Math.min(2, w * 0.08, h * 0.08));
+  const glossInset = Math.max(0, Math.min(3, w * 0.12, h * 0.12));
+  const strokeInset = Math.max(0, Math.min(2.5, w * 0.1, h * 0.1));
   const grad = ctx.createLinearGradient(x, y, x, y + h);
   grad.addColorStop(0, opts.top || 'rgba(25,42,68,0.96)');
   grad.addColorStop(0.52, opts.mid || 'rgba(13,24,42,0.92)');
@@ -213,44 +268,98 @@ function drawPanel(x, y, w, h, opts) {
   ctx.shadowBlur = opts.blur || 22;
   fillRR(x, y, w, h, radius, grad, opts.stroke || 'rgba(202,228,255,0.14)', opts.lw || 2);
   ctx.shadowBlur = 0;
-  ctx.save();
-  rrPath(x + 2, y + 2, w - 4, h - 4, Math.max(6, radius - 2));
-  ctx.clip();
-  const edgeGlow = ctx.createLinearGradient(x, y, x, y + h);
-  edgeGlow.addColorStop(0, 'rgba(255,255,255,0.12)');
-  edgeGlow.addColorStop(0.18, 'rgba(255,255,255,0.06)');
-  edgeGlow.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = edgeGlow;
-  ctx.fillRect(x, y, w, h);
-  if (accent) {
-    const accentGrad = ctx.createLinearGradient(x, y, x + w, y + h * 0.6);
-    accentGrad.addColorStop(0, accent);
-    accentGrad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.globalAlpha = opts.accentAlpha == null ? 0.14 : opts.accentAlpha;
-    ctx.fillStyle = accentGrad;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w * 0.52, y);
-    ctx.lineTo(x + w * 0.22, y + h);
-    ctx.lineTo(x, y + h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
+  const clipRect = insetRectMetrics(x, y, w, h, clipInset, clipInset);
+  if (clipRect.w > 0.5 && clipRect.h > 0.5) {
+    ctx.save();
+    rrPath(
+      clipRect.x,
+      clipRect.y,
+      clipRect.w,
+      clipRect.h,
+      clampCornerRadius(Math.max(0, radius - clipInset), clipRect.w, clipRect.h)
+    );
+    ctx.clip();
+    const edgeGlow = ctx.createLinearGradient(x, y, x, y + h);
+    edgeGlow.addColorStop(0, 'rgba(255,255,255,0.12)');
+    edgeGlow.addColorStop(0.18, 'rgba(255,255,255,0.06)');
+    edgeGlow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = edgeGlow;
+    ctx.fillRect(x, y, w, h);
+    if (accent) {
+      const accentGrad = ctx.createLinearGradient(x, y, x + w, y + h * 0.6);
+      accentGrad.addColorStop(0, accent);
+      accentGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = opts.accentAlpha == null ? 0.14 : opts.accentAlpha;
+      ctx.fillStyle = accentGrad;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w * 0.52, y);
+      ctx.lineTo(x + w * 0.22, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (opts.gloss !== false) {
+      const topGlossRect = insetRectMetrics(x, y, w, Math.max(0, h * 0.28), glossInset, glossInset);
+      const bottomGlossRect = insetRectMetrics(x, y + h * 0.58, w, Math.max(0, h * 0.22), glossInset, glossInset);
+      ctx.globalAlpha = opts.glossAlpha == null ? 0.16 : opts.glossAlpha;
+      if (topGlossRect.w > 0.5 && topGlossRect.h > 0.5) {
+        fillRR(
+          topGlossRect.x,
+          topGlossRect.y,
+          topGlossRect.w,
+          topGlossRect.h,
+          clampCornerRadius(Math.max(0, radius - glossInset), topGlossRect.w, topGlossRect.h),
+          'rgba(255,255,255,0.18)',
+          null,
+          0
+        );
+      }
+      ctx.globalAlpha = 0.1;
+      if (bottomGlossRect.w > 0.5 && bottomGlossRect.h > 0.5) {
+        fillRR(
+          bottomGlossRect.x,
+          bottomGlossRect.y,
+          bottomGlossRect.w,
+          bottomGlossRect.h,
+          clampCornerRadius(Math.max(0, radius - glossInset), bottomGlossRect.w, bottomGlossRect.h),
+          'rgba(0,0,0,0.22)',
+          null,
+          0
+        );
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
   }
-  if (opts.gloss !== false) {
-    ctx.globalAlpha = opts.glossAlpha == null ? 0.16 : opts.glossAlpha;
-    fillRR(x + 3, y + 3, w - 6, Math.max(6, h * 0.28), Math.max(6, radius - 3), 'rgba(255,255,255,0.18)', null, 0);
-    ctx.globalAlpha = 0.1;
-    fillRR(x + 3, y + h * 0.58, w - 6, Math.max(6, h * 0.22), Math.max(6, radius - 3), 'rgba(0,0,0,0.22)', null, 0);
-    ctx.globalAlpha = 1;
+  const innerStrokeRect = insetRectMetrics(x, y, w, h, strokeInset, strokeInset);
+  if (innerStrokeRect.w > 1 && innerStrokeRect.h > 1) {
+    ctx.strokeStyle = opts.innerStroke || 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    rrPath(
+      innerStrokeRect.x,
+      innerStrokeRect.y,
+      innerStrokeRect.w,
+      innerStrokeRect.h,
+      clampCornerRadius(Math.max(0, radius - strokeInset), innerStrokeRect.w, innerStrokeRect.h)
+    );
+    ctx.stroke();
   }
-  ctx.restore();
-  ctx.strokeStyle = opts.innerStroke || 'rgba(255,255,255,0.06)';
-  ctx.lineWidth = 1;
-  rrPath(x + 2.5, y + 2.5, w - 5, h - 5, Math.max(6, radius - 3));
-  ctx.stroke();
   if (accent) {
-    fillRR(x + 3, y + 3, Math.max(8, w * 0.24), Math.max(4, h * 0.09), Math.max(4, radius - 4), accent, null, 0);
+    const accentRect = insetRectMetrics(x, y, Math.max(8, Math.min(w, w * 0.24 + clipInset * 2)), Math.max(4, Math.min(h, h * 0.09 + clipInset * 2)), clipInset + 1, clipInset + 1);
+    if (accentRect.w > 0.5 && accentRect.h > 0.5) {
+      fillRR(
+        accentRect.x,
+        accentRect.y,
+        accentRect.w,
+        accentRect.h,
+        clampCornerRadius(Math.max(0, radius - 4), accentRect.w, accentRect.h),
+        accent,
+        null,
+        0
+      );
+    }
   }
   ctx.restore();
 }
@@ -287,6 +396,9 @@ function drawMiniChip(x, y, w, h, label, opts) {
 }
 
 function drawProgressBar(x, y, w, h, frac, colors) {
+  const rect = normalizeRectMetrics(x, y, w, h);
+  x = rect.x; y = rect.y; w = rect.w; h = rect.h;
+  if (w <= 0 || h <= 0) return;
   frac = clamp(frac, 0, 1);
   drawPanel(x, y, w, h, {
     radius: h / 2,
@@ -297,11 +409,16 @@ function drawProgressBar(x, y, w, h, frac, colors) {
     gloss: false
   });
   if (frac <= 0) return;
+  colors = colors || ['#8DD7FF', '#4AC6FF'];
   const fill = ctx.createLinearGradient(x, y, x + w, y);
   fill.addColorStop(0, colors[0]);
   fill.addColorStop(1, colors[1]);
+  const fillRect = insetRectMetrics(x, y, w, h, Math.max(1, Math.min(2, w * 0.08, h * 0.2)), Math.max(1, Math.min(2, w * 0.08, h * 0.2)));
+  if (fillRect.w <= 0.5 || fillRect.h <= 0.5) return;
+  const fillW = fillRect.w * frac;
+  if (fillW <= 0.5) return;
   ctx.save();
-  rrPath(x + 2, y + 2, Math.max(2, (w - 4) * frac), Math.max(2, h - 4), Math.max(2, h / 2 - 2));
+  rrPath(fillRect.x, fillRect.y, fillW, fillRect.h, clampCornerRadius(fillRect.h / 2, fillW, fillRect.h));
   ctx.fillStyle = fill;
   ctx.fill();
   ctx.restore();

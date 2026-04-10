@@ -118,6 +118,17 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Added authored level names, tuning, and scripted chunk plans for Levels 11-20 so the midgame now extends beyond the first reset loop with real setpieces instead of falling back to repeated procedural structure.
 - Rebuilt the boss runtime around readable telegraphs, staged phase escalation, boss-specific body shapes, attack cue cards, stronger hit feedback, and richer defeat rewards/time payout so boss fights read more like authored encounters.
 - Added native shell -> WebView app-state and viewport messaging so Android background/resume and resize behavior can pause the game more safely and re-sync layout/ad readiness on return.
+2026-04-09
+- Canvas radius crash hardening pass:
+- Investigated the mobile gameplay `IndexSizeError` reported in playtest screenshots (`arcTo` radius `-0.02`) and traced it to shared panel/progress-bar helpers, not level logic. The helpers were subtracting fixed `4px/5px` insets from already-short HUD bars, which could make inner rect heights slightly negative on compact Android layouts.
+- Added shared geometry guards in `game.js`: `normalizeRectMetrics`, `insetRectMetrics`, and `clampCornerRadius`.
+- Hardened `rrPath`, `fillRR`, `ellipse`, `drawPanel`, and `drawProgressBar` so they now normalize negative/tiny dimensions, clamp corner radii safely, and skip fragile inner layers when a panel is too small for decorative insets.
+- Regenerated `gameHtml.js` / `assets/gameHtml.js` via `node gen-gamehtmljs.js`.
+- Verification for this fix: `node --check game.js`, `npm run smoke:mobile-webview`, and a targeted Puppeteer compact-viewport probe that directly exercised `drawPanel(…, h=3.96)`, `drawProgressBar(…, h=3.96)`, `rrPath` with negative height, and `ellipse` with negative radii. All completed with no page errors and no red runtime overlay.
+- Broad follow-up error scan:
+- Re-ran syntax checks for `game.js`, `App.js`, and `scripts/mobile_webview_smoke.js`.
+- Ran the existing mobile WebView smoke suite plus a custom canvas probe across `1280x720`, `960x540`, and `1600x720` viewports, with runtime wrapping around `CanvasRenderingContext2D.arcTo`, `arc`, and `ellipse` to catch any negative-radius calls during menu, map, char select, gameplay, level-complete, and boss-fight flows.
+- Result: no page errors, no console errors, no runtime error overlay, and no additional negative-radius canvas calls surfaced beyond the already-fixed panel/progress-bar path.
 - Added adaptive performance stepping plus particle trimming so sustained low-FPS runs can fall back gracefully on weaker Android hardware instead of staying pinned to a too-expensive effects budget.
 - Finished the boss-fight HUD pass by removing the overlapping standard gameplay HUD during boss encounters and replacing the cramped inline player readout with a dedicated compact stat row inside the boss panel.
 - Upgraded the smoke harness and runtime text snapshot so coverage now asserts an authored scripted midgame level plus boss cue / telegraph state in addition to the earlier onboarding and meta-screen checks.

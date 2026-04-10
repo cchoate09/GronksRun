@@ -23,7 +23,7 @@ const UI_FONT_BODY = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
 const UI_FONT_NUMERIC = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
 const FONTS = {};
 function rebuildFonts(u) {
-  const sizes = [0.4, 0.5, 0.55, 0.6, 0.65, 0.7, 0.8, 0.9, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5];
+  const sizes = [0.18, 0.2, 0.22, 0.23, 0.24, 0.26, 0.28, 0.3, 0.32, 0.34, 0.36, 0.38, 0.4, 0.42, 0.45, 0.48, 0.5, 0.52, 0.55, 0.58, 0.6, 0.65, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5, 2, 2.5, 3, 4, 5];
   for (const s of sizes) {
     const px = Math.round(u * s);
     FONTS[`b${s}`] = `700 ${px}px ${UI_FONT_DISPLAY}`;
@@ -64,7 +64,7 @@ function resize() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
   W = canvas.width; H = canvas.height;
-  UNIT = Math.min(W, H) / 20;
+  UNIT = Math.min(W, H) / 17;
   GROUND_BASE = H * 0.73;
   PLAYER_SX = W * 0.18;
   rebuildFonts(UNIT);
@@ -498,13 +498,13 @@ function drawValueCard(x, y, w, h, kicker, value, sub, opts) {
   });
   const innerW = w - UNIT * 0.56;
   drawFitText(kicker, x + w / 2, y + h * 0.2, innerW, {
-    basePx: opts.kickerPx || UNIT * 0.24,
-    minPx: opts.kickerMinPx || UNIT * 0.18,
+    basePx: opts.kickerPx || UNIT * 0.28,
+    minPx: opts.kickerMinPx || UNIT * 0.22,
     color: opts.kickerColor || 'rgba(196,210,234,0.72)'
   });
   drawFitText(value, x + w / 2, y + h * (sub ? 0.5 : 0.56), innerW, {
-    basePx: opts.valuePx || UNIT * 0.48,
-    minPx: opts.valueMinPx || UNIT * 0.26,
+    basePx: opts.valuePx || UNIT * 0.52,
+    minPx: opts.valueMinPx || UNIT * 0.3,
     weight: 'bold',
     color: opts.valueColor || '#F5F7FF',
     shadowColor: opts.valueShadow || 'rgba(0,0,0,0.35)',
@@ -512,8 +512,8 @@ function drawValueCard(x, y, w, h, kicker, value, sub, opts) {
   });
   if (sub) {
     drawFitText(sub, x + w / 2, y + h * 0.78, innerW, {
-      basePx: opts.subPx || UNIT * 0.22,
-      minPx: opts.subMinPx || UNIT * 0.18,
+      basePx: opts.subPx || UNIT * 0.26,
+      minPx: opts.subMinPx || UNIT * 0.2,
       color: opts.subColor || 'rgba(212,224,246,0.7)'
     });
   }
@@ -636,7 +636,12 @@ const save = {
 };
 function loadSave() {
   try {
-    const d = JSON.parse(localStorage.getItem('gronk2') || '{}');
+    const raw = (function() {
+      try { return localStorage.getItem('gronk2'); } catch(e) { return null; }
+    })() || (function() {
+      try { return sessionStorage.getItem('gronk2'); } catch(e) { return null; }
+    })() || '{}';
+    const d = JSON.parse(raw);
     Object.assign(save, d);
     // Type coercion — ensure numeric fields are actually numbers
     const numKeys = ['highestLevel','bestScore','totalGems','selectedChar','savedLevel','savedScore','savedGems','cooldownEnd','dailyStreak'];
@@ -678,8 +683,23 @@ function loadSave() {
   } catch(e) { /* corrupted save — defaults remain */ }
 }
 let _saveFailWarning = 0;
+let _saveFailCount = 0;
 function persistSave() {
-  try { localStorage.setItem('gronk2', JSON.stringify(save)); _saveFailWarning = 0; } catch(e) { _saveFailWarning = 5; }
+  const payload = JSON.stringify(save);
+  try {
+    localStorage.setItem('gronk2', payload);
+    _saveFailCount = 0;
+    _saveFailWarning = 0;
+  } catch(e) {
+    _saveFailCount++;
+    // Silently fall back to sessionStorage for the current session
+    try { sessionStorage.setItem('gronk2', payload); } catch(e2) {}
+    // Only show the banner after multiple consecutive failures — avoids
+    // a scary red warning on the very first save if localStorage is
+    // temporarily unavailable (e.g. WebView quota shared with other apps)
+    if (_saveFailCount >= 3) _saveFailWarning = 5;
+    console.warn('Storage save failed (' + _saveFailCount + '):', e && e.message);
+  }
 }
 function _hitStop(dur) { G.hitStop = Math.max(G.hitStop || 0, dur); }
 function safeSelectedChar() {
@@ -6854,25 +6874,25 @@ function drawLevelComplete(dt){
   drawValueCard(panelX + innerPad, statY, statW, u * 1.34, 'SCORE', `${G.runScore}`, null, {
     accent: 'rgba(255,215,90,0.24)',
     valueColor: '#FFE58A',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.42
+    kickerPx: u * 0.26,
+    valuePx: u * 0.46
   });
-  drawValueCard(panelX + innerPad + statW + statGap, statY, statW, u * 1.34, 'TIME BONUS', `+${timeBonus}`, null, {
+  drawValueCard(panelX + innerPad + statW + statGap, statY, statW, u * 1.34, 'BONUS', `+${timeBonus}`, null, {
     accent: 'rgba(118,222,136,0.22)',
     valueColor: '#9BFFBC',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.42
+    kickerPx: u * 0.26,
+    valuePx: u * 0.46
   });
   drawValueCard(panelX + innerPad + (statW + statGap) * 2, statY, statW, u * 1.34, 'GEMS', `${G.runGems}`, null, {
     accent: 'rgba(95,229,255,0.2)',
     valueColor: `hsl(${G.theme.gemH},100%,70%)`,
-    kickerPx: u * 0.2,
-    valuePx: u * 0.42
+    kickerPx: u * 0.26,
+    valuePx: u * 0.46
   });
 
   drawFitText(stars === 3 ? 'THREE STAR CLEAR' : (stars === 2 ? 'SOLID CLEAR' : 'LEVEL SURVIVED'), W / 2, panelY + u * 4.98, panelW - u * 1.6, {
-    basePx: u * 0.28,
-    minPx: u * 0.18,
+    basePx: u * 0.34,
+    minPx: u * 0.22,
     color: 'rgba(196,208,228,0.72)'
   });
   for (let s = 0; s < 3; s++) {
@@ -9579,25 +9599,25 @@ function drawHUD(dt){
     mid: 'rgba(14,25,44,0.92)',
     bottom: 'rgba(8,14,28,0.9)',
     accent: 'rgba(120,188,255,0.18)',
-    kickerPx: u * 0.2,
-    valuePx: compact ? u * 0.36 : u * 0.42,
-    valueMinPx: u * 0.24,
+    kickerPx: u * 0.26,
+    valuePx: compact ? u * 0.38 : u * 0.44,
+    valueMinPx: u * 0.26,
     valueColor: '#F7FBFF'
   });
   drawFitText('HEALTH', hudX + innerPad, hudY + u * 0.94, leftW - innerPad * 2 - u * 1.08, {
-    basePx: u * 0.2,
-    minPx: u * 0.15,
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(176,194,220,0.62)',
     align: 'left',
     baseline: 'top'
   });
-  drawProgressBar(hudX + innerPad, hudY + u * 1.18, leftW - innerPad * 2, u * 0.22, hpPct, [
+  drawProgressBar(hudX + innerPad, hudY + u * 1.18, leftW - innerPad * 2, u * 0.24, hpPct, [
     `hsl(${lerp(8,100,hpPct)},90%,58%)`,
     `hsl(${lerp(18,120,hpPct)},88%,42%)`
   ]);
-  drawFitText(`${Math.ceil(p.hp)}/${p.maxHP}`, hudX + leftW - innerPad, hudY + u * 0.94, u * 1.1, {
-    basePx: u * 0.22,
-    minPx: u * 0.15,
+  drawFitText(`${Math.ceil(p.hp)}/${p.maxHP}`, hudX + leftW - innerPad, hudY + u * 0.94, u * 1.2, {
+    basePx: u * 0.26,
+    minPx: u * 0.18,
     weight: 'bold',
     color: 'rgba(255,255,255,0.82)',
     align: 'right',
@@ -9615,23 +9635,23 @@ function drawHUD(dt){
     blur: 12
   });
   drawFitText('TIME LEFT', centerX + centerW / 2, hudY + u * 0.38, centerW - u * 0.32, {
-    basePx: u * 0.2,
-    minPx: u * 0.15,
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(196,210,234,0.72)'
   });
   ctx.save();
-  ctx.translate(centerX + centerW / 2, hudY + u * 0.8);
+  ctx.translate(centerX + centerW / 2, hudY + u * 0.82);
   ctx.scale(pulse, pulse);
   drawFitText(`${Math.ceil(tl)}s`, 0, 0, centerW - u * 0.36, {
-    basePx: compact ? u * 0.58 : u * 0.72,
-    minPx: u * 0.3,
+    basePx: compact ? u * 0.62 : u * 0.76,
+    minPx: u * 0.34,
     weight: 'bold',
     color: tCol
   });
   ctx.restore();
-  drawFitText(`${Math.round(prog * 100)}% CLEAR`, centerX + centerW / 2, hudY + u * 1.18, centerW - u * 0.32, {
-    basePx: u * 0.19,
-    minPx: u * 0.15,
+  drawFitText(`${Math.round(prog * 100)}%`, centerX + centerW / 2, hudY + u * 1.22, centerW - u * 0.32, {
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(222,232,248,0.74)'
   });
   drawProgressBar(centerX + u * 0.14, hudY + u * 1.36, centerW - u * 0.28, u * 0.16, prog, [
@@ -9649,35 +9669,35 @@ function drawHUD(dt){
     blur: 12
   });
   drawFitText('SCORE', rightX + innerPad, hudY + u * 0.36, rightW * 0.42, {
-    basePx: u * 0.2,
-    minPx: u * 0.15,
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(188,204,228,0.72)',
     align: 'left',
     baseline: 'top'
   });
-  drawFitText(`${G.runScore}`, rightX + innerPad, hudY + u * 0.74, rightW - u * 2.05, {
-    basePx: compact ? u * 0.36 : u * 0.46,
-    minPx: u * 0.24,
+  drawFitText(`${G.runScore}`, rightX + innerPad, hudY + u * 0.76, rightW - u * 2.1, {
+    basePx: compact ? u * 0.38 : u * 0.48,
+    minPx: u * 0.26,
     weight: 'bold',
     color: '#FFE58A',
     align: 'left',
     baseline: 'middle'
   });
-  const topChipW = Math.min(u * (compact ? 1.96 : 2.12), rightW * 0.34);
-  drawMiniChip(rightX + rightW - innerPad - topChipW, hudY + u * 0.2, topChipW, u * 0.42, `${Math.max(0, G.continuesLeft)} SAVE`, {
-    font: FONTS['b0.18'] || ('700 ' + Math.round(u * 0.18) + 'px ' + UI_FONT_DISPLAY),
+  const topChipW = Math.min(u * (compact ? 2.1 : 2.3), rightW * 0.36);
+  drawMiniChip(rightX + rightW - innerPad - topChipW, hudY + u * 0.2, topChipW, u * 0.48, `${Math.max(0, G.continuesLeft)} SAVE`, {
+    font: FONTS['b0.22'] || ('700 ' + Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY),
     accent: G.continuesLeft > 0 ? 'rgba(255,143,112,0.24)' : 'rgba(110,118,138,0.18)',
     textColor: G.continuesLeft > 0 ? '#FFD9C9' : 'rgba(182,188,210,0.72)'
   });
-  drawMiniChip(rightX + innerPad, hudY + u * 1.1, u * 1.34, u * 0.38, 'GEMS', {
-    font: FONTS['b0.18'] || ('700 ' + Math.round(u * 0.18) + 'px ' + UI_FONT_DISPLAY),
+  drawMiniChip(rightX + innerPad, hudY + u * 1.1, u * 1.5, u * 0.44, 'GEMS', {
+    font: FONTS['b0.22'] || ('700 ' + Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY),
     accent: 'rgba(75,181,203,0.14)',
     textColor: 'rgba(208,236,248,0.76)'
   });
-  drawDiamondShape(rightX + innerPad + u * 0.16, hudY + u * 1.48, u * 0.12, `hsl(${G.theme.gemH},100%,68%)`, 'rgba(255,255,255,0.18)');
-  drawFitText(`${G.runGems}`, rightX + innerPad + u * 0.46, hudY + u * 1.48, u * 1.08, {
-    basePx: u * 0.3,
-    minPx: u * 0.2,
+  drawDiamondShape(rightX + innerPad + u * 0.18, hudY + u * 1.52, u * 0.14, `hsl(${G.theme.gemH},100%,68%)`, 'rgba(255,255,255,0.18)');
+  drawFitText(`${G.runGems}`, rightX + innerPad + u * 0.52, hudY + u * 1.52, u * 1.2, {
+    basePx: u * 0.34,
+    minPx: u * 0.22,
     weight: 'bold',
     color: `hsl(${G.theme.gemH},100%,68%)`,
     align: 'left'
@@ -9688,12 +9708,12 @@ function drawHUD(dt){
     let comboCol = colors[cIdx];
     if (G.combo >= 30) comboCol = `hsl(${(G.time * 360) % 360},100%,65%)`;
     const comboPulse = 1 + G.comboPulse * 0.14;
-    const comboChipW = Math.min(u * (compact ? 2.48 : 2.74), rightW * 0.52);
+    const comboChipW = Math.min(u * (compact ? 2.7 : 3.0), rightW * 0.56);
     ctx.save();
-    ctx.translate(rightX + rightW - innerPad - comboChipW / 2, hudY + u * 1.48);
+    ctx.translate(rightX + rightW - innerPad - comboChipW / 2, hudY + u * 1.52);
     ctx.scale(comboPulse, comboPulse);
-    drawMiniChip(-comboChipW / 2, -u * 0.19, comboChipW, u * 0.38, `COMBO x${G.combo}`, {
-      font: FONTS['b0.19'] || ('700 ' + Math.round(u * 0.19) + 'px ' + UI_FONT_DISPLAY),
+    drawMiniChip(-comboChipW / 2, -u * 0.22, comboChipW, u * 0.44, `COMBO x${G.combo}`, {
+      font: FONTS['b0.23'] || ('700 ' + Math.round(u * 0.23) + 'px ' + UI_FONT_DISPLAY),
       accent: comboCol,
       textColor: '#FFF8EF',
       top: 'rgba(30,20,22,0.92)',
@@ -11327,21 +11347,21 @@ function drawDeathScreen() {
   drawValueCard(panelX + u * 0.28, panelY + u * 1.52, statW, u * 1.08, 'LEVEL', G.levelNum, null, {
     accent: '#7C8DAA',
     valueColor: '#F4F8FF',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.34
+    kickerPx: u * 0.26,
+    valuePx: u * 0.4
   });
   drawValueCard(panelX + u * 0.28 + statW + statGap, panelY + u * 1.52, statW, u * 1.08, 'GEMS', G.runGems + (adDoubleGemsUsed ? ' x2' : ''), null, {
     accent: '#D2A84A',
     valueColor: '#FFF8E8',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.34
+    kickerPx: u * 0.26,
+    valuePx: u * 0.4
   });
   drawValueCard(panelX + u * 0.28 + (statW + statGap) * 2, panelY + u * 1.52, statW, u * 1.08, 'SCORE', G.runScore, 'BEST ' + save.bestScore, {
     accent: '#4E90C9',
     valueColor: '#FFE27A',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.34,
-    subPx: u * 0.2
+    kickerPx: u * 0.26,
+    valuePx: u * 0.4,
+    subPx: u * 0.24
   });
 
   if (showAdContinue && showDoubleGems) {

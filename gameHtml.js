@@ -11,9 +11,6 @@ const html = `<!DOCTYPE html>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
   <meta name="theme-color" content="#0d1b3e">
   <title>Gronk's Run</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -342,12 +339,12 @@ const AD_DEATH_INTERVAL = 3;
 const AD_COOLDOWN_MS = 60000;
 
 // Pre-cached font strings (rebuilt on resize to avoid per-frame template literals)
-const UI_FONT_DISPLAY = '"Bangers", "Impact", cursive';
-const UI_FONT_BODY = '"Nunito", "Avenir Next", "Segoe UI", sans-serif';
-const UI_FONT_NUMERIC = '"Bangers", "Impact", cursive';
+const UI_FONT_DISPLAY = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
+const UI_FONT_BODY = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
+const UI_FONT_NUMERIC = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
 const FONTS = {};
 function rebuildFonts(u) {
-  const sizes = [0.4, 0.5, 0.55, 0.6, 0.65, 0.7, 0.8, 0.9, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5];
+  const sizes = [0.18, 0.2, 0.22, 0.23, 0.24, 0.26, 0.28, 0.3, 0.32, 0.34, 0.36, 0.38, 0.4, 0.42, 0.45, 0.48, 0.5, 0.52, 0.55, 0.58, 0.6, 0.65, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5, 2, 2.5, 3, 4, 5];
   for (const s of sizes) {
     const px = Math.round(u * s);
     FONTS[\`b\${s}\`] = \`700 \${px}px \${UI_FONT_DISPLAY}\`;
@@ -388,7 +385,7 @@ function resize() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
   W = canvas.width; H = canvas.height;
-  UNIT = Math.min(W, H) / 20;
+  UNIT = Math.min(W, H) / 17;
   GROUND_BASE = H * 0.73;
   PLAYER_SX = W * 0.18;
   rebuildFonts(UNIT);
@@ -551,7 +548,7 @@ function drawNotifDot(x, y, count, u) {
   ctx.beginPath(); ctx.arc(x, y, r, 0, PI2);
   ctx.fillStyle = '#FF2244'; ctx.fill();
   ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = 'bold '+Math.round(u*0.3)+'px ' + UI_FONT_DISPLAY;
+  ctx.font = 'bold '+Math.round(u*0.3)+'px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#FFF';
   ctx.fillText(count > 9 ? '9+' : ''+count, x, y);
@@ -565,7 +562,7 @@ function drawButton(x,y,w,h,label,opts){
   if(pressed){ctx.save();ctx.translate(cx,cy);ctx.scale(0.95,0.95);ctx.translate(-cx,-cy);}
   fillRR(x,y,w,h,r,opts.fill||'rgba(30,60,90,0.8)',opts.stroke||'rgba(255,255,255,0.4)',opts.lw||2);
   if(pressed){fillRR(x,y,w,h,r,'rgba(0,0,0,0.2)',null,0);}
-  ctx.font=opts.font||FONTS['b1']||('bold '+UNIT+'px ' + UI_FONT_DISPLAY);
+  ctx.font=opts.font||FONTS['b1']||('bold '+UNIT+'px monospace');
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle=opts.textColor||'#FFF';
   ctx.fillText(label,cx,cy);
@@ -583,9 +580,9 @@ function drawPanel(x, y, w, h, opts) {
   const glossInset = Math.max(0, Math.min(3, w * 0.12, h * 0.12));
   const strokeInset = Math.max(0, Math.min(2.5, w * 0.1, h * 0.1));
   const grad = ctx.createLinearGradient(x, y, x, y + h);
-  grad.addColorStop(0, opts.top || 'rgba(28,46,78,0.97)');
-  grad.addColorStop(0.52, opts.mid || 'rgba(14,26,52,0.94)');
-  grad.addColorStop(1, opts.bottom || 'rgba(8,15,32,0.92)');
+  grad.addColorStop(0, opts.top || 'rgba(25,42,68,0.96)');
+  grad.addColorStop(0.52, opts.mid || 'rgba(13,24,42,0.92)');
+  grad.addColorStop(1, opts.bottom || 'rgba(7,13,24,0.9)');
   const accent = opts.accent || null;
   ctx.save();
   ctx.shadowColor = opts.shadow || 'rgba(0,0,0,0.28)';
@@ -822,13 +819,13 @@ function drawValueCard(x, y, w, h, kicker, value, sub, opts) {
   });
   const innerW = w - UNIT * 0.56;
   drawFitText(kicker, x + w / 2, y + h * 0.2, innerW, {
-    basePx: opts.kickerPx || UNIT * 0.24,
-    minPx: opts.kickerMinPx || UNIT * 0.18,
+    basePx: opts.kickerPx || UNIT * 0.28,
+    minPx: opts.kickerMinPx || UNIT * 0.22,
     color: opts.kickerColor || 'rgba(196,210,234,0.72)'
   });
   drawFitText(value, x + w / 2, y + h * (sub ? 0.5 : 0.56), innerW, {
-    basePx: opts.valuePx || UNIT * 0.48,
-    minPx: opts.valueMinPx || UNIT * 0.26,
+    basePx: opts.valuePx || UNIT * 0.52,
+    minPx: opts.valueMinPx || UNIT * 0.3,
     weight: 'bold',
     color: opts.valueColor || '#F5F7FF',
     shadowColor: opts.valueShadow || 'rgba(0,0,0,0.35)',
@@ -836,8 +833,8 @@ function drawValueCard(x, y, w, h, kicker, value, sub, opts) {
   });
   if (sub) {
     drawFitText(sub, x + w / 2, y + h * 0.78, innerW, {
-      basePx: opts.subPx || UNIT * 0.22,
-      minPx: opts.subMinPx || UNIT * 0.18,
+      basePx: opts.subPx || UNIT * 0.26,
+      minPx: opts.subMinPx || UNIT * 0.2,
       color: opts.subColor || 'rgba(212,224,246,0.7)'
     });
   }
@@ -960,7 +957,12 @@ const save = {
 };
 function loadSave() {
   try {
-    const d = JSON.parse(localStorage.getItem('gronk2') || '{}');
+    const raw = (function() {
+      try { return localStorage.getItem('gronk2'); } catch(e) { return null; }
+    })() || (function() {
+      try { return sessionStorage.getItem('gronk2'); } catch(e) { return null; }
+    })() || '{}';
+    const d = JSON.parse(raw);
     Object.assign(save, d);
     // Type coercion — ensure numeric fields are actually numbers
     const numKeys = ['highestLevel','bestScore','totalGems','selectedChar','savedLevel','savedScore','savedGems','cooldownEnd','dailyStreak'];
@@ -1002,8 +1004,23 @@ function loadSave() {
   } catch(e) { /* corrupted save — defaults remain */ }
 }
 let _saveFailWarning = 0;
+let _saveFailCount = 0;
 function persistSave() {
-  try { localStorage.setItem('gronk2', JSON.stringify(save)); _saveFailWarning = 0; } catch(e) { _saveFailWarning = 5; }
+  const payload = JSON.stringify(save);
+  try {
+    localStorage.setItem('gronk2', payload);
+    _saveFailCount = 0;
+    _saveFailWarning = 0;
+  } catch(e) {
+    _saveFailCount++;
+    // Silently fall back to sessionStorage for the current session
+    try { sessionStorage.setItem('gronk2', payload); } catch(e2) {}
+    // Only show the banner after multiple consecutive failures — avoids
+    // a scary red warning on the very first save if localStorage is
+    // temporarily unavailable (e.g. WebView quota shared with other apps)
+    if (_saveFailCount >= 3) _saveFailWarning = 5;
+    console.warn('Storage save failed (' + _saveFailCount + '):', e && e.message);
+  }
 }
 function _hitStop(dur) { G.hitStop = Math.max(G.hitStop || 0, dur); }
 function safeSelectedChar() {
@@ -1732,7 +1749,7 @@ function drawTooltip() {
   const u = UNIT;
   const compact = W < 1100 || H < 560 || (W / H > 1.8);
   const a = tooltipState.alpha;
-  ctx.font = \`bold \${u * (compact ? 0.36 : 0.42)}px \${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u * (compact ? 0.36 : 0.42)}px monospace\`;
   const tw = ctx.measureText(tooltipState.text).width;
   const padX = u * (compact ? 0.44 : 0.55);
   const bw = Math.min(W - SAFE_LEFT - SAFE_RIGHT - u * 1.3, tw + padX * 2 + u * 1.0);
@@ -1763,7 +1780,7 @@ function drawTooltip() {
     } else if (icon === 'gem') {
       ctx.beginPath(); ctx.moveTo(arrowX, arrowY - u * 0.2 + bounce * 0.5); ctx.lineTo(arrowX + u * 0.12, arrowY - u * 0.04); ctx.lineTo(arrowX + u * 0.12, arrowY + u * 0.08); ctx.lineTo(arrowX, arrowY + u * 0.2); ctx.lineTo(arrowX - u * 0.12, arrowY + u * 0.08); ctx.lineTo(arrowX - u * 0.12, arrowY - u * 0.04); ctx.closePath(); ctx.fill();
     } else if (icon === 'warn') {
-      ctx.font = \`bold \${u * 0.54}px \${UI_FONT_DISPLAY}\`;
+      ctx.font = \`bold \${u * 0.54}px monospace\`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#FF4444';
@@ -1773,7 +1790,7 @@ function drawTooltip() {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = \`bold \${u * (compact ? 0.42 : 0.48)}px \${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u * (compact ? 0.42 : 0.48)}px monospace\`;
   ctx.fillStyle = '#FFD700';
   ctx.fillText(tooltipState.text, W / 2, by + bh / 2);
   ctx.restore();
@@ -2054,7 +2071,7 @@ function drawAnnouncement() {
   ctx.globalAlpha = alpha * 0.92;
   ctx.translate(W / 2, bannerY);
   ctx.scale(scale, scale);
-  ctx.font = FONTS['b0.52'] || ('bold ' + Math.round(u * 0.52) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b0.52'] || ('bold ' + Math.round(u * 0.52) + 'px monospace');
   var bannerW = clamp(ctx.measureText(_announceText).width + u * 1.4, u * 4.8, u * 9.8);
   var bannerH = u * 1.08;
   drawPanel(-bannerW / 2, -bannerH / 2, bannerW, bannerH, {
@@ -2110,7 +2127,7 @@ function drawFloatingTexts() {
     ctx.save();
     ctx.translate(item.x, item.y);
     ctx.scale(riseScale, riseScale);
-    ctx.font = 'bold ' + Math.round(UNIT * 0.54 * item.size) + 'px ' + UI_FONT_DISPLAY;
+    ctx.font = 'bold ' + Math.round(UNIT * 0.54 * item.size) + 'px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = Math.max(2, UNIT * 0.05 * item.size);
@@ -2278,11 +2295,11 @@ const ENV_DECO = {
 };
 
 const THEMES = {
-  JUNGLE:  { sky:['#0d2a10','#1a4e22','#226a30'], mt:'#1e3a5a', hl:'#3a7a44', gt:'#4a9a32', gf:'#5a3a20', gemH:185, amb:null },
-  VOLCANO: { sky:['#220508','#4a0e08','#781c00'], mt:'#5a1810', hl:'#8a3010', gt:'#cc4400', gf:'#3a1808', gemH:30, amb:'EMBERS' },
-  GLACIER: { sky:['#0a2248','#1a4890','#2a6acc'], mt:'#5a9acc', hl:'#9ad4f0', gt:'#c0ecff', gf:'#6aaabf', gemH:210, amb:'SNOW' },
-  SWAMP:   { sky:['#071209','#102818','#1a3c20'], mt:'#203818', hl:'#355a24', gt:'#486830', gf:'#1e2e10', gemH:100, amb:'FIREFLY' },
-  SKY:     { sky:['#2282d8','#42a8f8','#88ccff'], mt:'#d8f0ff', hl:'#eef8ff', gt:'#b4e0ff', gf:'#84c4f0', gemH:50, amb:null },
+  JUNGLE:  { sky:['#0a1628','#152844','#1e4a2a'], mt:'#1e3a5a', hl:'#2d5a3a', gt:'#3a7a28', gf:'#4a3020', gemH:185, amb:null },
+  VOLCANO: { sky:['#1a0508','#3a1008','#5a2008'], mt:'#4a1510', hl:'#6a2810', gt:'#bb3300', gf:'#3a1808', gemH:30, amb:'EMBERS' },
+  GLACIER: { sky:['#0a1838','#1a3868','#2a58a0'], mt:'#4a80b0', hl:'#8ac0e0', gt:'#b0dff0', gf:'#5a90b0', gemH:210, amb:'SNOW' },
+  SWAMP:   { sky:['#080f06','#122010','#1a3010'], mt:'#1a3010', hl:'#2a4a18', gt:'#3a5a20', gf:'#1e2e10', gemH:100, amb:'FIREFLY' },
+  SKY:     { sky:['#3a90e0','#5ab0f8','#a0d8ff'], mt:'#d0e8ff', hl:'#e8f4ff', gt:'#a8d8f8', gf:'#7ab8e8', gemH:50, amb:null },
 };
 
 function getThemeName(theme) {
@@ -2686,15 +2703,15 @@ function drawSettingsScreen(dt) {
     });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.font = FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px monospace');
     ctx.fillStyle = '#F5F7FF';
     ctx.fillText(title, contentX + u * 0.34, y + u * 0.22);
-    ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace');
     ctx.fillStyle = 'rgba(202,216,236,0.66)';
     ctx.fillText(desc, contentX + u * 0.34, y + u * 0.74);
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.font = FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace');
     ctx.fillStyle = 'rgba(245,247,255,0.82)';
     ctx.fillText(value, contentX + contentW - u * 0.34, y + rowH * 0.5);
   }
@@ -2715,7 +2732,7 @@ function drawSettingsScreen(dt) {
 
   const shakeBtn = { x: sliderX + sliderW - u * 2.6, y: shakeY + rowH * 0.24, w: u * 2.6, h: u * 0.76 };
   drawMiniChip(shakeBtn.x, shakeBtn.y, shakeBtn.w, shakeBtn.h, save.screenShake === false ? 'OFF' : 'ON', {
-    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
     accent: save.screenShake === false ? 'rgba(110,120,150,0.18)' : 'rgba(110,210,130,0.22)',
     textColor: save.screenShake === false ? 'rgba(182,190,210,0.72)' : '#E8FFF0'
   });
@@ -2730,10 +2747,10 @@ function drawSettingsScreen(dt) {
   });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace');
   ctx.fillStyle = '#FFD46C';
   ctx.fillText('CREDITS', W / 2, creditsY + u * 0.38);
-  ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.32'] || (Math.round(u * 0.32) + 'px monospace');
   ctx.fillStyle = 'rgba(216,226,240,0.74)';
   ctx.fillText('Game design, gameplay systems, and packaging', W / 2, creditsY + u * 0.92);
   ctx.fillStyle = 'rgba(180,194,216,0.6)';
@@ -3072,12 +3089,12 @@ function drawMissionsScreen(dt) {
       blur: 18
     });
     drawMiniChip(x + u * 0.24, y + u * 0.18, Math.min(u * 4.4, w * 0.56), u * 0.56, title, {
-      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
       accent: accent,
       textColor: textColor
     });
     drawMiniChip(x + w - Math.min(u * 3.5, w * 0.32) - u * 0.24, y + u * 0.18, Math.min(u * 3.5, w * 0.32), u * 0.56, resetText, {
-      font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace'),
       accent: 'rgba(110,120,150,0.16)',
       textColor: 'rgba(221,229,245,0.78)'
     });
@@ -3085,7 +3102,7 @@ function drawMissionsScreen(dt) {
     if (!missions.length) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY);
+      ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
       ctx.fillStyle = 'rgba(188,198,214,0.58)';
       ctx.fillText('No missions ready yet', x + w / 2, y + h * 0.55);
       return;
@@ -3162,13 +3179,13 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
   ctx.shadowBlur = 0;
 
   drawMiniChip(x + u * 0.22, y + u * 0.16, u * 2.2, u * 0.42, done ? 'DONE' : ready ? 'READY' : 'IN PLAY', {
-    font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace'),
     accent: statusAccent,
     textColor: done ? '#E7FFF0' : ready ? '#FFF3C8' : '#E6EEF9'
   });
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.font = FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace');
   ctx.fillStyle = done ? 'rgba(208,236,214,0.74)' : '#F5F7FF';
   drawTextBlock(mission.desc, x + u * 0.24, y + u * 0.66, leftW, u * 0.28, { align: 'left' });
 
@@ -3186,7 +3203,7 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px monospace');
   ctx.fillStyle = 'rgba(214,226,244,0.68)';
   ctx.fillText(Math.min(mission.progress || 0, mission.target) + '/' + mission.target, barX, barY - u * 0.14);
   ctx.textAlign = 'right';
@@ -3195,13 +3212,13 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
 
   if (done) {
     drawMiniChip(actionX, y + h * 0.22, actionW, u * 0.62, 'DONE', {
-      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
       accent: 'rgba(110,210,130,0.22)',
       textColor: '#E9FFF0'
     });
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px monospace');
     ctx.fillStyle = 'rgba(158,222,172,0.68)';
     ctx.fillText('Reward sent', actionX + actionW / 2, y + h * 0.72);
     return null;
@@ -3216,7 +3233,7 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
     ctx.scale(pulse, pulse);
     ctx.translate(-btnCX, -btnCY);
     drawMiniChip(actionX, btnY, actionW, btnH, 'CLAIM', {
-      font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace'),
       accent: 'rgba(255,208,90,0.28)',
       textColor: '#FFF4C8',
       top: 'rgba(52,38,12,0.98)',
@@ -3226,19 +3243,19 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
     ctx.restore();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace');
     ctx.fillStyle = '#FFE27A';
     ctx.fillText('+' + mission.reward + 'g', actionX + actionW / 2, y + h * 0.72);
     return { x: actionX, y: btnY, w: actionW, h: btnH, mission: mission };
   } else {
     drawMiniChip(actionX, y + h * 0.22, actionW, u * 0.62, '+' + mission.reward + 'g', {
-      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
       accent: 'rgba(120,188,255,0.18)',
       textColor: '#EAF4FF'
     });
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = FONTS['n0.22'] || (Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['n0.22'] || (Math.round(u * 0.22) + 'px monospace');
     ctx.fillStyle = 'rgba(188,198,214,0.6)';
     ctx.fillText('Keep pushing', actionX + actionW / 2, y + h * 0.72);
     return null;
@@ -5712,7 +5729,7 @@ function drawEnemies(){
             ctx.shadowColor="#FF0000";ctx.shadowBlur=15;
             ctx.fillStyle="#FF2200";ctx.beginPath();ctx.moveTo(cw,ch-cth);ctx.lineTo(cw+ctw,ch);ctx.lineTo(cw-ctw,ch);ctx.closePath();ctx.fill();
             ctx.shadowBlur=0;
-            ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1.6)+"px " + UI_FONT_DISPLAY;
+            ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1.6)+"px monospace";
             ctx.textAlign="center";ctx.textBaseline="middle";
             ctx.fillText("!",cw,ch-u*0.6);
           }
@@ -5831,7 +5848,7 @@ function drawEnemies(){
       ctx.shadowColor="#FF0000";ctx.shadowBlur=10;
       ctx.fillStyle="#FF2200";ctx.beginPath();ctx.moveTo(0,-th);ctx.lineTo(tw,0);ctx.lineTo(-tw,0);ctx.closePath();ctx.fill();
       ctx.shadowBlur=0;
-      ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1.0)+"px " + UI_FONT_DISPLAY;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",0,-u*0.4);
+      ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1.0)+"px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",0,-u*0.4);
       ctx.restore();
     }
     ctx.globalAlpha=1;
@@ -6427,7 +6444,7 @@ function DEPRECATED_drawHUD(dt){
   const tl=G.timeLeft;
 
   // Level name & number (top center above timer)
-  ctx.font=\`bold \${u*.65}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*.65}px monospace\`;ctx.textAlign='center';ctx.textBaseline='top';
   ctx.fillStyle='rgba(255,255,255,0.5)';
   ctx.fillText(\`Level \${G.levelNum}: \${G.levelDef.name}\`,W/2,pad*.3);
 
@@ -6436,7 +6453,7 @@ function DEPRECATED_drawHUD(dt){
   const tCol=\`rgb(255,\${Math.floor(lerp(210,30,urg))},\${Math.floor(lerp(90,30,urg))})\`;
   const pf=tl<5?1+Math.sin(G.time*12)*.14:1;
   ctx.save();ctx.translate(W/2,pad+u*1.6);ctx.scale(pf,pf);
-  ctx.font=\`bold \${u*1.6}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font=\`bold \${u*1.6}px monospace\`;ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`\${Math.ceil(tl)}s\`,3,3);
   ctx.fillStyle=tCol;ctx.fillText(\`\${Math.ceil(tl)}s\`,0,0);ctx.restore();
 
@@ -6449,7 +6466,7 @@ function DEPRECATED_drawHUD(dt){
   pGrd.addColorStop(1,\`hsl(\${lerp(0,120,prog)},75%,40%)\`);
   ctx.fillStyle=pGrd;ctx.fillRect(barX,barY,barW*prog,barH);
   ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.strokeRect(barX,barY,barW,barH);
-  ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.font=\`\${u*.4}px monospace\`;ctx.textAlign='center';ctx.textBaseline='top';
   ctx.fillStyle='rgba(255,255,255,0.6)';
   ctx.fillText(\`\${Math.floor(prog*100)}%\`,W/2,barY+barH+2);
 
@@ -6457,7 +6474,7 @@ function DEPRECATED_drawHUD(dt){
   ctx.fillStyle='rgba(0,0,0,0.25)';const spW=u*5.5,spH=u*2.2;
   ctx.beginPath();ctx.moveTo(pad+u*.3,pad);ctx.lineTo(pad+spW,pad);ctx.quadraticCurveTo(pad+spW+u*.3,pad,pad+spW+u*.3,pad+u*.3);ctx.lineTo(pad+spW+u*.3,pad+spH);ctx.quadraticCurveTo(pad+spW+u*.3,pad+spH+u*.3,pad+spW,pad+spH+u*.3);ctx.lineTo(pad+u*.3,pad+spH+u*.3);ctx.quadraticCurveTo(pad,pad+spH+u*.3,pad,pad+spH);ctx.lineTo(pad,pad+u*.3);ctx.quadraticCurveTo(pad,pad,pad+u*.3,pad);ctx.closePath();ctx.fill();
   // Score (top-left)
-  ctx.font=\`bold \${u*.9}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*.9}px monospace\`;ctx.textAlign='left';ctx.textBaseline='top';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`\${G.runScore}\`,pad+2,pad+2);
   ctx.fillStyle='#FFD700';ctx.fillText(\`\${G.runScore}\`,pad,pad);
 
@@ -6477,20 +6494,20 @@ function DEPRECATED_drawHUD(dt){
   // Border
   ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;ctx.strokeRect(hpBarX,hpBarY,hpBarW,hpBarH);
   // HP text (below bar, larger)
-  ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*.45}px monospace\`;ctx.fillStyle='white';ctx.textAlign='center';ctx.textBaseline='top';
   ctx.fillText(\`\${p.hp}/\${p.maxHP}\`,hpBarX+hpBarW/2,hpBarY+hpBarH+u*.1);
 
   // Gems panel bg (top-right)
   ctx.fillStyle='rgba(0,0,0,0.25)';const gpW=u*5,gpX=W-pad-SAFE_RIGHT-gpW-u*.3;
   ctx.beginPath();ctx.moveTo(gpX+u*.3,pad);ctx.lineTo(gpX+gpW,pad);ctx.quadraticCurveTo(gpX+gpW+u*.3,pad,gpX+gpW+u*.3,pad+u*.3);ctx.lineTo(gpX+gpW+u*.3,pad+u*2);ctx.quadraticCurveTo(gpX+gpW+u*.3,pad+u*2.3,gpX+gpW,pad+u*2.3);ctx.lineTo(gpX+u*.3,pad+u*2.3);ctx.quadraticCurveTo(gpX,pad+u*2.3,gpX,pad+u*2);ctx.lineTo(gpX,pad+u*.3);ctx.quadraticCurveTo(gpX,pad,gpX+u*.3,pad);ctx.closePath();ctx.fill();
   // Gems (top-right)
-  ctx.font=\`bold \${u*.9}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='right';
+  ctx.font=\`bold \${u*.9}px monospace\`;ctx.textAlign='right';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`\\u25C6 \${G.runGems}\`,W-pad-SAFE_RIGHT+2,pad+2);
   ctx.fillStyle=\`hsl(\${G.theme.gemH},100%,65%)\`;ctx.fillText(\`\\u25C6 \${G.runGems}\`,W-pad-SAFE_RIGHT,pad);
 
   // Continues (below gems)
   if(G.continuesLeft>0){
-    ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,170,0,0.7)';
+    ctx.font=\`\${u*.5}px monospace\`;ctx.fillStyle='rgba(255,170,0,0.7)';
     ctx.fillText(\`\\u2764 x\${G.continuesLeft}\`,W-pad-SAFE_RIGHT,pad+u*1.2);
   }
 
@@ -6498,7 +6515,7 @@ function DEPRECATED_drawHUD(dt){
   if(G.announce&&G.announce.life>0){
     const al=clamp(G.announce.life,0,1),sc=1+(1-al)*.25;
     ctx.save();ctx.translate(W/2,H*.42);ctx.scale(sc,sc);ctx.globalAlpha=al;
-    ctx.font=\`bold \${u*1.6}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=\`bold \${u*1.6}px monospace\`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillText(G.announce.text,3,3);
     ctx.fillStyle='#FFD700';ctx.fillText(G.announce.text,0,0);
     ctx.restore();ctx.globalAlpha=1;
@@ -6506,7 +6523,7 @@ function DEPRECATED_drawHUD(dt){
   }
 
   // Pause icon (top-right, offset left to avoid Android nav buttons)
-  ctx.font=\`bold \${u*1.2}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='right';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*1.2}px monospace\`;ctx.textAlign='right';ctx.textBaseline='top';
   ctx.fillStyle='rgba(255,255,255,0.5)';
   ctx.fillText('||',W-pad*3.5-SAFE_RIGHT,pad*.5);
 
@@ -6531,7 +6548,7 @@ function DEPRECATED_drawHUD(dt){
     }
     // Size escalation
     var comboSize = Math.min(u*0.65 + G.combo*u*0.005, u*0.95);
-    ctx.font=\`bold \${comboSize}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.font=\`bold \${comboSize}px monospace\`;ctx.textAlign='left';ctx.textBaseline='top';
     ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`COMBO x\${G.combo}! (\${G.comboMult}.0x)\`,2,2);
     ctx.fillStyle=comboCol;ctx.fillText(\`COMBO x\${G.combo}! (\${G.comboMult}.0x)\`,0,0);
     ctx.shadowBlur=0;
@@ -6555,9 +6572,9 @@ function DEPRECATED_drawHUD(dt){
     ctx.fillStyle='rgba(255,215,0,0.9)';
     const apW = u*10, apH = u*1.8;
     ctx.fillRect(W/2-apW/2, H*0.15, apW, apH);
-    ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=\`bold \${u*.6}px monospace\`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='#000';ctx.fillText(\`ACHIEVEMENT: \${achievementPopup.name}\`, W/2, H*0.15+apH*0.35);
-    ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillText(achievementPopup.desc, W/2, H*0.15+apH*0.7);
+    ctx.font=\`\${u*.4}px monospace\`;ctx.fillText(achievementPopup.desc, W/2, H*0.15+apH*0.7);
     ctx.restore();ctx.globalAlpha=1;
   }
   // Character unlock popup
@@ -6568,7 +6585,7 @@ function DEPRECATED_drawHUD(dt){
     ctx.fillStyle='rgba(100,200,255,0.9)';
     const upW = u*10, upH = u*1.5;
     ctx.fillRect(W/2-upW/2, H*0.22, upW, upH);
-    ctx.font=\`bold \${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=\`bold \${u*.55}px monospace\`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='#000';ctx.fillText(\`\${charUnlockPopup.name} UNLOCKED!\`, W/2, H*0.22+upH*0.5);
     ctx.restore();ctx.globalAlpha=1;
   }
@@ -6580,11 +6597,11 @@ function DEPRECATED_drawHUD(dt){
   if(p.magnetTimer>0){ctx.fillText('\\uD83E\\uDDF2',ix,iy);ix+=u*1.2;}
   if(p.extraLife){ctx.fillText('\\u2764\\uFE0F',ix,iy);ix+=u*1.2;}
   if(p.starTimer>0){ctx.fillText('\\u2B50',ix,iy);ix+=u*1.2;}
-  if(p.tinyTimer>0){ctx.fillStyle='#22CCAA';ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillText('TINY',ix,iy);ix+=u*1.8;}
-  if(p.speedBoost){ctx.fillStyle='#CC8822';ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillText('FAST',ix,iy);ix+=u*1.8;}
-  if(p.doubleScore){ctx.fillStyle='#CC4422';ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillText('x2',ix,iy);ix+=u*1.4;}
+  if(p.tinyTimer>0){ctx.fillStyle='#22CCAA';ctx.font=\`\${u*.55}px monospace\`;ctx.fillText('TINY',ix,iy);ix+=u*1.8;}
+  if(p.speedBoost){ctx.fillStyle='#CC8822';ctx.font=\`\${u*.55}px monospace\`;ctx.fillText('FAST',ix,iy);ix+=u*1.8;}
+  if(p.doubleScore){ctx.fillStyle='#CC4422';ctx.font=\`\${u*.55}px monospace\`;ctx.fillText('x2',ix,iy);ix+=u*1.4;}
   // Cooldown indicators
-  ctx.font=\`\${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.textBaseline='bottom';
+  ctx.font=\`\${u*.45}px monospace\`;ctx.textBaseline='bottom';
   if(p.slideTimer>0){ctx.fillStyle='#88CCFF';ctx.fillText('SLIDE',ix,iy);ix+=u*2;}
   if(p.dashTimer>0){ctx.fillStyle='#88FFCC';ctx.fillText('DASH',ix,iy);ix+=u*2;}
   if(p.parryTimer>0){ctx.fillStyle='#FFFF44';ctx.fillText('PARRY',ix,iy);ix+=u*2.5;}
@@ -6613,7 +6630,7 @@ function LEGACY_drawMenu(){
   var titleScale = 1 + Math.sin(Date.now()*.002)*0.03;
   ctx.save(); ctx.translate(W/2, H*.22 + titleBounce); ctx.scale(titleScale, titleScale);
   ctx.shadowColor='rgba(0,0,0,0.8)';ctx.shadowBlur=15;ctx.shadowOffsetY=4;
-  ctx.font=\`bold \${u*2.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#B8860B';
+  ctx.font=\`bold \${u*2.5}px monospace\`;ctx.fillStyle='#B8860B';
   ctx.fillText("GRONK'S RUN",0,u*0.1);
   ctx.shadowColor='#FFD700';ctx.shadowBlur=25;ctx.shadowOffsetY=0;
   ctx.fillStyle='#FFD700';ctx.fillText("GRONK'S RUN",0,0);
@@ -6621,12 +6638,12 @@ function LEGACY_drawMenu(){
   ctx.fillText("GRONK'S RUN",0,-u*0.08);ctx.globalAlpha=1;
   ctx.restore();
 
-  ctx.font=\`\${u*.85}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88CCFF';
+  ctx.font=\`\${u*.85}px monospace\`;ctx.fillStyle='#88CCFF';
   ctx.fillText('Prehistoric Survival!',W/2,H*.24+u*2.5);
 
   var tapAlpha = 0.5 + Math.sin(Date.now()*.004)*0.5;
   ctx.globalAlpha = Math.max(0.05, tapAlpha);
-  ctx.font=\`bold \${u*1.1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1.1}px monospace\`;ctx.fillStyle='white';
   ctx.shadowColor='rgba(255,255,255,0.5)';ctx.shadowBlur=10;
   ctx.fillText('TAP TO START',W/2,H*.55);
   ctx.shadowBlur=0;ctx.globalAlpha=1;
@@ -6637,22 +6654,22 @@ function LEGACY_drawMenu(){
     if(cdRemain>0){
       const mins=Math.max(0, Math.floor(cdRemain/60000));
       const secs=Math.max(0, Math.min(59, Math.ceil((cdRemain%60000)/1000)));
-      ctx.font=\`\${u*.65}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FF8844';
+      ctx.font=\`\${u*.65}px monospace\`;ctx.fillStyle='#FF8844';
       ctx.fillText(\`Resume Level \${save.savedLevel} in \${mins}:\${secs<10?'0':''}\${secs}\`,W/2,H*.65);
     } else {
       const pulse=1+Math.sin(Date.now()*.006)*.06;
       ctx.save();ctx.translate(W/2,H*.65);ctx.scale(pulse,pulse);
-      ctx.font=\`bold \${u*.85}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#44DD66';
+      ctx.font=\`bold \${u*.85}px monospace\`;ctx.fillStyle='#44DD66';
       ctx.fillText(\`RESUME Level \${save.savedLevel}\`,0,0);ctx.restore();
     }
   }
 
   if(save.highestLevel>0){
-    ctx.font=\`\${u*.7}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+    ctx.font=\`\${u*.7}px monospace\`;ctx.fillStyle='#FFD700';
     ctx.fillText(\`Best: Level \${save.highestLevel} | Score: \${save.bestScore}\`,W/2,H*.76);
   }
 
-  ctx.font=\`\${u*.48}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.4)';
+  ctx.font=\`\${u*.48}px monospace\`;ctx.fillStyle='rgba(255,255,255,0.4)';
   ctx.fillText('Swipe Up: Jump \\u2022 Down: Slide/Pound \\u2022 Right: Dash',W/2,H-SAFE_BOTTOM-u*1);
 
   // Speaker icon
@@ -6701,28 +6718,17 @@ function drawMenu(){
   });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const titlePulse = 1 + Math.sin(Date.now() * 0.003) * 0.032;
+  const titlePulse = 1 + Math.sin(Date.now() * 0.003) * 0.025;
   ctx.save();
   ctx.translate(W / 2, headerY + u * 0.92);
   ctx.scale(titlePulse, titlePulse);
-  // Outer glow pass
-  ctx.save();
-  ctx.shadowColor = 'rgba(255,200,60,0.7)';
-  ctx.shadowBlur = 32;
   drawFitText("GRONK'S RUN", 0, 0, headerW - u * 2, {
-    basePx: u * 1.52,
-    minPx: u * 0.96,
+    basePx: u * 1.42,
+    minPx: u * 0.9,
     weight: 'bold',
-    color: 'rgba(255,200,60,0.0)',
-  });
-  ctx.restore();
-  drawFitText("GRONK'S RUN", 0, 0, headerW - u * 2, {
-    basePx: u * 1.52,
-    minPx: u * 0.96,
-    weight: 'bold',
-    color: '#FFE040',
-    shadowColor: 'rgba(255,140,0,0.5)',
-    shadowBlur: 18
+    color: '#FFE58A',
+    shadowColor: 'rgba(0,0,0,0.34)',
+    shadowBlur: 12
   });
   ctx.restore();
   drawFitText(firstSession ? 'A cinematic lane runner with dash combat and boss breaks.' : 'Pick your runner, cash out gems, and keep the climb alive.', W / 2, headerY + u * 1.52, headerW - u * 2.2, {
@@ -6885,7 +6891,7 @@ function DEPRECATED_drawCharSelect(){
   ctx.fillStyle='#0a1628';ctx.fillRect(0,0,W,H);
 
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font=\`bold \${u*1.2}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1.2}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText('CHOOSE YOUR CHARACTER',W/2,SAFE_TOP+H*.06);
 
   const cols=3, rows=2, totalChars=CHARS.length;
@@ -6911,13 +6917,13 @@ function DEPRECATED_drawCharSelect(){
       // Silhouette — dark circle + lock icon
       ctx.fillStyle='rgba(60,60,80,0.6)';
       ctx.beginPath();ctx.arc(cx,cy-cardH*.08,u*1.2,0,PI2);ctx.fill();
-      ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.7)';
+      ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='rgba(150,150,170,0.7)';
       ctx.fillText('?',cx,cy-cardH*.06);
       // Name (dimmed)
-      ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.5)';
+      ctx.font=\`bold \${u*.6}px monospace\`;ctx.fillStyle='rgba(150,150,170,0.5)';
       ctx.fillText(ch.name,cx,cy+cardH*.3);
       // Requirement
-      ctx.font=\`\${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,180,80,0.7)';
+      ctx.font=\`\${u*.35}px monospace\`;ctx.fillStyle='rgba(255,180,80,0.7)';
       ctx.fillText(CHAR_UNLOCK[i]?CHAR_UNLOCK[i].req:'???',cx,cy+cardH*.42);
     } else {
       // Character preview
@@ -6928,10 +6934,10 @@ function DEPRECATED_drawCharSelect(){
       ctx.restore();
 
       // Name
-      ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=sel?'#FFD700':ch.col;
+      ctx.font=\`bold \${u*.6}px monospace\`;ctx.fillStyle=sel?'#FFD700':ch.col;
       ctx.fillText(ch.name,cx,cy+cardH*.3);
       // Desc
-      ctx.font=\`\${u*.38}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.6)';
+      ctx.font=\`\${u*.38}px monospace\`;ctx.fillStyle='rgba(255,255,255,0.6)';
       ctx.fillText(ch.desc,cx,cy+cardH*.42);
     }
   }
@@ -6939,11 +6945,11 @@ function DEPRECATED_drawCharSelect(){
   // Start button
   const btnW=u*5,btnH=u*1.3,btnX=W/2-btnW/2,btnY=H-SAFE_BOTTOM-u*1.5;
   ctx.fillStyle='#FFD700';ctx.fillRect(btnX,btnY,btnW,btnH);
-  ctx.fillStyle='#000';ctx.font=\`bold \${u*.85}px \${UI_FONT_DISPLAY}\`;
+  ctx.fillStyle='#000';ctx.font=\`bold \${u*.85}px monospace\`;
   ctx.fillText('START!',W/2,btnY+btnH/2);
 
   if(Math.sin(Date.now()*.005)>0){
-    ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.font=\`\${u*.5}px monospace\`;ctx.fillStyle='rgba(255,255,255,0.5)';
     ctx.fillText('Tap a character, then START!',W/2,btnY-u*.5);
   }
 
@@ -6951,14 +6957,14 @@ function DEPRECATED_drawCharSelect(){
   const htpW=u*4.5, htpH=u*1, htpX=SAFE_LEFT+u*.5, htpY=H-SAFE_BOTTOM-u*1.5;
   ctx.fillStyle='rgba(100,100,200,0.3)';ctx.fillRect(htpX,htpY,htpW,htpH);
   ctx.strokeStyle='rgba(100,100,200,0.5)';ctx.lineWidth=1;ctx.strokeRect(htpX,htpY,htpW,htpH);
-  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
+  ctx.font=\`\${u*.5}px monospace\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
   ctx.fillText('HOW TO PLAY',htpX+htpW/2,htpY+htpH/2);
 
   // SKINS button (bottom, between HOW TO PLAY and speaker)
   const skW=u*3.5, skH=u*1, skX=htpX+htpW+u*.5, skY=H-SAFE_BOTTOM-u*1.5;
   ctx.fillStyle='rgba(200,100,220,0.3)';ctx.fillRect(skX,skY,skW,skH);
   ctx.strokeStyle='rgba(200,100,220,0.5)';ctx.lineWidth=1;ctx.strokeRect(skX,skY,skW,skH);
-  ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(230,180,255,0.8)';ctx.textAlign='center';
+  ctx.font=\`bold \${u*.5}px monospace\`;ctx.fillStyle='rgba(230,180,255,0.8)';ctx.textAlign='center';
   ctx.fillText('SKINS',skX+skW/2,skY+skH/2);
 
   // Speaker icon
@@ -7024,7 +7030,7 @@ function drawLevelIntro(dt){
 
   if (guide) {
     drawMiniChip(W / 2 - u * 2.5, panelY + u * 0.34, u * 5, u * 0.58, guide.header, {
-      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
       accent: 'rgba(120,220,255,0.22)'
     });
   }
@@ -7032,21 +7038,21 @@ function drawLevelIntro(dt){
   ctx.save();
   ctx.translate(W/2,panelY + u * (guide ? 1.25 : 0.95));
   ctx.scale(titleScale,titleScale);
-  ctx.font = FONTS['b1.35'] || ('bold ' + Math.round(u * 1.35) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b1.35'] || ('bold ' + Math.round(u * 1.35) + 'px monospace');
   ctx.fillStyle = '#FFD700';
   ctx.fillText(\`LEVEL \${G.levelNum}\`,0,0);
   ctx.restore();
 
   drawMiniChip(panelX + u * 0.62, panelY + u * (guide ? 1.6 : 1.35), panelW - u * 1.24, u * 0.7, G.levelDef.name.toUpperCase(), {
-    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
     accent: 'rgba(120,210,255,0.2)'
   });
 
-  ctx.font = FONTS['b0.58'] || ('bold ' + Math.round(u * 0.58) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b0.58'] || ('bold ' + Math.round(u * 0.58) + 'px monospace');
   ctx.fillStyle = guide ? '#F5F7FF' : '#88CCFF';
   ctx.fillText((guide ? guide.title : (G.levelDef.focus || 'Stay alive')).toUpperCase(), W / 2, panelY + u * (guide ? 2.55 : 2.35));
 
-  ctx.font = FONTS['n0.4'] || (Math.round(u * 0.4) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.4'] || (Math.round(u * 0.4) + 'px monospace');
   ctx.fillStyle = 'rgba(224,233,248,0.76)';
   const introTxt = guide ? guide.intro : \`Survive \${G.levelDef.targetTime}s to advance.\`;
   drawTextBlock(introTxt, W / 2, panelY + u * (guide ? 3.25 : 3.2), panelW - u * 1.2, u * 0.48, { align: 'center' });
@@ -7059,16 +7065,16 @@ function drawLevelIntro(dt){
       const step = guide.steps[i];
       const chipX = W / 2 - chipW - chipGap / 2 + i * (chipW + chipGap);
       drawMiniChip(chipX, chipY, chipW, u * 0.6, step.short, {
-        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY),
+        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
         accent: step.accent,
         textColor: '#F7FBFF'
       });
     }
-    ctx.font = FONTS['n0.33'] || (Math.round(u * 0.33) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['n0.33'] || (Math.round(u * 0.33) + 'px monospace');
     ctx.fillStyle = 'rgba(218,230,246,0.68)';
     drawTextBlock(guide.rewardHint, W / 2, panelY + panelH - u * 0.8, panelW - u * 1.2, u * 0.4, { align: 'center' });
   } else {
-    ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
     ctx.fillStyle = 'rgba(220,228,245,0.68)';
     drawTextBlock('Stay healthy, grab gems, and keep the lane readable.', W / 2, panelY + panelH - u * 0.8, panelW - u * 1.2, u * 0.42, { align: 'center' });
   }
@@ -7085,14 +7091,14 @@ function LEGACY_drawLevelComplete(dt){
   const pulse=1+Math.sin(G.levelCompleteTimer*4)*.05;
   ctx.save();ctx.translate(W/2,H*.25);ctx.scale(pulse,pulse);
   ctx.shadowColor='#FFD700';ctx.shadowBlur=20;
-  ctx.font=\`bold \${u*2}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*2}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText('LEVEL COMPLETE!',0,0);ctx.shadowBlur=0;ctx.restore();
 
-  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88CCFF';
+  ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='#88CCFF';
   ctx.fillText(\`\${G.levelDef.name} cleared!\`,W/2,H*.42);
 
   const timeBonus=Math.floor(G.timeLeft*10);
-  ctx.font=\`\${u*.8}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`\${u*.8}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText(\`Score: \${G.runScore}  |  Time Bonus: +\${timeBonus}\`,W/2,H*.55);
 
   // Star rating display
@@ -7112,12 +7118,12 @@ function LEGACY_drawLevelComplete(dt){
     const _sbx=W-SAFE_RIGHT-_sbw-u, _sby=H-SAFE_BOTTOM-u*1.5;
     ctx.fillStyle='rgba(50,150,255,0.25)';ctx.fillRect(_sbx,_sby,_sbw,_sbh);
     ctx.strokeStyle='rgba(80,180,255,0.5)';ctx.lineWidth=1;ctx.strokeRect(_sbx,_sby,_sbw,_sbh);
-    ctx.font='bold '+Math.round(u*.45)+'px ' + UI_FONT_DISPLAY;ctx.fillStyle='rgba(100,200,255,0.8)';
+    ctx.font='bold '+Math.round(u*.45)+'px monospace';ctx.fillStyle='rgba(100,200,255,0.8)';
     ctx.fillText('SHARE', _sbx+_sbw/2, _sby+_sbh/2);
   }
   if(G.levelCompleteTimer>3){
     if(Math.sin(Date.now()*.005)>0){
-      ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='white';
       ctx.fillText('TAP FOR NEXT LEVEL',W/2,H*.75);
     }
   }
@@ -7142,42 +7148,29 @@ function drawLevelComplete(dt){
   const starY = panelY + u * 5.5;
   const ctaY = panelY + panelH - u * 1.42;
 
-  const lcOverlay = ctx.createLinearGradient(0, 0, 0, H);
-  lcOverlay.addColorStop(0, 'rgba(5,12,8,0.58)');
-  lcOverlay.addColorStop(1, 'rgba(4,8,14,0.72)');
-  ctx.fillStyle = lcOverlay;
+  ctx.fillStyle = 'rgba(5,8,14,0.62)';
   ctx.fillRect(0, 0, W, H);
   drawPanel(panelX, panelY, panelW, panelH, {
     radius: u * 0.56,
-    top: 'rgba(20,44,30,0.97)',
-    mid: 'rgba(12,28,20,0.94)',
-    bottom: 'rgba(7,16,12,0.93)',
-    stroke: 'rgba(120,255,160,0.22)',
-    accent: 'rgba(100,240,140,0.22)',
-    blur: 32
+    top: 'rgba(22,38,60,0.96)',
+    mid: 'rgba(12,22,38,0.92)',
+    bottom: 'rgba(7,12,24,0.92)',
+    stroke: 'rgba(214,232,255,0.16)',
+    accent: 'rgba(255,215,90,0.24)',
+    blur: 28
   });
 
   const pulse = 1 + Math.sin(G.levelCompleteTimer * 4) * 0.03;
   ctx.save();
   ctx.translate(W / 2, panelY + u * 0.92);
   ctx.scale(pulse, pulse);
-  ctx.save();
-  ctx.shadowColor = 'rgba(120,255,160,0.65)';
-  ctx.shadowBlur = 28;
   drawFitText('LEVEL CLEAR', 0, 0, panelW - u * 1.6, {
     basePx: compact ? u * 0.96 : u * 1.08,
     minPx: u * 0.5,
     weight: 'bold',
-    color: 'rgba(120,255,160,0)',
-  });
-  ctx.restore();
-  drawFitText('LEVEL CLEAR', 0, 0, panelW - u * 1.6, {
-    basePx: compact ? u * 0.96 : u * 1.08,
-    minPx: u * 0.5,
-    weight: 'bold',
-    color: '#A0FFB8',
-    shadowColor: 'rgba(0,180,80,0.4)',
-    shadowBlur: 14
+    color: '#FFE58A',
+    shadowColor: 'rgba(0,0,0,0.32)',
+    shadowBlur: 10
   });
   ctx.restore();
 
@@ -7202,25 +7195,25 @@ function drawLevelComplete(dt){
   drawValueCard(panelX + innerPad, statY, statW, u * 1.34, 'SCORE', \`\${G.runScore}\`, null, {
     accent: 'rgba(255,215,90,0.24)',
     valueColor: '#FFE58A',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.42
+    kickerPx: u * 0.26,
+    valuePx: u * 0.46
   });
-  drawValueCard(panelX + innerPad + statW + statGap, statY, statW, u * 1.34, 'TIME BONUS', \`+\${timeBonus}\`, null, {
+  drawValueCard(panelX + innerPad + statW + statGap, statY, statW, u * 1.34, 'BONUS', \`+\${timeBonus}\`, null, {
     accent: 'rgba(118,222,136,0.22)',
     valueColor: '#9BFFBC',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.42
+    kickerPx: u * 0.26,
+    valuePx: u * 0.46
   });
   drawValueCard(panelX + innerPad + (statW + statGap) * 2, statY, statW, u * 1.34, 'GEMS', \`\${G.runGems}\`, null, {
     accent: 'rgba(95,229,255,0.2)',
     valueColor: \`hsl(\${G.theme.gemH},100%,70%)\`,
-    kickerPx: u * 0.2,
-    valuePx: u * 0.42
+    kickerPx: u * 0.26,
+    valuePx: u * 0.46
   });
 
   drawFitText(stars === 3 ? 'THREE STAR CLEAR' : (stars === 2 ? 'SOLID CLEAR' : 'LEVEL SURVIVED'), W / 2, panelY + u * 4.98, panelW - u * 1.6, {
-    basePx: u * 0.28,
-    minPx: u * 0.18,
+    basePx: u * 0.34,
+    minPx: u * 0.22,
     color: 'rgba(196,208,228,0.72)'
   });
   for (let s = 0; s < 3; s++) {
@@ -7273,22 +7266,22 @@ function DEPRECATED_drawDeathScreen(){
   ctx.textAlign='center';ctx.textBaseline='middle';
 
   ctx.shadowColor='#FF4444';ctx.shadowBlur=15;
-  ctx.font=\`bold \${u*1.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FF4444';
+  ctx.font=\`bold \${u*1.6}px monospace\`;ctx.fillStyle='#FF4444';
   ctx.fillText('GAME OVER',W/2,H*.1);ctx.shadowBlur=0;
 
-  ctx.font=\`bold \${u*.9}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*.9}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText(\`Score: \${G.runScore}\`,W/2,H*.2);
 
-  ctx.font=\`\${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.7)';
+  ctx.font=\`\${u*.6}px monospace\`;ctx.fillStyle='rgba(255,255,255,0.7)';
   ctx.fillText(\`Level \${G.levelNum} | Gems: \${G.runGems}\${adDoubleGemsUsed?' (doubled!)':''}\`,W/2,H*.28);
 
   if(G.newHigh){
     const bp=1+Math.sin(Date.now()*.008)*.08;
     ctx.save();ctx.translate(W/2,H*.35);ctx.scale(bp,bp);
-    ctx.font=\`bold \${u*.7}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+    ctx.font=\`bold \${u*.7}px monospace\`;ctx.fillStyle='#FFD700';
     ctx.fillText('\\u2B50 NEW BEST! \\u2B50',0,0);ctx.restore();
   } else {
-    ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,215,0,0.6)';
+    ctx.font=\`\${u*.55}px monospace\`;ctx.fillStyle='rgba(255,215,0,0.6)';
     ctx.fillText(\`Best: \${save.bestScore}\`,W/2,H*.35);
   }
 
@@ -7308,18 +7301,18 @@ function DEPRECATED_drawDeathScreen(){
       ctx.save();ctx.translate(lx+adBtnW/2,adY+adBtnH/2);ctx.scale(adPulse,adPulse);
       ctx.fillStyle='rgba(100,50,200,0.6)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
       ctx.strokeStyle='rgba(160,100,255,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-      ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.45}px monospace\`;ctx.fillStyle='white';
       ctx.fillText('\\uD83C\\uDFAC WATCH AD',0,-u*.2);
-      ctx.font=\`bold \${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#DDBBFF';
+      ctx.font=\`bold \${u*.35}px monospace\`;ctx.fillStyle='#DDBBFF';
       ctx.fillText('FREE CONTINUE',0,u*.18);
       ctx.restore();
       // Double Gems button
       ctx.save();ctx.translate(rx+adBtnW/2,adY+adBtnH/2);ctx.scale(adPulse,adPulse);
       ctx.fillStyle='rgba(200,150,0,0.5)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
       ctx.strokeStyle='rgba(255,200,50,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-      ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.45}px monospace\`;ctx.fillStyle='white';
       ctx.fillText('\\uD83C\\uDFAC WATCH AD',0,-u*.2);
-      ctx.font=\`bold \${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFE488';
+      ctx.font=\`bold \${u*.35}px monospace\`;ctx.fillStyle='#FFE488';
       ctx.fillText('2x GEMS',0,u*.18);
       ctx.restore();
     } else {
@@ -7330,12 +7323,12 @@ function DEPRECATED_drawDeathScreen(){
       if (showAdContinue) {
         ctx.fillStyle='rgba(100,50,200,0.6)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
         ctx.strokeStyle='rgba(160,100,255,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-        ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+        ctx.font=\`bold \${u*.45}px monospace\`;ctx.fillStyle='white';
         ctx.fillText('\\uD83C\\uDFAC AD: FREE CONTINUE',0,0);
       } else {
         ctx.fillStyle='rgba(200,150,0,0.5)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
         ctx.strokeStyle='rgba(255,200,50,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-        ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+        ctx.font=\`bold \${u*.45}px monospace\`;ctx.fillStyle='white';
         ctx.fillText('\\uD83C\\uDFAC AD: 2x GEMS',0,0);
       }
       ctx.restore();
@@ -7343,7 +7336,7 @@ function DEPRECATED_drawDeathScreen(){
   }
 
   // Progress saved notice
-  ctx.font=\`\${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,170,0,0.7)';
+  ctx.font=\`\${u*.45}px monospace\`;ctx.fillStyle='rgba(255,170,0,0.7)';
   ctx.fillText(\`Progress saved at Level \${G.levelNum}\`,W/2,H*.55);
 
   // Quick retry + level map buttons
@@ -7353,14 +7346,14 @@ function DEPRECATED_drawDeathScreen(){
   ctx.save();ctx.translate(W/2,H*.58);ctx.scale(pulse,pulse);
   ctx.fillStyle='#22AA44';ctx.fillRect(-btnW/2,-btnH/2,btnW,btnH);
   ctx.strokeStyle='#44DD66';ctx.lineWidth=2;ctx.strokeRect(-btnW/2,-btnH/2,btnW,btnH);
-  ctx.font=\`bold \${u*.75}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*.75}px monospace\`;ctx.fillStyle='white';
   ctx.fillText('RETRY',0,0);ctx.restore();
 
   // New Run button
   const nrY2=H*.72;
   ctx.fillStyle='rgba(100,100,255,0.3)';ctx.fillRect(W/2-btnW/2,nrY2,btnW,btnH*.85);
   ctx.strokeStyle='rgba(150,150,255,0.5)';ctx.lineWidth=1;ctx.strokeRect(W/2-btnW/2,nrY2,btnW,btnH*.85);
-  ctx.font=\`bold \${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.9)';
+  ctx.font=\`bold \${u*.55}px monospace\`;ctx.fillStyle='rgba(200,200,255,0.9)';
   ctx.fillText('NEW RUN',W/2,nrY2+btnH*.42);
 
   // Share + Level Map buttons side by side
@@ -7369,7 +7362,7 @@ function DEPRECATED_drawDeathScreen(){
   // Share button
   ctx.fillStyle='rgba(50,150,255,0.2)';ctx.fillRect(W/2-halfBtn-u*.3,bottomY,halfBtn,btnH*.8);
   ctx.strokeStyle='rgba(80,180,255,0.5)';ctx.lineWidth=1;ctx.strokeRect(W/2-halfBtn-u*.3,bottomY,halfBtn,btnH*.8);
-  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(100,200,255,0.8)';
+  ctx.font=\`\${u*.5}px monospace\`;ctx.fillStyle='rgba(100,200,255,0.8)';
   ctx.fillText('SHARE',W/2-halfBtn/2-u*.3,bottomY+btnH*.4);
   // Level Map button
   ctx.fillStyle='rgba(255,255,255,0.1)';ctx.fillRect(W/2+u*.3,bottomY,halfBtn,btnH*.8);
@@ -7444,7 +7437,7 @@ function DEPRECATED_drawPausedScreen(){
   ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';ctx.textBaseline='middle';
 
-  ctx.font=\`bold \${u*2.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*2.5}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText('PAUSED',W/2,H*.25);
 
   // Resume button (green)
@@ -7452,14 +7445,14 @@ function DEPRECATED_drawPausedScreen(){
   const resY=H*.45;
   ctx.fillStyle='#22AA44';ctx.fillRect(W/2-btnW/2,resY,btnW,btnH);
   ctx.strokeStyle='#44DD66';ctx.lineWidth=2;ctx.strokeRect(W/2-btnW/2,resY,btnW,btnH);
-  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='white';
   ctx.fillText('RESUME',W/2,resY+btnH/2);
 
   // Quit button (red)
   const quitY=H*.62;
   ctx.fillStyle='rgba(200,50,50,0.8)';ctx.fillRect(W/2-btnW/2,quitY,btnW,btnH);
   ctx.strokeStyle='#FF4444';ctx.lineWidth=2;ctx.strokeRect(W/2-btnW/2,quitY,btnW,btnH);
-  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='white';
   ctx.fillText('QUIT',W/2,quitY+btnH/2);
 
   // Speaker icon
@@ -7487,7 +7480,7 @@ function DEPRECATED_drawTutorial(){
   ctx.fillStyle='#0a1628';ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';ctx.textBaseline='middle';
 
-  ctx.font=\`bold \${u*1.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1.5}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText('HOW TO PLAY',W/2,H*.08);
 
   const items=[
@@ -7502,7 +7495,7 @@ function DEPRECATED_drawTutorial(){
     const y=startY+i*spacing;
     ctx.font=\`\${u*1.2}px sans-serif\`;ctx.fillStyle='#88CCFF';
     ctx.fillText(items[i].icon,W*.15,y);
-    ctx.font=\`\${u*.65}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.font=\`\${u*.65}px monospace\`;ctx.fillStyle='rgba(255,255,255,0.85)';
     ctx.textAlign='left';ctx.fillText(items[i].text,W*.25,y);
     ctx.textAlign='center';
   }
@@ -7511,7 +7504,7 @@ function DEPRECATED_drawTutorial(){
   const btnW=u*6, btnH=u*1.5, btnY=H*.85;
   ctx.fillStyle='#22AA44';ctx.fillRect(W/2-btnW/2,btnY,btnW,btnH);
   ctx.strokeStyle='#44DD66';ctx.lineWidth=2;ctx.strokeRect(W/2-btnW/2,btnY,btnW,btnH);
-  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='white';
   ctx.fillText('GOT IT!',W/2,btnY+btnH/2);
 }
 function handleTutorialTap(){
@@ -7546,12 +7539,12 @@ function LEGACY_drawBossHPBar(){
     blur:22
   });
   drawMiniChip(panelX+u*0.32,panelY+u*0.22,u*2.7,u*0.5,boss.phaseLabel || 'OPENING',{
-    font:FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY),
+    font:FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
     accent:pct < 0.34 ? 'rgba(255,100,100,0.28)' : pct < 0.66 ? 'rgba(255,178,90,0.24)' : 'rgba(120,188,255,0.22)',
     textColor:'#FFF4D6'
   });
   drawMiniChip(panelX+panelW-u*2.24,panelY+u*0.22,u*1.92,u*0.5,\`\${Math.ceil(Math.max(0,boss.bossTimer))}S\`,{
-    font:FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY),
+    font:FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
     accent:'rgba(255,166,74,0.22)',
     textColor:'#FFE5AE'
   });
@@ -7596,7 +7589,7 @@ function LEGACY_drawBossHPBar(){
     for (let i = 0; i < statLabels.length; i++) {
       drawMiniChip(panelX + statPad + i * (statW + statGap), statY, statW, statH, statLabels[i], {
         radius:u*0.2,
-        font:FONTS['b0.21'] || ('bold ' + Math.round(u * 0.21) + 'px ' + UI_FONT_DISPLAY),
+        font:FONTS['b0.21'] || ('bold ' + Math.round(u * 0.21) + 'px monospace'),
         accent:statAccents[i],
         textColor:'rgba(233,240,249,0.84)',
         top:'rgba(14,22,38,0.9)',
@@ -8142,7 +8135,7 @@ function drawStatsScreen(dt){
     blur: 20
   });
   drawMiniChip(layout.bodyX + u * 0.36, layout.bodyY + u * 0.24, u * 4.3, u * 0.64, \`\${Math.round(achProg * 100)}% COMPLETE\`, {
-    font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
     accent: 'rgba(255,215,90,0.22)',
     textColor: '#FFF4C8'
   });
@@ -8178,7 +8171,7 @@ function drawStatsScreen(dt){
   for(const grp of statGroups) {
     if(y > clipY - u && y < clipY + clipH){
       drawMiniChip(innerX, y, u * 3.8, u * 0.58, grp.title, {
-        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY),
+        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
         accent: grp.color,
         textColor: '#F7FBFF'
       });
@@ -8193,11 +8186,11 @@ function drawStatsScreen(dt){
           stroke: 'rgba(255,255,255,0.06)',
           blur: 8
         });
-        ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY);
+        ctx.font = FONTS['n0.34'] || (Math.round(u * 0.34) + 'px monospace');
         ctx.fillStyle='rgba(214,226,244,0.72)';
         ctx.textAlign='left';
         ctx.fillText(item.icon+'  '+item.label, innerX + u * 0.28, y + rowH * 0.5);
-        ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px ' + UI_FONT_DISPLAY);
+        ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace');
         ctx.fillStyle='rgba(245,247,255,0.92)';
         ctx.textAlign='right';
         ctx.fillText(''+item.val, innerX + innerW - u * 0.28, y + rowH * 0.5);
@@ -8209,7 +8202,7 @@ function drawStatsScreen(dt){
 
   if(y > clipY - u && y < clipY + clipH){
     drawMiniChip(innerX, y, u * 4.5, u * 0.58, 'ACHIEVEMENTS', {
-      font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
       accent: 'rgba(255,215,90,0.22)',
       textColor: '#FFF4C8'
     });
@@ -8230,20 +8223,20 @@ function drawStatsScreen(dt){
         blur: 8
       });
       drawMiniChip(innerX + u * 0.24, y + u * 0.18, u * 1.1, u * 0.5, unlocked ? 'DONE' : 'LOCK', {
-        font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY),
+        font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace'),
         accent: unlocked ? 'rgba(255,215,90,0.22)' : 'rgba(110,120,150,0.18)',
         textColor: unlocked ? '#FFE7A4' : 'rgba(188,196,216,0.72)'
       });
       ctx.textAlign='left';ctx.textBaseline='top';
-      ctx.font = FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY);
+      ctx.font = FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace');
       ctx.fillStyle = unlocked ? '#FFD45E' : 'rgba(216,224,242,0.74)';
       ctx.fillText(a.name, innerX + u * 1.52, y + u * 0.16);
-      ctx.font = FONTS['n0.28'] || (Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY);
+      ctx.font = FONTS['n0.28'] || (Math.round(u * 0.28) + 'px monospace');
       ctx.fillStyle = unlocked ? 'rgba(255,230,176,0.72)' : 'rgba(170,182,204,0.6)';
       ctx.fillText(a.desc + (a.gems ? \` (+\${a.gems}g)\` : ''), innerX + u * 1.52, y + u * 0.54);
       if (unlocked) {
         ctx.textAlign='right';
-        ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY);
+        ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
         ctx.fillStyle = '#FFE7A4';
         ctx.fillText('UNLOCKED', innerX + innerW - u * 0.28, y + u * 0.24);
       }
@@ -8337,7 +8330,7 @@ function drawShopScreen(dt) {
   for (let s = 0; s < sections.length; s++) {
     const section = sections[s];
     drawMiniChip(bodyX, y, Math.min(u * 6.8, bodyW * 0.64), u * 0.58, section.label, {
-      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
       accent: section.accent,
       textColor: section.text
     });
@@ -8360,16 +8353,16 @@ function drawShopScreen(dt) {
       });
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.font = FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px ' + UI_FONT_DISPLAY);
+      ctx.font = FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace');
       ctx.fillStyle = canBuy ? '#FFE27A' : owned ? '#96FFB4' : queued ? '#CBE4FF' : 'rgba(220,228,245,0.74)';
       ctx.fillText(item.name, bodyX + u * 0.26, y + u * 0.18);
-      ctx.font = FONTS['n0.28'] || (Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY);
+      ctx.font = FONTS['n0.28'] || (Math.round(u * 0.28) + 'px monospace');
       ctx.fillStyle = 'rgba(192,206,228,0.62)';
       ctx.fillText(item.desc, bodyX + u * 0.26, y + u * 0.58);
       const chipW = u * 2.15;
       const chipX = bodyX + bodyW - chipW - u * 0.22;
       drawMiniChip(chipX, y + u * 0.26, chipW, u * 0.62, statusLabel.toUpperCase(), {
-        font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY),
+        font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
         accent: accent,
         textColor: owned ? '#E8FFF0' : queued ? '#EAF4FF' : canBuy ? '#FFF4C8' : 'rgba(190,200,220,0.72)'
       });
@@ -8428,10 +8421,10 @@ function drawSkinsScreen(dt) {
   ctx.textAlign='center';ctx.textBaseline='middle';
 
   // Title
-  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText('SKINS',W/2,u*1);
   // Gem balance
-  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,220,100,0.8)';
+  ctx.font=\`\${u*.5}px monospace\`;ctx.fillStyle='rgba(255,220,100,0.8)';
   ctx.fillText(\`Gems: \${save.totalGems}\`,W/2,u*1.8);
 
   // Character tabs
@@ -8444,7 +8437,7 @@ function drawSkinsScreen(dt) {
     ctx.fillStyle = sel ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.05)';
     ctx.fillRect(tx,ty,tabW,th);
     if(sel){ctx.strokeStyle='#FFD700';ctx.lineWidth=2;ctx.strokeRect(tx,ty,tabW,th);}
-    ctx.font=\`bold \${u*.4}px \${UI_FONT_DISPLAY}\`;
+    ctx.font=\`bold \${u*.4}px monospace\`;
     ctx.fillStyle = unlocked ? (sel?'#FFD700':'rgba(255,255,255,0.7)') : 'rgba(100,100,120,0.4)';
     ctx.fillText(CHARS[i].name, tx+tabW/2, ty+th/2);
   }
@@ -8496,21 +8489,21 @@ function drawSkinsScreen(dt) {
 
     // Skin name
     ctx.textAlign='center';
-    ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=active?'#FFD700':owned?'#88FF88':sk.col;
+    ctx.font=\`bold \${u*.5}px monospace\`;ctx.fillStyle=active?'#FFD700':owned?'#88FF88':sk.col;
     ctx.fillText(sk.name, cx, cy+cardH*.3);
 
     // Status / price
     if(charLocked){
-      ctx.font=\`\${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.5)';
+      ctx.font=\`\${u*.35}px monospace\`;ctx.fillStyle='rgba(150,150,170,0.5)';
       ctx.fillText('Unlock char first', cx, cy+cardH*.42);
     } else if(active){
-      ctx.font=\`bold \${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+      ctx.font=\`bold \${u*.4}px monospace\`;ctx.fillStyle='#FFD700';
       ctx.fillText('EQUIPPED', cx, cy+cardH*.42);
     } else if(owned){
-      ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88FF88';
+      ctx.font=\`\${u*.4}px monospace\`;ctx.fillStyle='#88FF88';
       ctx.fillText('TAP TO EQUIP', cx, cy+cardH*.42);
     } else {
-      ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=canBuy?'#FFD700':'rgba(150,150,170,0.5)';
+      ctx.font=\`bold \${u*.45}px monospace\`;ctx.fillStyle=canBuy?'#FFD700':'rgba(150,150,170,0.5)';
       ctx.fillText(\`\${sk.cost}g\`, cx, cy+cardH*.42);
     }
   }
@@ -8518,7 +8511,7 @@ function drawSkinsScreen(dt) {
   // Back button
   const btnW=u*4, btnH=u*1.2, btnY=H-SAFE_BOTTOM-u*1.8;
   fillRR(W/2-btnW/2, btnY, btnW, btnH, u*0.3, 'rgba(100,100,200,0.3)', 'rgba(100,100,200,0.5)', 1);
-  ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';
+  ctx.font=\`bold \${u*.6}px monospace\`;ctx.fillStyle='rgba(200,200,255,0.8)';
   ctx.fillText('BACK', W/2, btnY+btnH/2);
 }
 
@@ -8632,36 +8625,36 @@ function drawContinuePrompt(dt){
   });
 
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font = FONTS['b1.18'] || ('bold ' + Math.round(u * 1.18) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b1.18'] || ('bold ' + Math.round(u * 1.18) + 'px monospace');
   ctx.fillStyle = '#FFD46C';
   ctx.fillText(vm.title, W / 2, layout.panelY + u * 0.88);
-  ctx.font = FONTS['n0.36'] || (Math.round(u * 0.36) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.36'] || (Math.round(u * 0.36) + 'px monospace');
   ctx.fillStyle = 'rgba(235,240,250,0.74)';
   ctx.fillText(vm.subtitle, W / 2, layout.panelY + u * 1.55, layout.panelW - layout.innerPad * 2);
 
   const statW = (layout.panelW - layout.innerPad * 2 - u * 0.24 * 2) / 3;
   const statY = layout.panelY + u * 2.1;
   drawMiniChip(layout.panelX + layout.innerPad, statY, statW, u * 0.74, \`LEVEL \${G.levelNum}\`, {
-    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
     accent: 'rgba(120,188,255,0.22)'
   });
   drawMiniChip(layout.panelX + layout.innerPad + statW + u * 0.24, statY, statW, u * 0.74, \`\${G.runScore} SCORE\`, {
-    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
     accent: 'rgba(255,215,90,0.2)'
   });
   drawMiniChip(layout.panelX + layout.panelW - layout.innerPad - statW, statY, statW, u * 0.74, \`\${Math.max(0, G.continuesLeft - 1)} AFTER USE\`, {
-    font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
     accent: 'rgba(255,143,112,0.22)',
     textColor: '#FFD9C9'
   });
 
   drawMiniChip(layout.panelX + layout.innerPad, layout.panelY + u * 3.12, layout.panelW - layout.innerPad * 2, u * 0.68, vm.lessonChip, {
-    font: FONTS['b0.33'] || ('bold ' + Math.round(u * 0.33) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.33'] || ('bold ' + Math.round(u * 0.33) + 'px monospace'),
     accent: vm.guided ? 'rgba(127,255,212,0.2)' : 'rgba(255,255,255,0.12)',
     textColor: vm.guided ? '#E8FFF5' : 'rgba(245,247,255,0.8)'
   });
 
-  ctx.font = FONTS['n0.31'] || (Math.round(u * 0.31) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.31'] || (Math.round(u * 0.31) + 'px monospace');
   ctx.fillStyle = 'rgba(210,220,236,0.68)';
   ctx.fillText(vm.note, W / 2, layout.panelY + u * 4.1, layout.panelW - layout.innerPad * 2);
 
@@ -8684,7 +8677,7 @@ function drawContinuePrompt(dt){
     stroke: 'rgba(255,170,170,0.3)',
     accent: '#D85A66',
     labelColor: '#FFF5F6',
-    labelFont: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px ' + UI_FONT_DISPLAY)
+    labelFont: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace')
   });
 }
 function handleContinueTap(){
@@ -8762,7 +8755,7 @@ function drawSpinWheel(dt) {
   ctx.textAlign='center';ctx.textBaseline='middle';
 
   ctx.shadowColor='#FFD700';ctx.shadowBlur=15;
-  ctx.font=\`bold \${u*1.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1.5}px monospace\`;ctx.fillStyle='#FFD700';
   ctx.fillText('SPIN FOR A POWERUP!',W/2,H*.08);ctx.shadowBlur=0;
 
   // Wheel
@@ -8797,7 +8790,7 @@ function drawSpinWheel(dt) {
     ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=2;ctx.stroke();
     // Label
     ctx.save();ctx.translate(cx,cy);ctx.rotate(startA+segAngle/2);
-    ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';ctx.textAlign='center';
+    ctx.font=\`bold \${u*.5}px monospace\`;ctx.fillStyle='white';ctx.textAlign='center';
     ctx.fillText(WHEEL_SEGMENTS[i].label,r*.6,0);
     ctx.restore();
   }
@@ -8812,7 +8805,7 @@ function drawSpinWheel(dt) {
   // Tap to spin or result
   if (!G.wheelSpinning && !G.wheelResult) {
     if(Math.sin(Date.now()*.005)>0){
-      ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*1}px monospace\`;ctx.fillStyle='white';
       ctx.fillText('TAP TO SPIN!',W/2,H*.85);
     }
   } else if (G.wheelResult && !G.wheelSpinning) {
@@ -8820,10 +8813,10 @@ function drawSpinWheel(dt) {
     const seg = WHEEL_SEGMENTS.find(s=>s.type===G.wheelResult);
     const rPulse=1+Math.sin(G.wheelTimer*6)*.08;
     ctx.save();ctx.translate(W/2,H*.82);ctx.scale(rPulse,rPulse);
-    ctx.font=\`bold \${u*1.1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+    ctx.font=\`bold \${u*1.1}px monospace\`;ctx.fillStyle='#FFD700';
     ctx.fillText(seg?seg.label:'???',0,0);ctx.restore();
     if(G.wheelTimer>1.5 && Math.sin(Date.now()*.005)>0){
-      ctx.font=\`bold \${u*.8}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.8}px monospace\`;ctx.fillStyle='white';
       ctx.fillText('TAP TO CONTINUE',W/2,H*.93);
     }
   }
@@ -8966,11 +8959,11 @@ function DEPRECATED_drawDailyReward(dt) {
   const titleScale = Math.min(1, t*2);
   ctx.save(); ctx.translate(W/2, H*.07); ctx.scale(titleScale, titleScale);
   ctx.shadowColor='#FFD700'; ctx.shadowBlur=20;
-  ctx.font='bold '+Math.round(u*1.5)+'px ' + UI_FONT_DISPLAY; ctx.fillStyle='#FFD700';
+  ctx.font='bold '+Math.round(u*1.5)+'px monospace'; ctx.fillStyle='#FFD700';
   ctx.fillText('DAILY LOGIN', 0, 0); ctx.shadowBlur=0; ctx.restore();
 
   // Streak display
-  ctx.font=Math.round(u*.6)+'px ' + UI_FONT_DISPLAY; ctx.fillStyle='#FFAA44';
+  ctx.font=Math.round(u*.6)+'px monospace'; ctx.fillStyle='#FFAA44';
   ctx.fillText('Day '+save.dailyStreak+' streak!', W/2, H*.13);
 
   // === 7-Day Calendar Grid ===  
@@ -9009,7 +9002,7 @@ function DEPRECATED_drawDailyReward(dt) {
     fillRR(cx, cy, cw, ch, u*0.2, bgCol, borderCol, isToday?2:1);
 
     // Day number
-    ctx.font='bold '+Math.round(u*0.35)+'px ' + UI_FONT_DISPLAY;
+    ctx.font='bold '+Math.round(u*0.35)+'px monospace';
     ctx.fillStyle = isClaimed?'rgba(100,220,100,0.8)':isToday?'#FFD700':isFuture?'rgba(120,130,150,0.5)':'rgba(200,200,220,0.6)';
     ctx.fillText('Day '+(di+1), cx+cw/2, cy+u*0.3);
 
@@ -9019,14 +9012,14 @@ function DEPRECATED_drawDailyReward(dt) {
     ctx.font = Math.round(iconSize)+'px sans-serif';
     ctx.fillStyle = isFuture && !isClaimed ? 'rgba(255,255,255,0.3)' : '#FFF';
     if (isClaimed) {
-      ctx.font = 'bold '+Math.round(u*0.9)+'px ' + UI_FONT_DISPLAY; ctx.fillStyle='#4caf50';
+      ctx.font = 'bold '+Math.round(u*0.9)+'px monospace'; ctx.fillStyle='#4caf50';
       ctx.fillText('\\u2713', cx+cw/2, cy+ch*0.5);
     } else {
       ctx.fillText(cal.icon, cx+cw/2, cy+ch*0.5);
     }
 
     // Reward label
-    ctx.font = Math.round(u*0.28)+'px ' + UI_FONT_DISPLAY;
+    ctx.font = Math.round(u*0.28)+'px monospace';
     ctx.fillStyle = isClaimed?'rgba(100,200,100,0.5)':isToday?cal.color:isFuture?'rgba(150,150,170,0.4)':'rgba(200,200,220,0.5)';
     ctx.fillText(cal.label, cx+cw/2, cy+ch-u*0.2);
   }
@@ -9047,9 +9040,9 @@ function DEPRECATED_drawDailyReward(dt) {
     ctx.font = Math.round(u*2)+'px sans-serif';
     ctx.fillText(reward.icon, W/2 - u*2.5, boxY+boxH/2+iconB);
     // Label
-    ctx.font = 'bold '+Math.round(u*.8)+'px ' + UI_FONT_DISPLAY; ctx.fillStyle = reward.color;
+    ctx.font = 'bold '+Math.round(u*.8)+'px monospace'; ctx.fillStyle = reward.color;
     ctx.fillText(reward.label, W/2 + u*0.8, boxY+boxH*0.4);
-    ctx.font = Math.round(u*.4)+'px ' + UI_FONT_DISPLAY; ctx.fillStyle='rgba(255,255,255,0.6)';
+    ctx.font = Math.round(u*.4)+'px monospace'; ctx.fillStyle='rgba(255,255,255,0.6)';
     ctx.fillText("Today's reward", W/2 + u*0.8, boxY+boxH*0.7);
   }
 
@@ -9060,14 +9053,14 @@ function DEPRECATED_drawDailyReward(dt) {
     const btnY = boxY + u*3.5;
     ctx.save(); ctx.translate(W/2, btnY+btnH/2); ctx.scale(pulse,pulse);
     fillRR(-btnW/2,-btnH/2,btnW,btnH,u*0.3,'#22AA44','#44DD66',2);
-    ctx.font='bold '+Math.round(u*.9)+'px ' + UI_FONT_DISPLAY; ctx.fillStyle='white';
+    ctx.font='bold '+Math.round(u*.9)+'px monospace'; ctx.fillStyle='white';
     ctx.fillText('CLAIM DAY '+(G.dailyCalendarDay||1)+'!', 0, 0); ctx.restore();
     G._claimBtnY = btnY;
   }
 
   // Already claimed — continue
   if (G.dailyRewardClaimed && t > 0.5) {
-    ctx.font='bold '+Math.round(u*.7)+'px ' + UI_FONT_DISPLAY; ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.font='bold '+Math.round(u*.7)+'px monospace'; ctx.fillStyle='rgba(255,255,255,0.7)';
     ctx.fillText('Reward claimed! Tap to continue', W/2, H*.92);
   }
 }
@@ -9195,7 +9188,7 @@ function drawDailyReward(dt) {
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY;
+    ctx.font = 'bold ' + Math.round(u * 0.3) + 'px monospace';
     ctx.fillStyle = isClaimed ? 'rgba(100,220,100,0.8)' : isToday ? '#FFD700' : isFuture ? 'rgba(120,130,150,0.5)' : 'rgba(200,200,220,0.6)';
     ctx.fillText('DAY ' + (di + 1), cx + cw / 2, cy + u * 0.24);
 
@@ -9204,14 +9197,14 @@ function drawDailyReward(dt) {
     ctx.font = Math.round(iconSize) + 'px sans-serif';
     ctx.fillStyle = isFuture && !isClaimed ? 'rgba(255,255,255,0.3)' : '#FFF';
     if (isClaimed) {
-      ctx.font = 'bold ' + Math.round(u * 0.7) + 'px ' + UI_FONT_DISPLAY;
+      ctx.font = 'bold ' + Math.round(u * 0.7) + 'px monospace';
       ctx.fillStyle = '#4caf50';
       ctx.fillText('\\u2713', cx + cw / 2, cy + ch * 0.5);
     } else {
       ctx.fillText(cal.icon, cx + cw / 2, cy + ch * 0.48);
     }
 
-    ctx.font = Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY;
+    ctx.font = Math.round(u * 0.22) + 'px monospace';
     ctx.fillStyle = isClaimed ? 'rgba(100,200,100,0.5)' : isToday ? cal.color : isFuture ? 'rgba(150,150,170,0.4)' : 'rgba(200,200,220,0.5)';
     drawTextBlock(cal.label, cx + cw / 2, cy + ch - u * 0.36, cw - u * 0.18, u * 0.2, { align: 'center' });
   }
@@ -9227,7 +9220,7 @@ function drawDailyReward(dt) {
     blur: 10
   });
   drawMiniChip(bodyX + pad + u * 0.22, detailY + u * 0.18, u * 3.5, u * 0.48, 'TODAY', {
-    font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace'),
     accent: reward.color,
     textColor: '#F9FCFF'
   });
@@ -9236,10 +9229,10 @@ function drawDailyReward(dt) {
   ctx.font = Math.round(u * 1.05) + 'px sans-serif';
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(reward.icon, bodyX + pad + u * 0.42, detailY + u * 0.82 + Math.sin(t * 3) * u * 0.04);
-  ctx.font = FONTS['b0.56'] || ('bold ' + Math.round(u * 0.56) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b0.56'] || ('bold ' + Math.round(u * 0.56) + 'px monospace');
   ctx.fillStyle = reward.color;
   ctx.fillText(reward.label.toUpperCase(), bodyX + pad + u * 1.62, detailY + u * 0.74);
-  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.3'] || (Math.round(u * 0.3) + 'px monospace');
   ctx.fillStyle = 'rgba(210,222,240,0.7)';
   drawTextBlock(getDailyRewardSummary(reward), bodyX + pad + u * 1.62, detailY + u * 1.22, bodyW - pad * 2 - u * 1.96, u * 0.3, { align: 'left' });
 
@@ -9299,11 +9292,11 @@ function DEPRECATED_drawLevelMap(dt) {
 
   // Title bar
   ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,SAFE_TOP+u*2.2);
-  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1}px monospace\`; ctx.fillStyle='#FFD700';
   ctx.fillText("GRONK'S JOURNEY", W/2, SAFE_TOP+u*1.1);
 
   // Stats bar
-  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.font=\`\${u*.5}px monospace\`; ctx.fillStyle='rgba(255,255,255,0.5)';
   ctx.fillText(\`Best Score: \${save.bestScore}  |  Total Gems: \${save.totalGems}\`, W/2, SAFE_TOP+u*1.9);
 
   // Map area
@@ -9429,13 +9422,13 @@ function DEPRECATED_drawLevelMap(dt) {
     }
 
     // Level number (above node)
-    ctx.font = \`bold \${u*.55}px \${UI_FONT_DISPLAY}\`; ctx.textAlign='center';
+    ctx.font = \`bold \${u*.55}px monospace\`; ctx.textAlign='center';
     ctx.fillStyle = locked ? 'rgba(80,80,100,0.45)' : 'rgba(255,255,255,0.85)';
     ctx.fillText(\`\${lvl}\`, nx, ny-nodeR-u*.5);
 
     // Level name (on the side)
     const nameX = (lvl%2===0) ? nx+nodeR+u*1.8 : nx-nodeR-u*1.8;
-    ctx.font = \`\${u*.48}px \${UI_FONT_DISPLAY}\`;
+    ctx.font = \`\${u*.48}px monospace\`;
     ctx.fillStyle = locked ? 'rgba(80,80,100,0.35)' : (completed ? 'rgba(255,215,0,0.75)' : 'rgba(255,255,255,0.65)');
     ctx.textAlign = (lvl%2===0) ? 'left' : 'right';
     let nameStr = def.name;
@@ -9449,7 +9442,7 @@ function DEPRECATED_drawLevelMap(dt) {
       if (cdRemain > 0) {
         const mins = Math.max(0, Math.floor(cdRemain/60000));
         const secs = Math.max(0, Math.min(59, Math.ceil((cdRemain%60000)/1000)));
-        ctx.font = \`\${u*.4}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='#FF8844';
+        ctx.font = \`\${u*.4}px monospace\`; ctx.fillStyle='#FF8844';
         ctx.fillText(\`\\u23F3 \${mins}:\${secs<10?'0':''}\${secs}\`, nx, ny+nodeR+u*.6);
       }
     }
@@ -9470,7 +9463,7 @@ function DEPRECATED_drawLevelMap(dt) {
     ctx.save(); ctx.translate(W/2, H-SAFE_BOTTOM-u*1.25); ctx.scale(pulse,pulse);
     ctx.fillStyle='#22AA44'; ctx.fillRect(-nlW/2,-nlH/2,nlW,nlH);
     ctx.strokeStyle='#44DD66'; ctx.lineWidth=3; ctx.strokeRect(-nlW/2,-nlH/2,nlW,nlH);
-    ctx.font=\`bold \${u*.8}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
+    ctx.font=\`bold \${u*.8}px monospace\`; ctx.fillStyle='white';
     ctx.fillText(\`NEXT: Level \${G._nextLevelNum}\`, 0, 0); ctx.restore();
   } else {
     if (canResume) {
@@ -9478,7 +9471,7 @@ function DEPRECATED_drawLevelMap(dt) {
       const rx = W*0.3-btnW/2, ry = H-SAFE_BOTTOM-u*1.8;
       ctx.fillStyle='#22AA44'; ctx.fillRect(rx,ry,btnW,btnH);
       ctx.strokeStyle='#44DD66'; ctx.lineWidth=2; ctx.strokeRect(rx,ry,btnW,btnH);
-      ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.6}px monospace\`; ctx.fillStyle='white';
       ctx.fillText(\`Resume L\${save.savedLevel}\`, W*0.3, ry+btnH/2);
     }
 
@@ -9486,7 +9479,7 @@ function DEPRECATED_drawLevelMap(dt) {
     const nrX = (canResume ? W*0.7 : W*0.5)-btnW/2, nrY = H-SAFE_BOTTOM-u*1.8;
     ctx.fillStyle='#2244AA'; ctx.fillRect(nrX,nrY,btnW,btnH);
     ctx.strokeStyle='#4466CC'; ctx.lineWidth=2; ctx.strokeRect(nrX,nrY,btnW,btnH);
-    ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
+    ctx.font=\`bold \${u*.6}px monospace\`; ctx.fillStyle='white';
     ctx.fillText('New Run', canResume ? W*0.7 : W*0.5, nrY+btnH/2);
 
     // Endless Mode button (unlocked after completing all 40 levels)
@@ -9494,14 +9487,14 @@ function DEPRECATED_drawLevelMap(dt) {
       const eW=u*5, eH=u*1, eX=W/2-eW/2, eY=H-SAFE_BOTTOM-u*3.3;
       ctx.fillStyle='rgba(180,50,200,0.3)';ctx.fillRect(eX,eY,eW,eH);
       ctx.strokeStyle='rgba(200,80,220,0.5)';ctx.lineWidth=1;ctx.strokeRect(eX,eY,eW,eH);
-      ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(220,150,255,0.9)';
+      ctx.font=\`bold \${u*.5}px monospace\`;ctx.fillStyle='rgba(220,150,255,0.9)';
       ctx.fillText(\`ENDLESS\${save.endlessBest>0?' (Best: '+save.endlessBest+')':''}\`,W/2,eY+eH/2);
     }
   }
 
   // Scroll hint
   if (maxScroll > 0) {
-    ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='rgba(255,255,255,0.3)';
+    ctx.font=\`\${u*.4}px monospace\`; ctx.fillStyle='rgba(255,255,255,0.3)';
     ctx.fillText('↕ Swipe to scroll', W/2, mapTop+u*.5);
   }
 
@@ -9509,14 +9502,14 @@ function DEPRECATED_drawLevelMap(dt) {
   const shW=u*3.5, shH=u*1, shX=W-shW*2-u*1.2-SAFE_RIGHT, shY=SAFE_TOP+u*.3;
   ctx.fillStyle='rgba(200,160,50,0.3)';ctx.fillRect(shX,shY,shW,shH);
   ctx.strokeStyle='rgba(200,160,50,0.5)';ctx.lineWidth=1;ctx.strokeRect(shX,shY,shW,shH);
-  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,220,100,0.8)';ctx.textAlign='center';
+  ctx.font=\`\${u*.5}px monospace\`;ctx.fillStyle='rgba(255,220,100,0.8)';ctx.textAlign='center';
   ctx.fillText('\\uD83D\\uDCB0 SHOP',shX+shW/2,shY+shH/2);
 
   // Stats button (top-right)
   const stW=u*3.5, stH=u*1, stX=W-stW-u*.5-SAFE_RIGHT, stY=SAFE_TOP+u*.3;
   ctx.fillStyle='rgba(100,100,200,0.3)';ctx.fillRect(stX,stY,stW,stH);
   ctx.strokeStyle='rgba(100,100,200,0.5)';ctx.lineWidth=1;ctx.strokeRect(stX,stY,stW,stH);
-  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
+  ctx.font=\`\${u*.5}px monospace\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
   ctx.fillText('\\uD83D\\uDCCA STATS',stX+stW/2,stY+stH/2);
 
   // Missions dimensions (needed by daily login button positioning)
@@ -9526,7 +9519,7 @@ function DEPRECATED_drawLevelMap(dt) {
   const dlToday = localDateStr(new Date());
   const dlClaimed = save.lastLoginDate === dlToday;
   const dlW=u*3.5, dlH=u*1, dlX=miX+miW+u*2.0, dlY=SAFE_TOP+u*.3;
-  drawButton(dlX,dlY,dlW,dlH,'LOGIN',{fill:dlClaimed?'rgba(60,60,80,0.3)':'rgba(255,100,50,0.3)',stroke:dlClaimed?'rgba(80,80,100,0.3)':'rgba(255,120,60,0.6)',lw:1,textColor:dlClaimed?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)',font:FONTS['b0.4']||('bold '+Math.round(u*0.4)+'px ' + UI_FONT_DISPLAY)});
+  drawButton(dlX,dlY,dlW,dlH,'LOGIN',{fill:dlClaimed?'rgba(60,60,80,0.3)':'rgba(255,100,50,0.3)',stroke:dlClaimed?'rgba(80,80,100,0.3)':'rgba(255,120,60,0.6)',lw:1,textColor:dlClaimed?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)',font:FONTS['b0.4']||('bold '+Math.round(u*0.4)+'px monospace')});
   if(!dlClaimed) drawNotifDot(dlX+dlW-u*0.1, dlY+u*0.1, 1, u);
 
   // Daily Challenge button (bottom of title bar)
@@ -9535,12 +9528,12 @@ function DEPRECATED_drawLevelMap(dt) {
   const dcW=u*6, dcH=u*0.9, dcX=W/2-dcW/2, dcY=SAFE_TOP+u*2.25;
   ctx.fillStyle=dcDone?'rgba(60,60,80,0.3)':'rgba(255,100,50,0.3)';ctx.fillRect(dcX,dcY,dcW,dcH);
   ctx.strokeStyle=dcDone?'rgba(80,80,100,0.3)':'rgba(255,120,60,0.6)';ctx.lineWidth=1;ctx.strokeRect(dcX,dcY,dcW,dcH);
-  ctx.font=\`bold \${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=dcDone?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)';ctx.textAlign='center';
+  ctx.font=\`bold \${u*.4}px monospace\`;ctx.fillStyle=dcDone?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)';ctx.textAlign='center';
   ctx.fillText(dcDone?\`DAILY DONE (\${save.challengeBest})\`:'DAILY CHALLENGE',W/2,dcY+dcH/2);
 
   // Missions button (top-left, right of speaker)
   const unclaimedN = (save.missions&&save.missions.daily||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length + (save.missions&&save.missions.weekly||[]).filter(function(m){return !m.claimed&&(m.progress||0)>=m.target;}).length;
-  drawButton(miX,miY,miW,miH,'MISSIONS',{fill:unclaimedN>0?'rgba(255,180,0,0.35)':'rgba(100,180,100,0.3)',stroke:unclaimedN>0?'rgba(255,200,50,0.6)':'rgba(100,180,100,0.5)',lw:1,textColor:unclaimedN>0?'#FFD700':'rgba(200,255,200,0.8)',font:FONTS['b0.4']||('bold '+Math.round(u*0.4)+'px ' + UI_FONT_DISPLAY)});
+  drawButton(miX,miY,miW,miH,'MISSIONS',{fill:unclaimedN>0?'rgba(255,180,0,0.35)':'rgba(100,180,100,0.3)',stroke:unclaimedN>0?'rgba(255,200,50,0.6)':'rgba(100,180,100,0.5)',lw:1,textColor:unclaimedN>0?'#FFD700':'rgba(200,255,200,0.8)',font:FONTS['b0.4']||('bold '+Math.round(u*0.4)+'px monospace')});
   if(unclaimedN>0) drawNotifDot(miX+miW-u*0.1, miY+u*0.1, unclaimedN, u);
 
   // Settings gear (top-left, right of missions)
@@ -9574,11 +9567,11 @@ function drawGuidedLessonStrip(baseY, compact) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['n0.22'] || (Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.22'] || (Math.round(u * 0.22) + 'px monospace');
   ctx.fillStyle = 'rgba(218,230,250,0.7)';
   ctx.fillText(guide.header, W / 2, panelY + u * 0.2);
 
-  ctx.font = compact ? ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY) : (FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px ' + UI_FONT_DISPLAY));
+  ctx.font = compact ? ('bold ' + Math.round(u * 0.34) + 'px monospace') : (FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace'));
   ctx.fillStyle = guide.completed ? '#7DF09B' : '#F5F7FF';
   ctx.fillText(guide.completed ? 'KEEP THE RHYTHM' : guide.title.toUpperCase(), W / 2, panelY + u * 0.48);
 
@@ -9591,7 +9584,7 @@ function drawGuidedLessonStrip(baseY, compact) {
     const done = !!step.done;
     const current = !done && pending === step;
     drawMiniChip(chipX, chipY, chipW, u * 0.38, (done ? 'OK ' : '') + step.short, {
-      font: compact ? ('bold ' + Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY) : (FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY)),
+      font: compact ? ('bold ' + Math.round(u * 0.22) + 'px monospace') : (FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace')),
       accent: done ? 'rgba(125,240,155,0.28)' : (current ? step.accent : 'rgba(110,126,152,0.16)'),
       textColor: done ? '#DFFFE9' : (current ? '#FFF7E6' : 'rgba(228,236,248,0.78)'),
       top: done ? 'rgba(16,38,26,0.94)' : 'rgba(16,24,40,0.92)',
@@ -9743,14 +9736,14 @@ function LEGACY_drawHUD(dt){
   const statChipW = Math.min(u * (compact ? 2.1 : 2.4), rightW * 0.36);
   const statChipX = rightX + rightW - innerPad - statChipW;
   drawMiniChip(statChipX, hudY + u * 0.24, statChipW, u * 0.48, \`\${Math.max(0, G.continuesLeft)} SAVE\`, {
-    font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px monospace'),
     accent: G.continuesLeft > 0 ? 'rgba(255,143,112,0.28)' : 'rgba(110,118,138,0.18)',
     textColor: G.continuesLeft > 0 ? '#FFD9C9' : 'rgba(182,188,210,0.72)',
     top: G.continuesLeft > 0 ? 'rgba(42,24,20,0.92)' : 'rgba(18,22,34,0.9)',
     bottom: G.continuesLeft > 0 ? 'rgba(20,10,10,0.9)' : 'rgba(10,14,24,0.88)'
   });
   drawMiniChip(rightX + innerPad, hudY + u * 1.16, u * 1.6, u * 0.44, 'GEMS', {
-    font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px monospace'),
     accent: 'rgba(75,181,203,0.14)',
     textColor: 'rgba(208,236,248,0.76)'
   });
@@ -9781,7 +9774,7 @@ function LEGACY_drawHUD(dt){
       accent: comboCol,
       blur: 10
     });
-    ctx.font = FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = comboCol;
@@ -9795,7 +9788,7 @@ function LEGACY_drawHUD(dt){
   }
 
   drawMiniChip(W - SAFE_RIGHT - u * 1.48, hudY + u * 0.12, u * 1.0, u * 0.88, '||', {
-    font: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px monospace'),
     accent: 'rgba(255,255,255,0.12)'
   });
   drawSpeakerIcon(SAFE_LEFT + u * 0.3, hudY + u * 0.14, u * 1.0);
@@ -9820,7 +9813,7 @@ function LEGACY_drawHUD(dt){
       stroke: 'rgba(255,223,120,0.16)',
       accent: 'rgba(255,215,0,0.24)'
     });
-    ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#FFD45E';
@@ -9857,7 +9850,7 @@ function LEGACY_drawHUD(dt){
     if (chipRow > 1) break;
     const chipY = chipBaseY - chipRow * (chipH + u * 0.16);
     drawMiniChip(chipX, chipY, chipW, chipH, chip.label, {
-      font: FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace'),
       accent: chip.accent,
       textColor: '#F5F7FF'
     });
@@ -9867,7 +9860,7 @@ function LEGACY_drawHUD(dt){
   if (_saveFailWarning > 0) {
     _saveFailWarning -= dt;
     ctx.save(); ctx.globalAlpha = clamp(_saveFailWarning, 0, 1);
-    ctx.font = FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace');
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillStyle = '#FF4444';
     ctx.fillText('STORAGE FULL - PROGRESS MAY NOT SAVE', W / 2, H - SAFE_BOTTOM - u * 2);
@@ -9904,12 +9897,12 @@ function drawHUD(dt){
 
   drawPanel(hudX, hudY, hudW, hudH, {
     radius: u * 0.42,
-    top: 'rgba(24,44,74,0.97)',
-    mid: 'rgba(13,24,46,0.94)',
-    bottom: 'rgba(7,13,28,0.92)',
-    stroke: 'rgba(140,200,255,0.22)',
-    accent: 'rgba(86,167,216,0.22)',
-    blur: 22
+    top: 'rgba(22,38,62,0.96)',
+    mid: 'rgba(12,22,38,0.92)',
+    bottom: 'rgba(7,12,24,0.9)',
+    stroke: 'rgba(214,232,255,0.12)',
+    accent: 'rgba(86,167,216,0.16)',
+    blur: 18
   });
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
@@ -9927,25 +9920,25 @@ function drawHUD(dt){
     mid: 'rgba(14,25,44,0.92)',
     bottom: 'rgba(8,14,28,0.9)',
     accent: 'rgba(120,188,255,0.18)',
-    kickerPx: u * 0.2,
-    valuePx: compact ? u * 0.36 : u * 0.42,
-    valueMinPx: u * 0.24,
+    kickerPx: u * 0.26,
+    valuePx: compact ? u * 0.38 : u * 0.44,
+    valueMinPx: u * 0.26,
     valueColor: '#F7FBFF'
   });
   drawFitText('HEALTH', hudX + innerPad, hudY + u * 0.94, leftW - innerPad * 2 - u * 1.08, {
-    basePx: u * 0.2,
-    minPx: u * 0.15,
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(176,194,220,0.62)',
     align: 'left',
     baseline: 'top'
   });
-  drawProgressBar(hudX + innerPad, hudY + u * 1.18, leftW - innerPad * 2, u * 0.22, hpPct, [
+  drawProgressBar(hudX + innerPad, hudY + u * 1.18, leftW - innerPad * 2, u * 0.24, hpPct, [
     \`hsl(\${lerp(8,100,hpPct)},90%,58%)\`,
     \`hsl(\${lerp(18,120,hpPct)},88%,42%)\`
   ]);
-  drawFitText(\`\${Math.ceil(p.hp)}/\${p.maxHP}\`, hudX + leftW - innerPad, hudY + u * 0.94, u * 1.1, {
-    basePx: u * 0.22,
-    minPx: u * 0.15,
+  drawFitText(\`\${Math.ceil(p.hp)}/\${p.maxHP}\`, hudX + leftW - innerPad, hudY + u * 0.94, u * 1.2, {
+    basePx: u * 0.26,
+    minPx: u * 0.18,
     weight: 'bold',
     color: 'rgba(255,255,255,0.82)',
     align: 'right',
@@ -9963,23 +9956,23 @@ function drawHUD(dt){
     blur: 12
   });
   drawFitText('TIME LEFT', centerX + centerW / 2, hudY + u * 0.38, centerW - u * 0.32, {
-    basePx: u * 0.2,
-    minPx: u * 0.15,
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(196,210,234,0.72)'
   });
   ctx.save();
-  ctx.translate(centerX + centerW / 2, hudY + u * 0.8);
+  ctx.translate(centerX + centerW / 2, hudY + u * 0.82);
   ctx.scale(pulse, pulse);
   drawFitText(\`\${Math.ceil(tl)}s\`, 0, 0, centerW - u * 0.36, {
-    basePx: compact ? u * 0.58 : u * 0.72,
-    minPx: u * 0.3,
+    basePx: compact ? u * 0.62 : u * 0.76,
+    minPx: u * 0.34,
     weight: 'bold',
     color: tCol
   });
   ctx.restore();
-  drawFitText(\`\${Math.round(prog * 100)}% CLEAR\`, centerX + centerW / 2, hudY + u * 1.18, centerW - u * 0.32, {
-    basePx: u * 0.19,
-    minPx: u * 0.15,
+  drawFitText(\`\${Math.round(prog * 100)}%\`, centerX + centerW / 2, hudY + u * 1.22, centerW - u * 0.32, {
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(222,232,248,0.74)'
   });
   drawProgressBar(centerX + u * 0.14, hudY + u * 1.36, centerW - u * 0.28, u * 0.16, prog, [
@@ -9997,35 +9990,35 @@ function drawHUD(dt){
     blur: 12
   });
   drawFitText('SCORE', rightX + innerPad, hudY + u * 0.36, rightW * 0.42, {
-    basePx: u * 0.2,
-    minPx: u * 0.15,
+    basePx: u * 0.24,
+    minPx: u * 0.18,
     color: 'rgba(188,204,228,0.72)',
     align: 'left',
     baseline: 'top'
   });
-  drawFitText(\`\${G.runScore}\`, rightX + innerPad, hudY + u * 0.74, rightW - u * 2.05, {
-    basePx: compact ? u * 0.36 : u * 0.46,
-    minPx: u * 0.24,
+  drawFitText(\`\${G.runScore}\`, rightX + innerPad, hudY + u * 0.76, rightW - u * 2.1, {
+    basePx: compact ? u * 0.38 : u * 0.48,
+    minPx: u * 0.26,
     weight: 'bold',
     color: '#FFE58A',
     align: 'left',
     baseline: 'middle'
   });
-  const topChipW = Math.min(u * (compact ? 1.96 : 2.12), rightW * 0.34);
-  drawMiniChip(rightX + rightW - innerPad - topChipW, hudY + u * 0.2, topChipW, u * 0.42, \`\${Math.max(0, G.continuesLeft)} SAVE\`, {
-    font: FONTS['b0.18'] || ('700 ' + Math.round(u * 0.18) + 'px ' + UI_FONT_DISPLAY),
+  const topChipW = Math.min(u * (compact ? 2.1 : 2.3), rightW * 0.36);
+  drawMiniChip(rightX + rightW - innerPad - topChipW, hudY + u * 0.2, topChipW, u * 0.48, \`\${Math.max(0, G.continuesLeft)} SAVE\`, {
+    font: FONTS['b0.22'] || ('700 ' + Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY),
     accent: G.continuesLeft > 0 ? 'rgba(255,143,112,0.24)' : 'rgba(110,118,138,0.18)',
     textColor: G.continuesLeft > 0 ? '#FFD9C9' : 'rgba(182,188,210,0.72)'
   });
-  drawMiniChip(rightX + innerPad, hudY + u * 1.1, u * 1.34, u * 0.38, 'GEMS', {
-    font: FONTS['b0.18'] || ('700 ' + Math.round(u * 0.18) + 'px ' + UI_FONT_DISPLAY),
+  drawMiniChip(rightX + innerPad, hudY + u * 1.1, u * 1.5, u * 0.44, 'GEMS', {
+    font: FONTS['b0.22'] || ('700 ' + Math.round(u * 0.22) + 'px ' + UI_FONT_DISPLAY),
     accent: 'rgba(75,181,203,0.14)',
     textColor: 'rgba(208,236,248,0.76)'
   });
-  drawDiamondShape(rightX + innerPad + u * 0.16, hudY + u * 1.48, u * 0.12, \`hsl(\${G.theme.gemH},100%,68%)\`, 'rgba(255,255,255,0.18)');
-  drawFitText(\`\${G.runGems}\`, rightX + innerPad + u * 0.46, hudY + u * 1.48, u * 1.08, {
-    basePx: u * 0.3,
-    minPx: u * 0.2,
+  drawDiamondShape(rightX + innerPad + u * 0.18, hudY + u * 1.52, u * 0.14, \`hsl(\${G.theme.gemH},100%,68%)\`, 'rgba(255,255,255,0.18)');
+  drawFitText(\`\${G.runGems}\`, rightX + innerPad + u * 0.52, hudY + u * 1.52, u * 1.2, {
+    basePx: u * 0.34,
+    minPx: u * 0.22,
     weight: 'bold',
     color: \`hsl(\${G.theme.gemH},100%,68%)\`,
     align: 'left'
@@ -10036,12 +10029,12 @@ function drawHUD(dt){
     let comboCol = colors[cIdx];
     if (G.combo >= 30) comboCol = \`hsl(\${(G.time * 360) % 360},100%,65%)\`;
     const comboPulse = 1 + G.comboPulse * 0.14;
-    const comboChipW = Math.min(u * (compact ? 2.48 : 2.74), rightW * 0.52);
+    const comboChipW = Math.min(u * (compact ? 2.7 : 3.0), rightW * 0.56);
     ctx.save();
-    ctx.translate(rightX + rightW - innerPad - comboChipW / 2, hudY + u * 1.48);
+    ctx.translate(rightX + rightW - innerPad - comboChipW / 2, hudY + u * 1.52);
     ctx.scale(comboPulse, comboPulse);
-    drawMiniChip(-comboChipW / 2, -u * 0.19, comboChipW, u * 0.38, \`COMBO x\${G.combo}\`, {
-      font: FONTS['b0.19'] || ('700 ' + Math.round(u * 0.19) + 'px ' + UI_FONT_DISPLAY),
+    drawMiniChip(-comboChipW / 2, -u * 0.22, comboChipW, u * 0.44, \`COMBO x\${G.combo}\`, {
+      font: FONTS['b0.23'] || ('700 ' + Math.round(u * 0.23) + 'px ' + UI_FONT_DISPLAY),
       accent: comboCol,
       textColor: '#FFF8EF',
       top: 'rgba(30,20,22,0.92)',
@@ -10187,7 +10180,7 @@ function DEPRECATED_drawMenu(){
   drawMiniChip(spotlightX + spotlightW - u * 2.85, spotlightY + u * 0.26, u * 2.55, u * 0.56, getCharPassiveLabel(hero).toUpperCase(), {
     accent: 'rgba(120,188,255,0.18)',
     textColor: '#EAF4FF',
-    font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY)
+    font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace')
   });
   ctx.save();
   ctx.translate(spotlightX + spotlightW * 0.5, spotlightY + spotlightH * 0.53);
@@ -10264,15 +10257,15 @@ function DEPRECATED_drawMenu(){
   const featureW = u * 3.2;
   drawMiniChip(W / 2 - featureW * 1.65, featureY, featureW, u * 0.72, 'AUTHORED LEVELS', {
     accent: 'rgba(120,200,255,0.18)',
-    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY)
+    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace')
   });
   drawMiniChip(W / 2 - featureW * 0.5, featureY, featureW, u * 0.72, 'DASH COMBAT', {
     accent: 'rgba(125,240,155,0.2)',
-    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY)
+    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace')
   });
   drawMiniChip(W / 2 + featureW * 0.65, featureY, featureW, u * 0.72, 'BOSSES + GEMS', {
     accent: 'rgba(255,140,110,0.2)',
-    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY)
+    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace')
   });
 
   if (save.savedLevel > 1) {
@@ -10283,7 +10276,7 @@ function DEPRECATED_drawMenu(){
     drawMiniChip(W / 2 - u * 5.4, featureY + u * 0.96, u * 10.8, u * 0.72, resumeText, {
       accent: cdRemain > 0 ? 'rgba(255,140,80,0.22)' : 'rgba(90,230,140,0.22)',
       textColor: cdRemain > 0 ? '#FFD7C2' : '#E7FFF0',
-      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY)
+      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace')
     });
   }
 
@@ -10337,18 +10330,18 @@ function DEPRECATED_drawLevelComplete(dt){
   ctx.restore();
 
   drawMiniChip(panelX + innerPad, panelY + u * 1.55, panelW - innerPad * 2, u * 0.68, G.levelDef.name.toUpperCase(), {
-    font: compact ? ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY) : (FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px ' + UI_FONT_DISPLAY)),
+    font: compact ? ('bold ' + Math.round(u * 0.3) + 'px monospace') : (FONTS['b0.36'] || ('bold ' + Math.round(u * 0.36) + 'px monospace')),
     accent: 'rgba(120,210,255,0.22)'
   });
   drawMiniChip(W / 2 - u * 2.3, panelY + u * 2.34, u * 4.6, u * 0.58, \`\${runner.name.toUpperCase()} FINISHED STRONG\`, {
-    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
     accent: lightenColor(runner.col, 12),
     textColor: '#F7FBFF'
   });
 
   if (G.newHigh) {
     drawMiniChip(W / 2 - u * 2.6, panelY + u * 2.96, u * 5.2, u * 0.58, 'NEW BEST SCORE', {
-      font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
       accent: 'rgba(255,110,110,0.26)',
       textColor: '#FFE7E9'
     });
@@ -10400,7 +10393,7 @@ function DEPRECATED_drawLevelComplete(dt){
 
   if (guideCopy) {
     drawMiniChip(panelX + innerPad, guideY, panelW - innerPad * 2, u * 0.64, guideCopy.toUpperCase(), {
-      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace'),
       accent: rewardReadyHint ? 'rgba(255,194,70,0.24)' : 'rgba(120,220,255,0.2)',
       textColor: rewardReadyHint ? '#FFE7B2' : 'rgba(236,244,255,0.82)'
     });
@@ -10534,17 +10527,17 @@ function drawLevelMap(dt) {
   }
 
   drawMiniChip(layout.shopX, layout.shopY, layout.shopW, layout.shopH, 'SHOP', {
-    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
     accent: 'rgba(255,208,90,0.28)',
     textColor: '#FFE27A'
   });
   drawMiniChip(layout.statsX, layout.statsY, layout.statsW, layout.statsH, 'STATS', {
-    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
     accent: 'rgba(120,180,255,0.24)',
     textColor: '#CBE4FF'
   });
   drawMiniChip(layout.settingsX, layout.settingsY, layout.settingsW, layout.settingsH, 'SET', {
-    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
     accent: 'rgba(255,255,255,0.12)',
     textColor: 'rgba(244,247,255,0.76)'
   });
@@ -10604,13 +10597,13 @@ function drawLevelMap(dt) {
   ctx.textBaseline = 'middle';
 
   drawMiniChip(layout.missionX, layout.quickY, layout.missionW, layout.quickH, missionLabel, {
-    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
     accent: unclaimedN>0 ? 'rgba(255,194,70,0.3)' : 'rgba(110,210,130,0.22)',
     textColor: unclaimedN>0 ? '#FFD45E' : '#D8FFE2'
   });
   if(unclaimedN>0) drawNotifDot(layout.missionX + layout.missionW - u*0.1, layout.quickY + u*0.1, unclaimedN, u);
   drawMiniChip(layout.loginX, layout.quickY, layout.loginW, layout.quickH, dlClaimed ? 'LOGIN CLAIMED' : 'DAILY LOGIN', {
-    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
     accent: dlClaimed ? 'rgba(110,120,150,0.18)' : 'rgba(255,126,84,0.32)',
     textColor: dlClaimed ? 'rgba(170,182,205,0.58)' : '#FFC39A'
   });
@@ -10691,7 +10684,7 @@ function drawLevelMap(dt) {
     ctx.lineWidth = isBoss ? 4 : 2.5;
     ctx.stroke();
 
-    ctx.font = FONTS['b0.52'] || ('bold ' + Math.round(u * 0.52) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['b0.52'] || ('bold ' + Math.round(u * 0.52) + 'px monospace');
     ctx.fillStyle = locked ? 'rgba(200,208,230,0.42)' : '#F5F7FF';
     ctx.fillText(\`\${lvl}\`, nx, ny + u * 0.03);
 
@@ -10724,7 +10717,7 @@ function drawLevelMap(dt) {
       const lx = (lvl%2===0) ? nx+nodeR+u*0.45 : nx-nodeR-u*0.45-lw;
       const ly = ny - u * 0.38;
       drawMiniChip(lx, ly, lw, u * 0.72, label, {
-        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px ' + UI_FONT_DISPLAY),
+        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
         accent: locked ? 'rgba(110,120,150,0.18)' : completed ? 'rgba(255,215,90,0.18)' : 'rgba(120,220,255,0.18)',
         textColor: locked ? 'rgba(178,186,206,0.48)' : 'rgba(245,247,255,0.82)',
         radius: u * 0.22,
@@ -10735,12 +10728,12 @@ function drawLevelMap(dt) {
   ctx.restore();
 
   drawMiniChip(layout.runnerX, layout.infoY, layout.runnerW, layout.infoH, 'RUNNER ' + runner.name.toUpperCase(), {
-    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
     accent: lightenColor(runner.col, 12),
     textColor: '#F5F7FF'
   });
   drawMiniChip(layout.progressX, layout.infoY, layout.progressW, layout.infoH, rewardReadyHint ? 'CLAIM BONUS GEMS' : guidedGoal ? ('NEXT ' + guidedGoal.steps.map(function(step) { return step.short; }).join(' + ')) : \`CLEARED \${save.highestLevel}/40\`, {
-    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY),
+    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
     accent: rewardReadyHint ? 'rgba(255,194,70,0.24)' : guidedGoal ? 'rgba(125,240,155,0.2)' : 'rgba(120,188,255,0.24)',
     textColor: rewardReadyHint ? '#FFECC8' : guidedGoal ? '#E7FFF0' : '#D8ECFF'
   });
@@ -10753,7 +10746,7 @@ function drawLevelMap(dt) {
       accent: '#4ED37D',
       labelColor: '#F7FFF8',
       subColor: 'rgba(214,255,226,0.78)',
-      labelFont: FONTS['b0.56'] || ('bold ' + Math.round(u * 0.56) + 'px ' + UI_FONT_DISPLAY)
+      labelFont: FONTS['b0.56'] || ('bold ' + Math.round(u * 0.56) + 'px monospace')
     });
   } else {
     if (canResume) {
@@ -10764,7 +10757,7 @@ function drawLevelMap(dt) {
         accent: '#4ED37D',
         labelColor: '#F7FFF8',
         subColor: 'rgba(214,255,226,0.76)',
-        labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px ' + UI_FONT_DISPLAY)
+        labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px monospace')
       });
     }
     drawActionCard(canResume ? layout.newRunX : layout.centerActionX, layout.actionY, layout.actionW, layout.actionH, guidedGoal ? guidedGoal.cta : 'NEW RUN', guidedGoal ? guidedGoal.mapHint : null, {
@@ -10774,11 +10767,11 @@ function drawLevelMap(dt) {
       accent: '#6288D9',
       labelColor: '#EDF4FF',
       subColor: 'rgba(214,228,255,0.72)',
-      labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px ' + UI_FONT_DISPLAY)
+      labelFont: FONTS['b0.54'] || ('bold ' + Math.round(u * 0.54) + 'px monospace')
     });
     if(save.highestLevel >= 40){
       drawMiniChip(layout.endlessX, layout.endlessY, layout.endlessW, layout.endlessH, \`ENDLESS\${save.endlessBest>0?' '+save.endlessBest:''}\`, {
-        font: FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px ' + UI_FONT_DISPLAY),
+        font: FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace'),
         accent: 'rgba(214,106,255,0.22)',
         textColor: '#EAB8FF'
       });
@@ -10787,7 +10780,7 @@ function drawLevelMap(dt) {
 
   if (maxScroll > 0) {
     drawMiniChip(W/2-u*2.4, mapTop+u*0.2, u*4.8, u*0.62, 'SWIPE TO SCROLL', {
-      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace'),
       accent: 'rgba(255,255,255,0.08)',
       textColor: 'rgba(226,232,244,0.55)',
       blur: 8,
@@ -11043,7 +11036,7 @@ function drawEnemies(){
             ctx.shadowColor="#FF2200";ctx.shadowBlur=15;
             ctx.fillStyle="#FF3311";ctx.beginPath();ctx.moveTo(cw,ch-cth);ctx.lineTo(cw+ctw,ch);ctx.lineTo(cw-ctw,ch);ctx.closePath();ctx.fill();
             ctx.shadowBlur=0;
-            ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1.4)+"px " + UI_FONT_DISPLAY;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",cw,ch-u*.7);
+            ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1.4)+"px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",cw,ch-u*.7);
           }
           break;
         }
@@ -11175,7 +11168,7 @@ function drawEnemies(){
       var tw=u*0.8, th=u*1.4, ty=drawY-u*4;
       ctx.save();ctx.translate(drawX,ty);ctx.scale(1+tPulse*0.2,1+tPulse*0.2);
       ctx.shadowColor="#FF0000";ctx.shadowBlur=10;ctx.fillStyle="#FF2200";ctx.beginPath();ctx.moveTo(0,-th);ctx.lineTo(tw,0);ctx.lineTo(-tw,0);ctx.closePath();ctx.fill();
-      ctx.shadowBlur=0;ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1)+"px " + UI_FONT_DISPLAY;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",0,-u*.4);ctx.restore();
+      ctx.shadowBlur=0;ctx.fillStyle="#FFF";ctx.font="bold "+Math.round(u*1)+"px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("!",0,-u*.4);ctx.restore();
     }
     ctx.globalAlpha=1;
     for(var _pi=0;_pi<en.projectiles.length;_pi++){var pr=en.projectiles[_pi];
@@ -11203,9 +11196,9 @@ function drawMetaBackdrop(themeObj, accent) {
   worldOffset += 72 * DT;
   drawBg(bgTheme);
   var overlay = ctx.createLinearGradient(0, 0, 0, H);
-  overlay.addColorStop(0, 'rgba(4,9,18,0.68)');
-  overlay.addColorStop(0.38, 'rgba(7,15,30,0.48)');
-  overlay.addColorStop(1, 'rgba(2,5,14,0.80)');
+  overlay.addColorStop(0, 'rgba(4,9,18,0.84)');
+  overlay.addColorStop(0.38, 'rgba(7,15,30,0.64)');
+  overlay.addColorStop(1, 'rgba(2,5,14,0.94)');
   ctx.fillStyle = overlay;
   ctx.fillRect(0, 0, W, H);
   if (accent) {
@@ -11294,17 +11287,17 @@ function drawMetaScreenScaffold(opts) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = opts.titleFont || FONTS['b1.08'] || ('bold ' + Math.round(u * 1.08) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = opts.titleFont || FONTS['b1.08'] || ('bold ' + Math.round(u * 1.08) + 'px monospace');
   ctx.fillStyle = opts.titleColor || '#F5D76C';
   ctx.fillText(title, W / 2, headerY + headerH * 0.34);
   if (subtitle) {
-    ctx.font = opts.subtitleFont || FONTS['n0.38'] || (Math.round(u * 0.38) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = opts.subtitleFont || FONTS['n0.38'] || (Math.round(u * 0.38) + 'px monospace');
     ctx.fillStyle = opts.subtitleColor || 'rgba(220,235,255,0.78)';
     drawTextBlock(subtitle, W / 2, headerY + headerH * 0.5, headerW - u * 1.5, u * 0.4, { align: 'center' });
   }
   if (opts.leftChip) {
     drawMiniChip(headerX + u * 0.34, headerY + u * 0.36, opts.leftChip.w || u * 3.6, u * 0.72, opts.leftChip.label, {
-      font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
       accent: opts.leftChip.accent || 'rgba(107,143,185,0.24)',
       textColor: opts.leftChip.textColor || '#EFF6FF'
     });
@@ -11312,7 +11305,7 @@ function drawMetaScreenScaffold(opts) {
   if (opts.rightChip) {
     const chipW = opts.rightChip.w || u * 3.6;
     drawMiniChip(headerX + headerW - chipW - u * 0.34, headerY + u * 0.36, chipW, u * 0.72, opts.rightChip.label, {
-      font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY),
+      font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
       accent: opts.rightChip.accent || 'rgba(75,181,203,0.24)',
       textColor: opts.rightChip.textColor || '#EFFAFF'
     });
@@ -11334,7 +11327,7 @@ function drawMetaFooterButton(layout, label, sub, opts) {
     accent: opts.accent || '#6288D9',
     labelColor: opts.labelColor || '#EDF4FF',
     subColor: opts.subColor || 'rgba(214,228,255,0.74)',
-    labelFont: opts.labelFont || FONTS['b0.52'] || ('bold ' + Math.round(UNIT * 0.52) + 'px ' + UI_FONT_DISPLAY)
+    labelFont: opts.labelFont || FONTS['b0.52'] || ('bold ' + Math.round(UNIT * 0.52) + 'px monospace')
   });
   return { x, y, w, h };
 }
@@ -11384,7 +11377,7 @@ function drawCharSelect() {
   });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['b1.2'] || ('bold ' + Math.round(u * 1.2) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b1.2'] || ('bold ' + Math.round(u * 1.2) + 'px monospace');
   ctx.fillStyle = '#F5D76C';
   drawFitText('CHOOSE YOUR RUNNER', W / 2, headerY + headerH * 0.4, headerW - u * 1.8, {
     basePx: u * 1.34,
@@ -11392,7 +11385,7 @@ function drawCharSelect() {
     weight: 'bold',
     color: '#F5D76C'
   });
-  ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px monospace');
   ctx.fillStyle = 'rgba(220,235,255,0.8)';
   ctx.fillText(firstSession ? 'Start clean: Gronk is the easiest opener. Level 1 teaches jump plus dash.' : 'Each hero reshapes your run with a different passive and stat profile.', W / 2, headerY + headerH * 0.76);
 
@@ -11419,7 +11412,7 @@ function drawCharSelect() {
   drawMiniChip(spotlightX + spotlightW - u * 3.05, spotlightY + u * 0.22, u * 2.75, u * 0.56, getCharPassiveLabel(selChar).toUpperCase(), {
     accent: 'rgba(120,188,255,0.18)',
     textColor: '#EAF4FF',
-    font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px ' + UI_FONT_DISPLAY)
+    font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace')
   });
   ctx.save();
   ctx.translate(spotlightX + u * 1.78, spotlightY + spotlightH * 0.62);
@@ -11506,10 +11499,10 @@ function drawCharSelect() {
       ctx.beginPath();
       ctx.arc(cx, ry + cardH * 0.34, u * 0.72, 0, PI2);
       ctx.fill();
-      ctx.font = FONTS['b0.8'] || ('bold ' + Math.round(u * 0.8) + 'px ' + UI_FONT_DISPLAY);
+      ctx.font = FONTS['b0.8'] || ('bold ' + Math.round(u * 0.8) + 'px monospace');
       ctx.fillStyle = 'rgba(200,208,224,0.85)';
       ctx.fillText('LOCK', cx, ry + cardH * 0.36);
-      ctx.font = FONTS['b0.52'] || ('bold ' + Math.round(u * 0.52) + 'px ' + UI_FONT_DISPLAY);
+      ctx.font = FONTS['b0.52'] || ('bold ' + Math.round(u * 0.52) + 'px monospace');
       ctx.fillStyle = 'rgba(206,214,230,0.82)';
       drawFitText(ch.name.toUpperCase(), cx, ry + cardH * 0.62, cardW - u * 0.4, {
         basePx: u * 0.42,
@@ -11566,7 +11559,7 @@ function drawCharSelect() {
       weight: 'bold',
       color: 'rgba(228,238,252,0.76)'
     });
-    ctx.font = FONTS['n0.26'] || (Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY);
+    ctx.font = FONTS['n0.26'] || (Math.round(u * 0.26) + 'px monospace');
     ctx.fillStyle = 'rgba(220,228,245,0.68)';
     ctx.fillText('HP ' + ch.maxHP + '   SPD ' + ch.spdM.toFixed(2) + 'x', cx, ry + cardH * 0.86);
   }
@@ -11610,7 +11603,7 @@ function drawCharSelect() {
     bottom: 'rgba(24,36,66,0.92)',
     stroke: 'rgba(157,190,255,0.4)',
     accent: '#5E88CF',
-    labelFont: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px ' + UI_FONT_DISPLAY)
+    labelFont: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px monospace')
   });
   G._charSelectLayout.tutorialBtn = { x: htpX, y: htpY, w: htpW, h: htpH };
 
@@ -11620,7 +11613,7 @@ function drawCharSelect() {
     bottom: 'rgba(48,27,74,0.92)',
     stroke: 'rgba(223,173,255,0.38)',
     accent: '#BA78E6',
-    labelFont: FONTS['b0.5'] || ('bold ' + Math.round(u * 0.5) + 'px ' + UI_FONT_DISPLAY)
+    labelFont: FONTS['b0.5'] || ('bold ' + Math.round(u * 0.5) + 'px monospace')
   });
   G._charSelectLayout.skinsBtn = { x: skX, y: skY, w: skW, h: skH };
 
@@ -11675,21 +11668,21 @@ function drawDeathScreen() {
   drawValueCard(panelX + u * 0.28, panelY + u * 1.52, statW, u * 1.08, 'LEVEL', G.levelNum, null, {
     accent: '#7C8DAA',
     valueColor: '#F4F8FF',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.34
+    kickerPx: u * 0.26,
+    valuePx: u * 0.4
   });
   drawValueCard(panelX + u * 0.28 + statW + statGap, panelY + u * 1.52, statW, u * 1.08, 'GEMS', G.runGems + (adDoubleGemsUsed ? ' x2' : ''), null, {
     accent: '#D2A84A',
     valueColor: '#FFF8E8',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.34
+    kickerPx: u * 0.26,
+    valuePx: u * 0.4
   });
   drawValueCard(panelX + u * 0.28 + (statW + statGap) * 2, panelY + u * 1.52, statW, u * 1.08, 'SCORE', G.runScore, 'BEST ' + save.bestScore, {
     accent: '#4E90C9',
     valueColor: '#FFE27A',
-    kickerPx: u * 0.2,
-    valuePx: u * 0.34,
-    subPx: u * 0.2
+    kickerPx: u * 0.26,
+    valuePx: u * 0.4,
+    subPx: u * 0.24
   });
 
   if (showAdContinue && showDoubleGems) {
@@ -11764,7 +11757,7 @@ function drawDeathScreen() {
     bottom: 'rgba(16,36,70,0.92)',
     stroke: 'rgba(134,204,255,0.34)',
     accent: '#4DADE6',
-    labelFont: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px ' + UI_FONT_DISPLAY)
+    labelFont: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px monospace')
   });
   G._deadLayout.shareBtn = { x: W / 2 - halfBtn - u * 0.22, y: bottomY, w: halfBtn, h: actionH * 0.8 };
   drawActionCard(W / 2 + u * 0.22, bottomY, halfBtn, actionH * 0.8, 'LEVEL MAP', null, {
@@ -11773,7 +11766,7 @@ function drawDeathScreen() {
     stroke: 'rgba(221,229,245,0.16)',
     accent: '#8593A8',
     labelColor: '#F1F5FF',
-    labelFont: FONTS['b0.46'] || ('bold ' + Math.round(u * 0.46) + 'px ' + UI_FONT_DISPLAY)
+    labelFont: FONTS['b0.46'] || ('bold ' + Math.round(u * 0.46) + 'px monospace')
   });
   G._deadLayout.mapBtn = { x: W / 2 + u * 0.22, y: bottomY, w: halfBtn, h: actionH * 0.8 };
 }
@@ -11839,7 +11832,7 @@ function drawPausedScreen() {
     accent: '#D85A66',
     labelColor: '#FFF5F6',
     subColor: 'rgba(255,218,220,0.74)',
-    labelFont: FONTS['b0.7'] || ('bold ' + Math.round(u * 0.7) + 'px ' + UI_FONT_DISPLAY)
+    labelFont: FONTS['b0.7'] || ('bold ' + Math.round(u * 0.7) + 'px monospace')
   });
   G._pausedLayout.quitBtn = { x: W / 2 - btnW / 2, y: quitY, w: btnW, h: btnH };
 
@@ -11872,10 +11865,10 @@ function drawTutorial() {
   });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['b1.3'] || ('bold ' + Math.round(u * 1.3) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['b1.3'] || ('bold ' + Math.round(u * 1.3) + 'px monospace');
   ctx.fillStyle = '#F5D76C';
   ctx.fillText('HOW TO PLAY', W / 2, SAFE_TOP + u * 1.1);
-  ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px ' + UI_FONT_DISPLAY);
+  ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px monospace');
   ctx.fillStyle = 'rgba(222,233,250,0.78)';
   ctx.fillText('Read the verbs once, then let the first three levels teach jump, slide, stomp, and dash timing in motion.', W / 2, SAFE_TOP + u * 1.68);
 
@@ -11897,7 +11890,7 @@ function drawTutorial() {
       textColor: '#F7FBFF',
       top: 'rgba(18,30,52,0.95)',
       bottom: 'rgba(10,16,30,0.9)',
-      font: FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px ' + UI_FONT_DISPLAY)
+      font: FONTS['b0.38'] || ('bold ' + Math.round(u * 0.38) + 'px monospace')
     });
     drawFitText(item.text, cardX + u * 2.05, y + cardH * 0.52, cardW - u * 2.4, {
       basePx: u * 0.34,
@@ -12098,11 +12091,11 @@ function drawDebugPanel() {
   const u = UNIT;
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
   ctx.fillRect(0, 0, W, H);
-  ctx.font = \`bold \${u*1.2}px \${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u*1.2}px monospace\`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillStyle = '#FF4444';
   ctx.fillText('DEBUG MODE', W/2, u*0.5);
-  ctx.font = \`\${u*0.55}px \${UI_FONT_DISPLAY}\`;
+  ctx.font = \`\${u*0.55}px monospace\`;
   ctx.fillStyle = '#fff';
   const lines = [
     \`Phase: \${G.phase}  |  Level: \${G.levelNum}\`,
@@ -12125,7 +12118,7 @@ function drawDebugPanel() {
   // Level quick-jump buttons (8 per row)
   const cols = 8, btnS = u*1.1;
   const startY = u*2 + lines.length*u*0.8 + u*0.5;
-  ctx.font = \`bold \${u*0.4}px \${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u*0.4}px monospace\`;
   for (let lv = 1; lv <= 40; lv++) {
     const col = (lv-1)%cols, row = Math.floor((lv-1)/cols);
     const bx = W/2 - (cols*btnS)/2 + col*btnS + btnS/2;
@@ -12140,7 +12133,7 @@ function drawDebugPanel() {
   // Close button
   ctx.fillStyle = '#FF4444';
   ctx.fillRect(W/2-u*2, H-u*2.5, u*4, u*1.5);
-  ctx.fillStyle = '#fff'; ctx.font = \`bold \${u*0.6}px \${UI_FONT_DISPLAY}\`;
+  ctx.fillStyle = '#fff'; ctx.font = \`bold \${u*0.6}px monospace\`;
   ctx.fillText('CLOSE', W/2, H-u*1.75);
 }
 function handleDebugTap(tx, ty) {
@@ -12313,13 +12306,13 @@ function loop(ts){
       // Gronk's Run title - fade in
       const titleA = clamp(lt * 2, 0, 1);
       ctx.globalAlpha = titleA;
-      ctx.font = FONTS['b5'] || \`bold \${UNIT*5}px \${UI_FONT_DISPLAY}\`;
+      ctx.font = FONTS['b5'] || \`bold \${UNIT*5}px monospace\`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = '#1B3A5C';
       ctx.fillText("GRONK'S", W/2+3, H*0.38+3);
       ctx.fillStyle = '#4caf50';
       ctx.fillText("GRONK'S", W/2, H*0.38);
-      ctx.font = FONTS['b3'] || \`bold \${UNIT*3}px \${UI_FONT_DISPLAY}\`;
+      ctx.font = FONTS['b3'] || \`bold \${UNIT*3}px monospace\`;
       ctx.fillStyle = '#FFD700';
       ctx.fillText('RUN', W/2, H*0.52);
       // Loading bar
@@ -12331,7 +12324,7 @@ function loop(ts){
       ctx.fillStyle = '#4caf50';
       ctx.fillRect(barX, barY, barW * prog, barH);
       // Loading text
-      ctx.font = FONTS['n0.5'] || \`\${UNIT*0.5}px \${UI_FONT_DISPLAY}\`;
+      ctx.font = FONTS['n0.5'] || \`\${UNIT*0.5}px monospace\`;
       ctx.fillStyle = '#888';
       ctx.fillText('Loading...', W/2, barY + barH + UNIT);
       ctx.globalAlpha = 1;
@@ -12433,13 +12426,13 @@ function loop(ts){
         ctx.fillStyle='rgba(15,25,50,0.95)';ctx.fillRect(_rx,_ry,_rw,_rh);
         ctx.strokeStyle='#FFD700';ctx.lineWidth=2;ctx.strokeRect(_rx,_ry,_rw,_rh);
         ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.font='bold '+Math.round(_ru*1)+'px ' + UI_FONT_DISPLAY;ctx.fillStyle='#FFD700';
+        ctx.font='bold '+Math.round(_ru*1)+'px monospace';ctx.fillStyle='#FFD700';
         ctx.fillText('Enjoying the game?', W/2, _ry+_rh*.25);
-        ctx.font=Math.round(_ru*.5)+'px ' + UI_FONT_DISPLAY;ctx.fillStyle='rgba(255,255,255,0.7)';
+        ctx.font=Math.round(_ru*.5)+'px monospace';ctx.fillStyle='rgba(255,255,255,0.7)';
         ctx.fillText('Rate us on the Play Store!', W/2, _ry+_rh*.45);
         // Rate button
         ctx.fillStyle='#22AA44';ctx.fillRect(_rx+_ru*.5,_ry+_rh*.65,_rw/2-_ru*.8,_rh*.25);
-        ctx.font='bold '+Math.round(_ru*.55)+'px ' + UI_FONT_DISPLAY;ctx.fillStyle='white';
+        ctx.font='bold '+Math.round(_ru*.55)+'px monospace';ctx.fillStyle='white';
         ctx.fillText('RATE', _rx+_rw*.25, _ry+_rh*.78);
         // Later button
         ctx.fillStyle='rgba(100,100,120,0.5)';ctx.fillRect(_rx+_rw/2+_ru*.3,_ry+_rh*.65,_rw/2-_ru*.8,_rh*.25);

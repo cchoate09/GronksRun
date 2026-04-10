@@ -1732,7 +1732,7 @@ function drawTooltip() {
   const u = UNIT;
   const compact = W < 1100 || H < 560 || (W / H > 1.8);
   const a = tooltipState.alpha;
-  ctx.font = \`bold \${u * (compact ? 0.36 : 0.42)}px ${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u * (compact ? 0.36 : 0.42)}px \${UI_FONT_DISPLAY}\`;
   const tw = ctx.measureText(tooltipState.text).width;
   const padX = u * (compact ? 0.44 : 0.55);
   const bw = Math.min(W - SAFE_LEFT - SAFE_RIGHT - u * 1.3, tw + padX * 2 + u * 1.0);
@@ -1763,7 +1763,7 @@ function drawTooltip() {
     } else if (icon === 'gem') {
       ctx.beginPath(); ctx.moveTo(arrowX, arrowY - u * 0.2 + bounce * 0.5); ctx.lineTo(arrowX + u * 0.12, arrowY - u * 0.04); ctx.lineTo(arrowX + u * 0.12, arrowY + u * 0.08); ctx.lineTo(arrowX, arrowY + u * 0.2); ctx.lineTo(arrowX - u * 0.12, arrowY + u * 0.08); ctx.lineTo(arrowX - u * 0.12, arrowY - u * 0.04); ctx.closePath(); ctx.fill();
     } else if (icon === 'warn') {
-      ctx.font = \`bold \${u * 0.54}px ${UI_FONT_DISPLAY}\`;
+      ctx.font = \`bold \${u * 0.54}px \${UI_FONT_DISPLAY}\`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#FF4444';
@@ -1773,7 +1773,7 @@ function drawTooltip() {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = \`bold \${u * (compact ? 0.42 : 0.48)}px ${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u * (compact ? 0.42 : 0.48)}px \${UI_FONT_DISPLAY}\`;
   ctx.fillStyle = '#FFD700';
   ctx.fillText(tooltipState.text, W / 2, by + bh / 2);
   ctx.restore();
@@ -6427,7 +6427,7 @@ function DEPRECATED_drawHUD(dt){
   const tl=G.timeLeft;
 
   // Level name & number (top center above timer)
-  ctx.font=\`bold \${u*.65}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*.65}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='top';
   ctx.fillStyle='rgba(255,255,255,0.5)';
   ctx.fillText(\`Level \${G.levelNum}: \${G.levelDef.name}\`,W/2,pad*.3);
 
@@ -6436,7 +6436,7 @@ function DEPRECATED_drawHUD(dt){
   const tCol=\`rgb(255,\${Math.floor(lerp(210,30,urg))},\${Math.floor(lerp(90,30,urg))})\`;
   const pf=tl<5?1+Math.sin(G.time*12)*.14:1;
   ctx.save();ctx.translate(W/2,pad+u*1.6);ctx.scale(pf,pf);
-  ctx.font=\`bold \${u*1.6}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font=\`bold \${u*1.6}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`\${Math.ceil(tl)}s\`,3,3);
   ctx.fillStyle=tCol;ctx.fillText(\`\${Math.ceil(tl)}s\`,0,0);ctx.restore();
 
@@ -6449,7 +6449,7 @@ function DEPRECATED_drawHUD(dt){
   pGrd.addColorStop(1,\`hsl(\${lerp(0,120,prog)},75%,40%)\`);
   ctx.fillStyle=pGrd;ctx.fillRect(barX,barY,barW*prog,barH);
   ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.strokeRect(barX,barY,barW,barH);
-  ctx.font=\`\${u*.4}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='top';
   ctx.fillStyle='rgba(255,255,255,0.6)';
   ctx.fillText(\`\${Math.floor(prog*100)}%\`,W/2,barY+barH+2);
 
@@ -6457,7 +6457,7 @@ function DEPRECATED_drawHUD(dt){
   ctx.fillStyle='rgba(0,0,0,0.25)';const spW=u*5.5,spH=u*2.2;
   ctx.beginPath();ctx.moveTo(pad+u*.3,pad);ctx.lineTo(pad+spW,pad);ctx.quadraticCurveTo(pad+spW+u*.3,pad,pad+spW+u*.3,pad+u*.3);ctx.lineTo(pad+spW+u*.3,pad+spH);ctx.quadraticCurveTo(pad+spW+u*.3,pad+spH+u*.3,pad+spW,pad+spH+u*.3);ctx.lineTo(pad+u*.3,pad+spH+u*.3);ctx.quadraticCurveTo(pad,pad+spH+u*.3,pad,pad+spH);ctx.lineTo(pad,pad+u*.3);ctx.quadraticCurveTo(pad,pad,pad+u*.3,pad);ctx.closePath();ctx.fill();
   // Score (top-left)
-  ctx.font=\`bold \${u*.9}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*.9}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='left';ctx.textBaseline='top';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`\${G.runScore}\`,pad+2,pad+2);
   ctx.fillStyle='#FFD700';ctx.fillText(\`\${G.runScore}\`,pad,pad);
 
@@ -6477,20 +6477,20 @@ function DEPRECATED_drawHUD(dt){
   // Border
   ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;ctx.strokeRect(hpBarX,hpBarY,hpBarW,hpBarH);
   // HP text (below bar, larger)
-  ctx.font=\`bold \${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';ctx.textAlign='center';ctx.textBaseline='top';
   ctx.fillText(\`\${p.hp}/\${p.maxHP}\`,hpBarX+hpBarW/2,hpBarY+hpBarH+u*.1);
 
   // Gems panel bg (top-right)
   ctx.fillStyle='rgba(0,0,0,0.25)';const gpW=u*5,gpX=W-pad-SAFE_RIGHT-gpW-u*.3;
   ctx.beginPath();ctx.moveTo(gpX+u*.3,pad);ctx.lineTo(gpX+gpW,pad);ctx.quadraticCurveTo(gpX+gpW+u*.3,pad,gpX+gpW+u*.3,pad+u*.3);ctx.lineTo(gpX+gpW+u*.3,pad+u*2);ctx.quadraticCurveTo(gpX+gpW+u*.3,pad+u*2.3,gpX+gpW,pad+u*2.3);ctx.lineTo(gpX+u*.3,pad+u*2.3);ctx.quadraticCurveTo(gpX,pad+u*2.3,gpX,pad+u*2);ctx.lineTo(gpX,pad+u*.3);ctx.quadraticCurveTo(gpX,pad,gpX+u*.3,pad);ctx.closePath();ctx.fill();
   // Gems (top-right)
-  ctx.font=\`bold \${u*.9}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='right';
+  ctx.font=\`bold \${u*.9}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='right';
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`\\u25C6 \${G.runGems}\`,W-pad-SAFE_RIGHT+2,pad+2);
   ctx.fillStyle=\`hsl(\${G.theme.gemH},100%,65%)\`;ctx.fillText(\`\\u25C6 \${G.runGems}\`,W-pad-SAFE_RIGHT,pad);
 
   // Continues (below gems)
   if(G.continuesLeft>0){
-    ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,170,0,0.7)';
+    ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,170,0,0.7)';
     ctx.fillText(\`\\u2764 x\${G.continuesLeft}\`,W-pad-SAFE_RIGHT,pad+u*1.2);
   }
 
@@ -6498,7 +6498,7 @@ function DEPRECATED_drawHUD(dt){
   if(G.announce&&G.announce.life>0){
     const al=clamp(G.announce.life,0,1),sc=1+(1-al)*.25;
     ctx.save();ctx.translate(W/2,H*.42);ctx.scale(sc,sc);ctx.globalAlpha=al;
-    ctx.font=\`bold \${u*1.6}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=\`bold \${u*1.6}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillText(G.announce.text,3,3);
     ctx.fillStyle='#FFD700';ctx.fillText(G.announce.text,0,0);
     ctx.restore();ctx.globalAlpha=1;
@@ -6506,7 +6506,7 @@ function DEPRECATED_drawHUD(dt){
   }
 
   // Pause icon (top-right, offset left to avoid Android nav buttons)
-  ctx.font=\`bold \${u*1.2}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='right';ctx.textBaseline='top';
+  ctx.font=\`bold \${u*1.2}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='right';ctx.textBaseline='top';
   ctx.fillStyle='rgba(255,255,255,0.5)';
   ctx.fillText('||',W-pad*3.5-SAFE_RIGHT,pad*.5);
 
@@ -6531,7 +6531,7 @@ function DEPRECATED_drawHUD(dt){
     }
     // Size escalation
     var comboSize = Math.min(u*0.65 + G.combo*u*0.005, u*0.95);
-    ctx.font=\`bold \${comboSize}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.font=\`bold \${comboSize}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='left';ctx.textBaseline='top';
     ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillText(\`COMBO x\${G.combo}! (\${G.comboMult}.0x)\`,2,2);
     ctx.fillStyle=comboCol;ctx.fillText(\`COMBO x\${G.combo}! (\${G.comboMult}.0x)\`,0,0);
     ctx.shadowBlur=0;
@@ -6555,9 +6555,9 @@ function DEPRECATED_drawHUD(dt){
     ctx.fillStyle='rgba(255,215,0,0.9)';
     const apW = u*10, apH = u*1.8;
     ctx.fillRect(W/2-apW/2, H*0.15, apW, apH);
-    ctx.font=\`bold \${u*.6}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='#000';ctx.fillText(\`ACHIEVEMENT: \${achievementPopup.name}\`, W/2, H*0.15+apH*0.35);
-    ctx.font=\`\${u*.4}px ${UI_FONT_DISPLAY}\`;ctx.fillText(achievementPopup.desc, W/2, H*0.15+apH*0.7);
+    ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillText(achievementPopup.desc, W/2, H*0.15+apH*0.7);
     ctx.restore();ctx.globalAlpha=1;
   }
   // Character unlock popup
@@ -6568,7 +6568,7 @@ function DEPRECATED_drawHUD(dt){
     ctx.fillStyle='rgba(100,200,255,0.9)';
     const upW = u*10, upH = u*1.5;
     ctx.fillRect(W/2-upW/2, H*0.22, upW, upH);
-    ctx.font=\`bold \${u*.55}px ${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=\`bold \${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='#000';ctx.fillText(\`\${charUnlockPopup.name} UNLOCKED!\`, W/2, H*0.22+upH*0.5);
     ctx.restore();ctx.globalAlpha=1;
   }
@@ -6580,11 +6580,11 @@ function DEPRECATED_drawHUD(dt){
   if(p.magnetTimer>0){ctx.fillText('\\uD83E\\uDDF2',ix,iy);ix+=u*1.2;}
   if(p.extraLife){ctx.fillText('\\u2764\\uFE0F',ix,iy);ix+=u*1.2;}
   if(p.starTimer>0){ctx.fillText('\\u2B50',ix,iy);ix+=u*1.2;}
-  if(p.tinyTimer>0){ctx.fillStyle='#22CCAA';ctx.font=\`\${u*.55}px ${UI_FONT_DISPLAY}\`;ctx.fillText('TINY',ix,iy);ix+=u*1.8;}
-  if(p.speedBoost){ctx.fillStyle='#CC8822';ctx.font=\`\${u*.55}px ${UI_FONT_DISPLAY}\`;ctx.fillText('FAST',ix,iy);ix+=u*1.8;}
-  if(p.doubleScore){ctx.fillStyle='#CC4422';ctx.font=\`\${u*.55}px ${UI_FONT_DISPLAY}\`;ctx.fillText('x2',ix,iy);ix+=u*1.4;}
+  if(p.tinyTimer>0){ctx.fillStyle='#22CCAA';ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillText('TINY',ix,iy);ix+=u*1.8;}
+  if(p.speedBoost){ctx.fillStyle='#CC8822';ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillText('FAST',ix,iy);ix+=u*1.8;}
+  if(p.doubleScore){ctx.fillStyle='#CC4422';ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillText('x2',ix,iy);ix+=u*1.4;}
   // Cooldown indicators
-  ctx.font=\`\${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.textBaseline='bottom';
+  ctx.font=\`\${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.textBaseline='bottom';
   if(p.slideTimer>0){ctx.fillStyle='#88CCFF';ctx.fillText('SLIDE',ix,iy);ix+=u*2;}
   if(p.dashTimer>0){ctx.fillStyle='#88FFCC';ctx.fillText('DASH',ix,iy);ix+=u*2;}
   if(p.parryTimer>0){ctx.fillStyle='#FFFF44';ctx.fillText('PARRY',ix,iy);ix+=u*2.5;}
@@ -6613,7 +6613,7 @@ function LEGACY_drawMenu(){
   var titleScale = 1 + Math.sin(Date.now()*.002)*0.03;
   ctx.save(); ctx.translate(W/2, H*.22 + titleBounce); ctx.scale(titleScale, titleScale);
   ctx.shadowColor='rgba(0,0,0,0.8)';ctx.shadowBlur=15;ctx.shadowOffsetY=4;
-  ctx.font=\`bold \${u*2.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#B8860B';
+  ctx.font=\`bold \${u*2.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#B8860B';
   ctx.fillText("GRONK'S RUN",0,u*0.1);
   ctx.shadowColor='#FFD700';ctx.shadowBlur=25;ctx.shadowOffsetY=0;
   ctx.fillStyle='#FFD700';ctx.fillText("GRONK'S RUN",0,0);
@@ -6621,12 +6621,12 @@ function LEGACY_drawMenu(){
   ctx.fillText("GRONK'S RUN",0,-u*0.08);ctx.globalAlpha=1;
   ctx.restore();
 
-  ctx.font=\`\${u*.85}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88CCFF';
+  ctx.font=\`\${u*.85}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88CCFF';
   ctx.fillText('Prehistoric Survival!',W/2,H*.24+u*2.5);
 
   var tapAlpha = 0.5 + Math.sin(Date.now()*.004)*0.5;
   ctx.globalAlpha = Math.max(0.05, tapAlpha);
-  ctx.font=\`bold \${u*1.1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1.1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
   ctx.shadowColor='rgba(255,255,255,0.5)';ctx.shadowBlur=10;
   ctx.fillText('TAP TO START',W/2,H*.55);
   ctx.shadowBlur=0;ctx.globalAlpha=1;
@@ -6637,22 +6637,22 @@ function LEGACY_drawMenu(){
     if(cdRemain>0){
       const mins=Math.max(0, Math.floor(cdRemain/60000));
       const secs=Math.max(0, Math.min(59, Math.ceil((cdRemain%60000)/1000)));
-      ctx.font=\`\${u*.65}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FF8844';
+      ctx.font=\`\${u*.65}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FF8844';
       ctx.fillText(\`Resume Level \${save.savedLevel} in \${mins}:\${secs<10?'0':''}\${secs}\`,W/2,H*.65);
     } else {
       const pulse=1+Math.sin(Date.now()*.006)*.06;
       ctx.save();ctx.translate(W/2,H*.65);ctx.scale(pulse,pulse);
-      ctx.font=\`bold \${u*.85}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#44DD66';
+      ctx.font=\`bold \${u*.85}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#44DD66';
       ctx.fillText(\`RESUME Level \${save.savedLevel}\`,0,0);ctx.restore();
     }
   }
 
   if(save.highestLevel>0){
-    ctx.font=\`\${u*.7}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+    ctx.font=\`\${u*.7}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
     ctx.fillText(\`Best: Level \${save.highestLevel} | Score: \${save.bestScore}\`,W/2,H*.76);
   }
 
-  ctx.font=\`\${u*.48}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.4)';
+  ctx.font=\`\${u*.48}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.4)';
   ctx.fillText('Swipe Up: Jump \\u2022 Down: Slide/Pound \\u2022 Right: Dash',W/2,H-SAFE_BOTTOM-u*1);
 
   // Speaker icon
@@ -6885,7 +6885,7 @@ function DEPRECATED_drawCharSelect(){
   ctx.fillStyle='#0a1628';ctx.fillRect(0,0,W,H);
 
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.font=\`bold \${u*1.2}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1.2}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText('CHOOSE YOUR CHARACTER',W/2,SAFE_TOP+H*.06);
 
   const cols=3, rows=2, totalChars=CHARS.length;
@@ -6911,13 +6911,13 @@ function DEPRECATED_drawCharSelect(){
       // Silhouette — dark circle + lock icon
       ctx.fillStyle='rgba(60,60,80,0.6)';
       ctx.beginPath();ctx.arc(cx,cy-cardH*.08,u*1.2,0,PI2);ctx.fill();
-      ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.7)';
+      ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.7)';
       ctx.fillText('?',cx,cy-cardH*.06);
       // Name (dimmed)
-      ctx.font=\`bold \${u*.6}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.5)';
+      ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.5)';
       ctx.fillText(ch.name,cx,cy+cardH*.3);
       // Requirement
-      ctx.font=\`\${u*.35}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,180,80,0.7)';
+      ctx.font=\`\${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,180,80,0.7)';
       ctx.fillText(CHAR_UNLOCK[i]?CHAR_UNLOCK[i].req:'???',cx,cy+cardH*.42);
     } else {
       // Character preview
@@ -6928,10 +6928,10 @@ function DEPRECATED_drawCharSelect(){
       ctx.restore();
 
       // Name
-      ctx.font=\`bold \${u*.6}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle=sel?'#FFD700':ch.col;
+      ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=sel?'#FFD700':ch.col;
       ctx.fillText(ch.name,cx,cy+cardH*.3);
       // Desc
-      ctx.font=\`\${u*.38}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.6)';
+      ctx.font=\`\${u*.38}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.6)';
       ctx.fillText(ch.desc,cx,cy+cardH*.42);
     }
   }
@@ -6939,11 +6939,11 @@ function DEPRECATED_drawCharSelect(){
   // Start button
   const btnW=u*5,btnH=u*1.3,btnX=W/2-btnW/2,btnY=H-SAFE_BOTTOM-u*1.5;
   ctx.fillStyle='#FFD700';ctx.fillRect(btnX,btnY,btnW,btnH);
-  ctx.fillStyle='#000';ctx.font=\`bold \${u*.85}px ${UI_FONT_DISPLAY}\`;
+  ctx.fillStyle='#000';ctx.font=\`bold \${u*.85}px \${UI_FONT_DISPLAY}\`;
   ctx.fillText('START!',W/2,btnY+btnH/2);
 
   if(Math.sin(Date.now()*.005)>0){
-    ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.5)';
     ctx.fillText('Tap a character, then START!',W/2,btnY-u*.5);
   }
 
@@ -6951,14 +6951,14 @@ function DEPRECATED_drawCharSelect(){
   const htpW=u*4.5, htpH=u*1, htpX=SAFE_LEFT+u*.5, htpY=H-SAFE_BOTTOM-u*1.5;
   ctx.fillStyle='rgba(100,100,200,0.3)';ctx.fillRect(htpX,htpY,htpW,htpH);
   ctx.strokeStyle='rgba(100,100,200,0.5)';ctx.lineWidth=1;ctx.strokeRect(htpX,htpY,htpW,htpH);
-  ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
+  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
   ctx.fillText('HOW TO PLAY',htpX+htpW/2,htpY+htpH/2);
 
   // SKINS button (bottom, between HOW TO PLAY and speaker)
   const skW=u*3.5, skH=u*1, skX=htpX+htpW+u*.5, skY=H-SAFE_BOTTOM-u*1.5;
   ctx.fillStyle='rgba(200,100,220,0.3)';ctx.fillRect(skX,skY,skW,skH);
   ctx.strokeStyle='rgba(200,100,220,0.5)';ctx.lineWidth=1;ctx.strokeRect(skX,skY,skW,skH);
-  ctx.font=\`bold \${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(230,180,255,0.8)';ctx.textAlign='center';
+  ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(230,180,255,0.8)';ctx.textAlign='center';
   ctx.fillText('SKINS',skX+skW/2,skY+skH/2);
 
   // Speaker icon
@@ -7085,14 +7085,14 @@ function LEGACY_drawLevelComplete(dt){
   const pulse=1+Math.sin(G.levelCompleteTimer*4)*.05;
   ctx.save();ctx.translate(W/2,H*.25);ctx.scale(pulse,pulse);
   ctx.shadowColor='#FFD700';ctx.shadowBlur=20;
-  ctx.font=\`bold \${u*2}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*2}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText('LEVEL COMPLETE!',0,0);ctx.shadowBlur=0;ctx.restore();
 
-  ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88CCFF';
+  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88CCFF';
   ctx.fillText(\`\${G.levelDef.name} cleared!\`,W/2,H*.42);
 
   const timeBonus=Math.floor(G.timeLeft*10);
-  ctx.font=\`\${u*.8}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`\${u*.8}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText(\`Score: \${G.runScore}  |  Time Bonus: +\${timeBonus}\`,W/2,H*.55);
 
   // Star rating display
@@ -7117,7 +7117,7 @@ function LEGACY_drawLevelComplete(dt){
   }
   if(G.levelCompleteTimer>3){
     if(Math.sin(Date.now()*.005)>0){
-      ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
       ctx.fillText('TAP FOR NEXT LEVEL',W/2,H*.75);
     }
   }
@@ -7273,22 +7273,22 @@ function DEPRECATED_drawDeathScreen(){
   ctx.textAlign='center';ctx.textBaseline='middle';
 
   ctx.shadowColor='#FF4444';ctx.shadowBlur=15;
-  ctx.font=\`bold \${u*1.6}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FF4444';
+  ctx.font=\`bold \${u*1.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FF4444';
   ctx.fillText('GAME OVER',W/2,H*.1);ctx.shadowBlur=0;
 
-  ctx.font=\`bold \${u*.9}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*.9}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText(\`Score: \${G.runScore}\`,W/2,H*.2);
 
-  ctx.font=\`\${u*.6}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.7)';
+  ctx.font=\`\${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.7)';
   ctx.fillText(\`Level \${G.levelNum} | Gems: \${G.runGems}\${adDoubleGemsUsed?' (doubled!)':''}\`,W/2,H*.28);
 
   if(G.newHigh){
     const bp=1+Math.sin(Date.now()*.008)*.08;
     ctx.save();ctx.translate(W/2,H*.35);ctx.scale(bp,bp);
-    ctx.font=\`bold \${u*.7}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+    ctx.font=\`bold \${u*.7}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
     ctx.fillText('\\u2B50 NEW BEST! \\u2B50',0,0);ctx.restore();
   } else {
-    ctx.font=\`\${u*.55}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,215,0,0.6)';
+    ctx.font=\`\${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,215,0,0.6)';
     ctx.fillText(\`Best: \${save.bestScore}\`,W/2,H*.35);
   }
 
@@ -7308,18 +7308,18 @@ function DEPRECATED_drawDeathScreen(){
       ctx.save();ctx.translate(lx+adBtnW/2,adY+adBtnH/2);ctx.scale(adPulse,adPulse);
       ctx.fillStyle='rgba(100,50,200,0.6)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
       ctx.strokeStyle='rgba(160,100,255,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-      ctx.font=\`bold \${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
       ctx.fillText('\\uD83C\\uDFAC WATCH AD',0,-u*.2);
-      ctx.font=\`bold \${u*.35}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#DDBBFF';
+      ctx.font=\`bold \${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#DDBBFF';
       ctx.fillText('FREE CONTINUE',0,u*.18);
       ctx.restore();
       // Double Gems button
       ctx.save();ctx.translate(rx+adBtnW/2,adY+adBtnH/2);ctx.scale(adPulse,adPulse);
       ctx.fillStyle='rgba(200,150,0,0.5)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
       ctx.strokeStyle='rgba(255,200,50,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-      ctx.font=\`bold \${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
       ctx.fillText('\\uD83C\\uDFAC WATCH AD',0,-u*.2);
-      ctx.font=\`bold \${u*.35}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFE488';
+      ctx.font=\`bold \${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFE488';
       ctx.fillText('2x GEMS',0,u*.18);
       ctx.restore();
     } else {
@@ -7330,12 +7330,12 @@ function DEPRECATED_drawDeathScreen(){
       if (showAdContinue) {
         ctx.fillStyle='rgba(100,50,200,0.6)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
         ctx.strokeStyle='rgba(160,100,255,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-        ctx.font=\`bold \${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+        ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
         ctx.fillText('\\uD83C\\uDFAC AD: FREE CONTINUE',0,0);
       } else {
         ctx.fillStyle='rgba(200,150,0,0.5)';ctx.fillRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
         ctx.strokeStyle='rgba(255,200,50,0.8)';ctx.lineWidth=2;ctx.strokeRect(-adBtnW/2,-adBtnH/2,adBtnW,adBtnH);
-        ctx.font=\`bold \${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+        ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
         ctx.fillText('\\uD83C\\uDFAC AD: 2x GEMS',0,0);
       }
       ctx.restore();
@@ -7343,7 +7343,7 @@ function DEPRECATED_drawDeathScreen(){
   }
 
   // Progress saved notice
-  ctx.font=\`\${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,170,0,0.7)';
+  ctx.font=\`\${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,170,0,0.7)';
   ctx.fillText(\`Progress saved at Level \${G.levelNum}\`,W/2,H*.55);
 
   // Quick retry + level map buttons
@@ -7353,14 +7353,14 @@ function DEPRECATED_drawDeathScreen(){
   ctx.save();ctx.translate(W/2,H*.58);ctx.scale(pulse,pulse);
   ctx.fillStyle='#22AA44';ctx.fillRect(-btnW/2,-btnH/2,btnW,btnH);
   ctx.strokeStyle='#44DD66';ctx.lineWidth=2;ctx.strokeRect(-btnW/2,-btnH/2,btnW,btnH);
-  ctx.font=\`bold \${u*.75}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*.75}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
   ctx.fillText('RETRY',0,0);ctx.restore();
 
   // New Run button
   const nrY2=H*.72;
   ctx.fillStyle='rgba(100,100,255,0.3)';ctx.fillRect(W/2-btnW/2,nrY2,btnW,btnH*.85);
   ctx.strokeStyle='rgba(150,150,255,0.5)';ctx.lineWidth=1;ctx.strokeRect(W/2-btnW/2,nrY2,btnW,btnH*.85);
-  ctx.font=\`bold \${u*.55}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.9)';
+  ctx.font=\`bold \${u*.55}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.9)';
   ctx.fillText('NEW RUN',W/2,nrY2+btnH*.42);
 
   // Share + Level Map buttons side by side
@@ -7369,7 +7369,7 @@ function DEPRECATED_drawDeathScreen(){
   // Share button
   ctx.fillStyle='rgba(50,150,255,0.2)';ctx.fillRect(W/2-halfBtn-u*.3,bottomY,halfBtn,btnH*.8);
   ctx.strokeStyle='rgba(80,180,255,0.5)';ctx.lineWidth=1;ctx.strokeRect(W/2-halfBtn-u*.3,bottomY,halfBtn,btnH*.8);
-  ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(100,200,255,0.8)';
+  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(100,200,255,0.8)';
   ctx.fillText('SHARE',W/2-halfBtn/2-u*.3,bottomY+btnH*.4);
   // Level Map button
   ctx.fillStyle='rgba(255,255,255,0.1)';ctx.fillRect(W/2+u*.3,bottomY,halfBtn,btnH*.8);
@@ -7444,7 +7444,7 @@ function DEPRECATED_drawPausedScreen(){
   ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';ctx.textBaseline='middle';
 
-  ctx.font=\`bold \${u*2.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*2.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText('PAUSED',W/2,H*.25);
 
   // Resume button (green)
@@ -7452,14 +7452,14 @@ function DEPRECATED_drawPausedScreen(){
   const resY=H*.45;
   ctx.fillStyle='#22AA44';ctx.fillRect(W/2-btnW/2,resY,btnW,btnH);
   ctx.strokeStyle='#44DD66';ctx.lineWidth=2;ctx.strokeRect(W/2-btnW/2,resY,btnW,btnH);
-  ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
   ctx.fillText('RESUME',W/2,resY+btnH/2);
 
   // Quit button (red)
   const quitY=H*.62;
   ctx.fillStyle='rgba(200,50,50,0.8)';ctx.fillRect(W/2-btnW/2,quitY,btnW,btnH);
   ctx.strokeStyle='#FF4444';ctx.lineWidth=2;ctx.strokeRect(W/2-btnW/2,quitY,btnW,btnH);
-  ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
   ctx.fillText('QUIT',W/2,quitY+btnH/2);
 
   // Speaker icon
@@ -7487,7 +7487,7 @@ function DEPRECATED_drawTutorial(){
   ctx.fillStyle='#0a1628';ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';ctx.textBaseline='middle';
 
-  ctx.font=\`bold \${u*1.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText('HOW TO PLAY',W/2,H*.08);
 
   const items=[
@@ -7502,7 +7502,7 @@ function DEPRECATED_drawTutorial(){
     const y=startY+i*spacing;
     ctx.font=\`\${u*1.2}px sans-serif\`;ctx.fillStyle='#88CCFF';
     ctx.fillText(items[i].icon,W*.15,y);
-    ctx.font=\`\${u*.65}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.font=\`\${u*.65}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,255,255,0.85)';
     ctx.textAlign='left';ctx.fillText(items[i].text,W*.25,y);
     ctx.textAlign='center';
   }
@@ -7511,7 +7511,7 @@ function DEPRECATED_drawTutorial(){
   const btnW=u*6, btnH=u*1.5, btnY=H*.85;
   ctx.fillStyle='#22AA44';ctx.fillRect(W/2-btnW/2,btnY,btnW,btnH);
   ctx.strokeStyle='#44DD66';ctx.lineWidth=2;ctx.strokeRect(W/2-btnW/2,btnY,btnW,btnH);
-  ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
   ctx.fillText('GOT IT!',W/2,btnY+btnH/2);
 }
 function handleTutorialTap(){
@@ -8428,10 +8428,10 @@ function drawSkinsScreen(dt) {
   ctx.textAlign='center';ctx.textBaseline='middle';
 
   // Title
-  ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText('SKINS',W/2,u*1);
   // Gem balance
-  ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,220,100,0.8)';
+  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,220,100,0.8)';
   ctx.fillText(\`Gems: \${save.totalGems}\`,W/2,u*1.8);
 
   // Character tabs
@@ -8444,7 +8444,7 @@ function drawSkinsScreen(dt) {
     ctx.fillStyle = sel ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.05)';
     ctx.fillRect(tx,ty,tabW,th);
     if(sel){ctx.strokeStyle='#FFD700';ctx.lineWidth=2;ctx.strokeRect(tx,ty,tabW,th);}
-    ctx.font=\`bold \${u*.4}px ${UI_FONT_DISPLAY}\`;
+    ctx.font=\`bold \${u*.4}px \${UI_FONT_DISPLAY}\`;
     ctx.fillStyle = unlocked ? (sel?'#FFD700':'rgba(255,255,255,0.7)') : 'rgba(100,100,120,0.4)';
     ctx.fillText(CHARS[i].name, tx+tabW/2, ty+th/2);
   }
@@ -8496,21 +8496,21 @@ function drawSkinsScreen(dt) {
 
     // Skin name
     ctx.textAlign='center';
-    ctx.font=\`bold \${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle=active?'#FFD700':owned?'#88FF88':sk.col;
+    ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=active?'#FFD700':owned?'#88FF88':sk.col;
     ctx.fillText(sk.name, cx, cy+cardH*.3);
 
     // Status / price
     if(charLocked){
-      ctx.font=\`\${u*.35}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.5)';
+      ctx.font=\`\${u*.35}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(150,150,170,0.5)';
       ctx.fillText('Unlock char first', cx, cy+cardH*.42);
     } else if(active){
-      ctx.font=\`bold \${u*.4}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+      ctx.font=\`bold \${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
       ctx.fillText('EQUIPPED', cx, cy+cardH*.42);
     } else if(owned){
-      ctx.font=\`\${u*.4}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88FF88';
+      ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#88FF88';
       ctx.fillText('TAP TO EQUIP', cx, cy+cardH*.42);
     } else {
-      ctx.font=\`bold \${u*.45}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle=canBuy?'#FFD700':'rgba(150,150,170,0.5)';
+      ctx.font=\`bold \${u*.45}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=canBuy?'#FFD700':'rgba(150,150,170,0.5)';
       ctx.fillText(\`\${sk.cost}g\`, cx, cy+cardH*.42);
     }
   }
@@ -8518,7 +8518,7 @@ function drawSkinsScreen(dt) {
   // Back button
   const btnW=u*4, btnH=u*1.2, btnY=H-SAFE_BOTTOM-u*1.8;
   fillRR(W/2-btnW/2, btnY, btnW, btnH, u*0.3, 'rgba(100,100,200,0.3)', 'rgba(100,100,200,0.5)', 1);
-  ctx.font=\`bold \${u*.6}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';
+  ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';
   ctx.fillText('BACK', W/2, btnY+btnH/2);
 }
 
@@ -8762,7 +8762,7 @@ function drawSpinWheel(dt) {
   ctx.textAlign='center';ctx.textBaseline='middle';
 
   ctx.shadowColor='#FFD700';ctx.shadowBlur=15;
-  ctx.font=\`bold \${u*1.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
   ctx.fillText('SPIN FOR A POWERUP!',W/2,H*.08);ctx.shadowBlur=0;
 
   // Wheel
@@ -8797,7 +8797,7 @@ function drawSpinWheel(dt) {
     ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=2;ctx.stroke();
     // Label
     ctx.save();ctx.translate(cx,cy);ctx.rotate(startA+segAngle/2);
-    ctx.font=\`bold \${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';ctx.textAlign='center';
+    ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';ctx.textAlign='center';
     ctx.fillText(WHEEL_SEGMENTS[i].label,r*.6,0);
     ctx.restore();
   }
@@ -8812,7 +8812,7 @@ function drawSpinWheel(dt) {
   // Tap to spin or result
   if (!G.wheelSpinning && !G.wheelResult) {
     if(Math.sin(Date.now()*.005)>0){
-      ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
       ctx.fillText('TAP TO SPIN!',W/2,H*.85);
     }
   } else if (G.wheelResult && !G.wheelSpinning) {
@@ -8820,10 +8820,10 @@ function drawSpinWheel(dt) {
     const seg = WHEEL_SEGMENTS.find(s=>s.type===G.wheelResult);
     const rPulse=1+Math.sin(G.wheelTimer*6)*.08;
     ctx.save();ctx.translate(W/2,H*.82);ctx.scale(rPulse,rPulse);
-    ctx.font=\`bold \${u*1.1}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
+    ctx.font=\`bold \${u*1.1}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='#FFD700';
     ctx.fillText(seg?seg.label:'???',0,0);ctx.restore();
     if(G.wheelTimer>1.5 && Math.sin(Date.now()*.005)>0){
-      ctx.font=\`bold \${u*.8}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.8}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='white';
       ctx.fillText('TAP TO CONTINUE',W/2,H*.93);
     }
   }
@@ -9299,11 +9299,11 @@ function DEPRECATED_drawLevelMap(dt) {
 
   // Title bar
   ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,SAFE_TOP+u*2.2);
-  ctx.font=\`bold \${u*1}px ${UI_FONT_DISPLAY}\`; ctx.fillStyle='#FFD700';
+  ctx.font=\`bold \${u*1}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='#FFD700';
   ctx.fillText("GRONK'S JOURNEY", W/2, SAFE_TOP+u*1.1);
 
   // Stats bar
-  ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`; ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='rgba(255,255,255,0.5)';
   ctx.fillText(\`Best Score: \${save.bestScore}  |  Total Gems: \${save.totalGems}\`, W/2, SAFE_TOP+u*1.9);
 
   // Map area
@@ -9429,13 +9429,13 @@ function DEPRECATED_drawLevelMap(dt) {
     }
 
     // Level number (above node)
-    ctx.font = \`bold \${u*.55}px ${UI_FONT_DISPLAY}\`; ctx.textAlign='center';
+    ctx.font = \`bold \${u*.55}px \${UI_FONT_DISPLAY}\`; ctx.textAlign='center';
     ctx.fillStyle = locked ? 'rgba(80,80,100,0.45)' : 'rgba(255,255,255,0.85)';
     ctx.fillText(\`\${lvl}\`, nx, ny-nodeR-u*.5);
 
     // Level name (on the side)
     const nameX = (lvl%2===0) ? nx+nodeR+u*1.8 : nx-nodeR-u*1.8;
-    ctx.font = \`\${u*.48}px ${UI_FONT_DISPLAY}\`;
+    ctx.font = \`\${u*.48}px \${UI_FONT_DISPLAY}\`;
     ctx.fillStyle = locked ? 'rgba(80,80,100,0.35)' : (completed ? 'rgba(255,215,0,0.75)' : 'rgba(255,255,255,0.65)');
     ctx.textAlign = (lvl%2===0) ? 'left' : 'right';
     let nameStr = def.name;
@@ -9449,7 +9449,7 @@ function DEPRECATED_drawLevelMap(dt) {
       if (cdRemain > 0) {
         const mins = Math.max(0, Math.floor(cdRemain/60000));
         const secs = Math.max(0, Math.min(59, Math.ceil((cdRemain%60000)/1000)));
-        ctx.font = \`\${u*.4}px ${UI_FONT_DISPLAY}\`; ctx.fillStyle='#FF8844';
+        ctx.font = \`\${u*.4}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='#FF8844';
         ctx.fillText(\`\\u23F3 \${mins}:\${secs<10?'0':''}\${secs}\`, nx, ny+nodeR+u*.6);
       }
     }
@@ -9470,7 +9470,7 @@ function DEPRECATED_drawLevelMap(dt) {
     ctx.save(); ctx.translate(W/2, H-SAFE_BOTTOM-u*1.25); ctx.scale(pulse,pulse);
     ctx.fillStyle='#22AA44'; ctx.fillRect(-nlW/2,-nlH/2,nlW,nlH);
     ctx.strokeStyle='#44DD66'; ctx.lineWidth=3; ctx.strokeRect(-nlW/2,-nlH/2,nlW,nlH);
-    ctx.font=\`bold \${u*.8}px ${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
+    ctx.font=\`bold \${u*.8}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
     ctx.fillText(\`NEXT: Level \${G._nextLevelNum}\`, 0, 0); ctx.restore();
   } else {
     if (canResume) {
@@ -9478,7 +9478,7 @@ function DEPRECATED_drawLevelMap(dt) {
       const rx = W*0.3-btnW/2, ry = H-SAFE_BOTTOM-u*1.8;
       ctx.fillStyle='#22AA44'; ctx.fillRect(rx,ry,btnW,btnH);
       ctx.strokeStyle='#44DD66'; ctx.lineWidth=2; ctx.strokeRect(rx,ry,btnW,btnH);
-      ctx.font=\`bold \${u*.6}px ${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
+      ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
       ctx.fillText(\`Resume L\${save.savedLevel}\`, W*0.3, ry+btnH/2);
     }
 
@@ -9486,7 +9486,7 @@ function DEPRECATED_drawLevelMap(dt) {
     const nrX = (canResume ? W*0.7 : W*0.5)-btnW/2, nrY = H-SAFE_BOTTOM-u*1.8;
     ctx.fillStyle='#2244AA'; ctx.fillRect(nrX,nrY,btnW,btnH);
     ctx.strokeStyle='#4466CC'; ctx.lineWidth=2; ctx.strokeRect(nrX,nrY,btnW,btnH);
-    ctx.font=\`bold \${u*.6}px ${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
+    ctx.font=\`bold \${u*.6}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='white';
     ctx.fillText('New Run', canResume ? W*0.7 : W*0.5, nrY+btnH/2);
 
     // Endless Mode button (unlocked after completing all 40 levels)
@@ -9494,14 +9494,14 @@ function DEPRECATED_drawLevelMap(dt) {
       const eW=u*5, eH=u*1, eX=W/2-eW/2, eY=H-SAFE_BOTTOM-u*3.3;
       ctx.fillStyle='rgba(180,50,200,0.3)';ctx.fillRect(eX,eY,eW,eH);
       ctx.strokeStyle='rgba(200,80,220,0.5)';ctx.lineWidth=1;ctx.strokeRect(eX,eY,eW,eH);
-      ctx.font=\`bold \${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(220,150,255,0.9)';
+      ctx.font=\`bold \${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(220,150,255,0.9)';
       ctx.fillText(\`ENDLESS\${save.endlessBest>0?' (Best: '+save.endlessBest+')':''}\`,W/2,eY+eH/2);
     }
   }
 
   // Scroll hint
   if (maxScroll > 0) {
-    ctx.font=\`\${u*.4}px ${UI_FONT_DISPLAY}\`; ctx.fillStyle='rgba(255,255,255,0.3)';
+    ctx.font=\`\${u*.4}px \${UI_FONT_DISPLAY}\`; ctx.fillStyle='rgba(255,255,255,0.3)';
     ctx.fillText('↕ Swipe to scroll', W/2, mapTop+u*.5);
   }
 
@@ -9509,14 +9509,14 @@ function DEPRECATED_drawLevelMap(dt) {
   const shW=u*3.5, shH=u*1, shX=W-shW*2-u*1.2-SAFE_RIGHT, shY=SAFE_TOP+u*.3;
   ctx.fillStyle='rgba(200,160,50,0.3)';ctx.fillRect(shX,shY,shW,shH);
   ctx.strokeStyle='rgba(200,160,50,0.5)';ctx.lineWidth=1;ctx.strokeRect(shX,shY,shW,shH);
-  ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,220,100,0.8)';ctx.textAlign='center';
+  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(255,220,100,0.8)';ctx.textAlign='center';
   ctx.fillText('\\uD83D\\uDCB0 SHOP',shX+shW/2,shY+shH/2);
 
   // Stats button (top-right)
   const stW=u*3.5, stH=u*1, stX=W-stW-u*.5-SAFE_RIGHT, stY=SAFE_TOP+u*.3;
   ctx.fillStyle='rgba(100,100,200,0.3)';ctx.fillRect(stX,stY,stW,stH);
   ctx.strokeStyle='rgba(100,100,200,0.5)';ctx.lineWidth=1;ctx.strokeRect(stX,stY,stW,stH);
-  ctx.font=\`\${u*.5}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
+  ctx.font=\`\${u*.5}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle='rgba(200,200,255,0.8)';ctx.textAlign='center';
   ctx.fillText('\\uD83D\\uDCCA STATS',stX+stW/2,stY+stH/2);
 
   // Missions dimensions (needed by daily login button positioning)
@@ -9535,7 +9535,7 @@ function DEPRECATED_drawLevelMap(dt) {
   const dcW=u*6, dcH=u*0.9, dcX=W/2-dcW/2, dcY=SAFE_TOP+u*2.25;
   ctx.fillStyle=dcDone?'rgba(60,60,80,0.3)':'rgba(255,100,50,0.3)';ctx.fillRect(dcX,dcY,dcW,dcH);
   ctx.strokeStyle=dcDone?'rgba(80,80,100,0.3)':'rgba(255,120,60,0.6)';ctx.lineWidth=1;ctx.strokeRect(dcX,dcY,dcW,dcH);
-  ctx.font=\`bold \${u*.4}px ${UI_FONT_DISPLAY}\`;ctx.fillStyle=dcDone?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)';ctx.textAlign='center';
+  ctx.font=\`bold \${u*.4}px \${UI_FONT_DISPLAY}\`;ctx.fillStyle=dcDone?'rgba(150,150,170,0.5)':'rgba(255,180,100,0.9)';ctx.textAlign='center';
   ctx.fillText(dcDone?\`DAILY DONE (\${save.challengeBest})\`:'DAILY CHALLENGE',W/2,dcY+dcH/2);
 
   // Missions button (top-left, right of speaker)
@@ -12098,11 +12098,11 @@ function drawDebugPanel() {
   const u = UNIT;
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
   ctx.fillRect(0, 0, W, H);
-  ctx.font = \`bold \${u*1.2}px ${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u*1.2}px \${UI_FONT_DISPLAY}\`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillStyle = '#FF4444';
   ctx.fillText('DEBUG MODE', W/2, u*0.5);
-  ctx.font = \`\${u*0.55}px ${UI_FONT_DISPLAY}\`;
+  ctx.font = \`\${u*0.55}px \${UI_FONT_DISPLAY}\`;
   ctx.fillStyle = '#fff';
   const lines = [
     \`Phase: \${G.phase}  |  Level: \${G.levelNum}\`,
@@ -12125,7 +12125,7 @@ function drawDebugPanel() {
   // Level quick-jump buttons (8 per row)
   const cols = 8, btnS = u*1.1;
   const startY = u*2 + lines.length*u*0.8 + u*0.5;
-  ctx.font = \`bold \${u*0.4}px ${UI_FONT_DISPLAY}\`;
+  ctx.font = \`bold \${u*0.4}px \${UI_FONT_DISPLAY}\`;
   for (let lv = 1; lv <= 40; lv++) {
     const col = (lv-1)%cols, row = Math.floor((lv-1)/cols);
     const bx = W/2 - (cols*btnS)/2 + col*btnS + btnS/2;
@@ -12140,7 +12140,7 @@ function drawDebugPanel() {
   // Close button
   ctx.fillStyle = '#FF4444';
   ctx.fillRect(W/2-u*2, H-u*2.5, u*4, u*1.5);
-  ctx.fillStyle = '#fff'; ctx.font = \`bold \${u*0.6}px ${UI_FONT_DISPLAY}\`;
+  ctx.fillStyle = '#fff'; ctx.font = \`bold \${u*0.6}px \${UI_FONT_DISPLAY}\`;
   ctx.fillText('CLOSE', W/2, H-u*1.75);
 }
 function handleDebugTap(tx, ty) {
@@ -12313,13 +12313,13 @@ function loop(ts){
       // Gronk's Run title - fade in
       const titleA = clamp(lt * 2, 0, 1);
       ctx.globalAlpha = titleA;
-      ctx.font = FONTS['b5'] || \`bold \${UNIT*5}px ${UI_FONT_DISPLAY}\`;
+      ctx.font = FONTS['b5'] || \`bold \${UNIT*5}px \${UI_FONT_DISPLAY}\`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = '#1B3A5C';
       ctx.fillText("GRONK'S", W/2+3, H*0.38+3);
       ctx.fillStyle = '#4caf50';
       ctx.fillText("GRONK'S", W/2, H*0.38);
-      ctx.font = FONTS['b3'] || \`bold \${UNIT*3}px ${UI_FONT_DISPLAY}\`;
+      ctx.font = FONTS['b3'] || \`bold \${UNIT*3}px \${UI_FONT_DISPLAY}\`;
       ctx.fillStyle = '#FFD700';
       ctx.fillText('RUN', W/2, H*0.52);
       // Loading bar
@@ -12331,7 +12331,7 @@ function loop(ts){
       ctx.fillStyle = '#4caf50';
       ctx.fillRect(barX, barY, barW * prog, barH);
       // Loading text
-      ctx.font = FONTS['n0.5'] || \`\${UNIT*0.5}px ${UI_FONT_DISPLAY}\`;
+      ctx.font = FONTS['n0.5'] || \`\${UNIT*0.5}px \${UI_FONT_DISPLAY}\`;
       ctx.fillStyle = '#888';
       ctx.fillText('Loading...', W/2, barY + barH + UNIT);
       ctx.globalAlpha = 1;

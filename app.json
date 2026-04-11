@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.gronksrun.app",
-      "versionCode": 29,
+      "versionCode": 30,
       "adaptiveIcon": {
         "backgroundColor": "#0a1628",
         "foregroundImage": "./assets/android-icon-foreground.png",

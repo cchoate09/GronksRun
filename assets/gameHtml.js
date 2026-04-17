@@ -9,8 +9,11 @@ const html = `<!DOCTYPE html>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
-  <meta name="theme-color" content="#0d1b3e">
+  <meta name="theme-color" content="#0E0E10">
   <title>Gronk's Run</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Bungee&family=Barlow+Condensed:wght@500;700;900&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -40,9 +43,10 @@ const html = `<!DOCTYPE html>
       display: none;
       position: fixed;
       inset: 0;
-      background: #0d1b3e;
-      color: #fff;
-      font-family: monospace;
+      background: #0E0E10;
+      color: #F4ECD8;
+      font-family: "Alfa Slab One", "Rockwell", Impact, serif;
+      letter-spacing: 0.02em;
       font-size: 5vw;
       text-align: center;
       flex-direction: column;
@@ -339,9 +343,11 @@ const AD_DEATH_INTERVAL = 3;
 const AD_COOLDOWN_MS = 60000;
 
 // Pre-cached font strings (rebuilt on resize to avoid per-frame template literals)
-const UI_FONT_DISPLAY = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
-const UI_FONT_BODY = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
-const UI_FONT_NUMERIC = '"Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif';
+// Woodcut / inked comic identity — Alfa Slab One for display, Barlow Condensed for body.
+// Fallbacks cover offline sessions before Google Fonts cache warms.
+const UI_FONT_DISPLAY = '"Alfa Slab One", "Bungee", "Rockwell", Impact, "Georgia Black", serif';
+const UI_FONT_BODY = '"Barlow Condensed", "Arial Narrow", "Roboto Condensed", Impact, sans-serif';
+const UI_FONT_NUMERIC = '"Alfa Slab One", "Bungee", "Rockwell", Impact, "Georgia Black", serif';
 const FONTS = {};
 function rebuildFonts(u) {
   const sizes = [0.18, 0.2, 0.22, 0.23, 0.24, 0.26, 0.28, 0.3, 0.32, 0.34, 0.36, 0.38, 0.4, 0.42, 0.45, 0.48, 0.5, 0.52, 0.55, 0.58, 0.6, 0.65, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5, 2, 2.5, 3, 4, 5];
@@ -361,6 +367,14 @@ function lightenColor(hex, amount) {
   return '#' + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
 }
 function darkenColor(hex, amount) { return lightenColor(hex, -amount); }
+function hexToRgba(hex, alpha) {
+  hex = (hex || '#FFFFFF').replace('#', '');
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  const r = parseInt(hex.substring(0,2),16) || 255;
+  const g = parseInt(hex.substring(2,4),16) || 255;
+  const b = parseInt(hex.substring(4,6),16) || 255;
+  return \`rgba(\${r},\${g},\${b},\${alpha == null ? 1 : alpha})\`;
+}
 
 // Safe area insets for Android notch/nav bar
 let SAFE_TOP = 0, SAFE_BOTTOM = 0, SAFE_LEFT = 0, SAFE_RIGHT = 0;
@@ -382,6 +396,7 @@ function updateSafeAreas() {
 function resize() {
   // Clear cached canvases on resize to free memory
   _vignetteCache = null;
+  _paperPatternRef = null;
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
   W = canvas.width; H = canvas.height;
@@ -938,9 +953,49 @@ class RNG {
 // ============================================================
 // SAVE DATA
 // ============================================================
+const RUN_PATHS = {
+  assault: {
+    id: 'assault',
+    name: 'Assault',
+    short: 'STRIKE',
+    desc: 'Faster pressure, stronger combo cash-outs, quicker signature charge.',
+    accent: '#F27854',
+    accentDark: '#9C3F24',
+    speedScale: 1.04,
+    scoreScale: 1.12,
+    signatureGain: 1.18,
+  },
+  vault: {
+    id: 'vault',
+    name: 'Vault',
+    short: 'VAULT',
+    desc: 'More gem value, more clock, and better sustain off pickups.',
+    accent: '#45C8D7',
+    accentDark: '#1C778B',
+    startGems: 3,
+    gemTimeBonus: 2,
+    gemScoreBonus: 35,
+    gemHealBonus: 3,
+    signatureGain: 1.08,
+  },
+  guardian: {
+    id: 'guardian',
+    name: 'Guardian',
+    short: 'FORTIFY',
+    desc: 'Higher effective health, lighter damage taken, steadier recoveries.',
+    accent: '#78D08B',
+    accentDark: '#2D7D49',
+    maxHpScale: 1.14,
+    damageScale: 0.82,
+    startShield: true,
+    signatureGain: 1.04,
+  },
+};
+const DEFAULT_RUN_PATH = 'assault';
+
 const save = {
-  highestLevel: 0, bestScore: 0, totalGems: 0, selectedChar: 0,
-  savedLevel: 1, savedScore: 0, savedGems: 0,
+  highestLevel: 0, bestScore: 0, totalGems: 0, selectedChar: 0, selectedPath: DEFAULT_RUN_PATH,
+  savedLevel: 1, savedScore: 0, savedGems: 0, savedChar: 0, savedPath: DEFAULT_RUN_PATH,
   cooldownEnd: 0, // timestamp when cooldown expires (0 = no cooldown)
   lastLoginDate: '', // YYYY-MM-DD of last daily reward
   dailyStreak: 0,    // consecutive daily logins
@@ -965,10 +1020,12 @@ function loadSave() {
     const d = JSON.parse(raw);
     Object.assign(save, d);
     // Type coercion — ensure numeric fields are actually numbers
-    const numKeys = ['highestLevel','bestScore','totalGems','selectedChar','savedLevel','savedScore','savedGems','cooldownEnd','dailyStreak'];
+    const numKeys = ['highestLevel','bestScore','totalGems','selectedChar','savedLevel','savedScore','savedGems','savedChar','cooldownEnd','dailyStreak'];
     for (const k of numKeys) save[k] = Number(save[k]) || 0;
     save.tutorialSeen = !!save.tutorialSeen;
     save.lastLoginDate = save.lastLoginDate || '';
+    save.selectedPath = normalizeRunPathId(save.selectedPath);
+    save.savedPath = normalizeRunPathId(save.savedPath || save.selectedPath);
     // Ensure nested objects have all keys (migration-safe)
     if (!save.stats || typeof save.stats !== 'object') save.stats = {};
     const defStats = { totalRuns:0, totalGems:0, totalScore:0, highestLevel:0, longestRun:0, enemiesDodged:0, obstaclesSmashed:0, dashesUsed:0, slidesUsed:0 };
@@ -995,6 +1052,8 @@ function loadSave() {
     // Character unlock migration
     if (!Array.isArray(save.unlockedChars)) save.unlockedChars = [0];
     if (!save.unlockedChars.includes(0)) save.unlockedChars.unshift(0);
+    save.selectedChar = safeSelectedChar(save.selectedChar);
+    save.savedChar = safeSelectedChar(save.savedChar);
     // Daily calendar migration
     if (!Array.isArray(save.calendarClaimed)) save.calendarClaimed = [];
     save.calendarWeekStart = save.calendarWeekStart || '';
@@ -1023,8 +1082,24 @@ function persistSave() {
   }
 }
 function _hitStop(dur) { G.hitStop = Math.max(G.hitStop || 0, dur); }
-function safeSelectedChar() {
-  return save.unlockedChars.includes(save.selectedChar) ? save.selectedChar : 0;
+function safeSelectedChar(charIdx) {
+  const idx = Number.isFinite(charIdx) ? Math.round(charIdx) : Number(save.selectedChar) || 0;
+  return save.unlockedChars.includes(idx) ? idx : 0;
+}
+function normalizeRunPathId(pathId) {
+  return RUN_PATHS[pathId] ? pathId : DEFAULT_RUN_PATH;
+}
+function getRunPathDef(pathId) {
+  return RUN_PATHS[normalizeRunPathId(pathId)];
+}
+function getSelectedRunPath() {
+  return getRunPathDef(save.selectedPath);
+}
+function getSavedRunPath() {
+  return getRunPathDef(save.savedPath || save.selectedPath);
+}
+function getActiveRunPath() {
+  return getRunPathDef(G.runPath || save.selectedPath);
 }
 
 // ============================================================
@@ -1111,6 +1186,7 @@ function getEventContext(params) {
     endless_mode: !!G.endless,
     level: Number.isFinite(G.levelNum) ? G.levelNum : null,
     phase: G.phase || null,
+    run_path: getActiveRunPath().id,
     run_gems: Number.isFinite(G.runGems) ? G.runGems : 0,
     run_score: Number.isFinite(G.runScore) ? G.runScore : 0,
   };
@@ -1820,6 +1896,44 @@ const CHARS = [
     spdM:0.97, hitM:1, startShield:false, startGems:0, sc:1.05, startMagnet:true, maxHP:90 },
 ];
 
+const CHAR_SIGNATURES = {
+  gronk: { name: 'Titan Break', desc: 'Shockwave clears the lane, restores a shield, and buys time.', accent: '#7EC8EC' },
+  pip: { name: 'Slipstream', desc: 'Slow time slightly and sharpen movement for a clean reposition.', accent: '#F4C542' },
+  bruk: { name: 'Bulwark', desc: 'Instant armor, heal, and a front-loaded impact burst.', accent: '#C08A62' },
+  zara: { name: 'Gemstorm', desc: 'Pull gems in, mint score, and stabilize the clock.', accent: '#D66AF0' },
+  rex: { name: 'Redline', desc: 'Extended speed surge that turns contact into lane control.', accent: '#FF6A4D' },
+  mog: { name: 'Arc Pulse', desc: 'Magnetized star burst that strips projectiles and hits the pack.', accent: '#59D9C8' },
+};
+
+function getCharSignatureProfile(charIdx) {
+  const ch = CHARS[clamp(charIdx || 0, 0, CHARS.length - 1)];
+  return CHAR_SIGNATURES[ch.id] || { name: 'Runner Surge', desc: 'Short burst of control and lane pressure.', accent: ch.col };
+}
+
+function getRunPathLabel(pathId) {
+  return getRunPathDef(pathId).name.toUpperCase();
+}
+
+function getRunPathStartState(pathId) {
+  const path = getRunPathDef(pathId);
+  return { gems: path.startGems || 0 };
+}
+
+function getPlayerSpeedScale(player) {
+  const path = getActiveRunPath();
+  let scale = CHARS[G.selectedChar].spdM * (path.speedScale || 1);
+  if (player && player.speedBoost) scale *= 1.15;
+  if (player && player.perfectLandTimer > 0) scale *= 1.15;
+  if (player && player.signatureBoostTimer > 0) scale *= player.signatureBoostScale || 1.18;
+  if (player && player.dashTimer > 0) scale *= 1.6;
+  return scale;
+}
+
+function grantSignatureCharge(amount, source) {
+  if (!G.player || !G.player.alive || amount <= 0) return;
+  G.player.addSignature(amount, source);
+}
+
 // ============================================================
 // SPRITE SHEET SYSTEM
 // ============================================================
@@ -1833,7 +1947,8 @@ const SPRITE_FRAMES = {
   dash: 12, hit: 13, idleStand: 14, idleBlink: 15
 };
 const SPRITE_RUN_FPS = 5;
-const ENEMY_SPRITES_ENABLED = true;
+const CHAR_SPRITES_ENABLED = false;
+const ENEMY_SPRITES_ENABLED = false;
 
 var SPRITE_B64 = typeof window.SPRITE_B64 === 'object' ? window.SPRITE_B64 : {};
 
@@ -1875,6 +1990,11 @@ function getSpriteBackgroundColor(pixels, width, height) {
 function initCharSprite(charId) {
   var sprite = charSprites[charId];
   if (!sprite || sprite.loading || sprite.ready) return;
+  if (!CHAR_SPRITES_ENABLED) {
+    sprite.blocked = true;
+    sprite.loading = false;
+    return;
+  }
   sprite.loading = true;
 
   var b64 = SPRITE_B64[charId];
@@ -2161,38 +2281,38 @@ function updateSlowMo(dt) {
 // LEVEL DATA  (5 unique themes, then repeat harder)
 // ============================================================
 const LEVEL_DEFS = [
-  { name:'Jungle Ruins',   theme:'JUNGLE',  targetTime:32, enemies:[], paceScale:0.92, enemyDelay:999, focus:'Read the lane and commit' },
-  { name:'Volcanic Caves', theme:'VOLCANO', targetTime:40, enemies:[], paceScale:1.0, enemyDelay:999, focus:'Stay low, then strike down' },
-  { name:'Glacier Peaks',  theme:'GLACIER', targetTime:48, enemies:['SERPENT'], paceScale:1.12, enemyDelay:6.2, focus:'Dash through danger' },
-  { name:'Murky Swamp',    theme:'SWAMP',   targetTime:72, enemies:['TROLL','WITCH','SERPENT','GOLEM'], focus:'Pressure and route reading' },
-  { name:'Sky Sanctuary',  theme:'SKY',     targetTime:82, enemies:['DIVER','WITCH','CHARGER','BOMBER'], focus:'Fast reactions and air space' },
+  { name:'Jungle Ruins',   theme:'JUNGLE',  targetTime:30, enemies:[], paceScale:0.92, enemyDelay:999, focus:'Read the lane and commit' },
+  { name:'Volcanic Caves', theme:'VOLCANO', targetTime:36, enemies:[], paceScale:1.0, enemyDelay:999, focus:'Stay low, then strike down' },
+  { name:'Glacier Peaks',  theme:'GLACIER', targetTime:42, enemies:['SERPENT'], paceScale:1.08, enemyDelay:6.2, focus:'Dash through danger' },
+  { name:'Murky Swamp',    theme:'SWAMP',   targetTime:52, enemies:['TROLL','WITCH','SERPENT','GOLEM'], focus:'Pressure and route reading' },
+  { name:'Sky Sanctuary',  theme:'SKY',     targetTime:58, enemies:['DIVER','WITCH','CHARGER','BOMBER'], focus:'Fast reactions and air space' },
 ];
 
 const LEVEL_OVERRIDES = {
-  4: { name: 'Fenrush Causeway', targetTime: 68, enemies: ['TROLL', 'SERPENT', 'GOLEM'], paceScale: 1.16, enemyDelay: 7.8, focus: 'Staggered swamp pressure' },
-  5: { name: 'Sunspire Approach', targetTime: 76, enemies: ['DIVER', 'CHARGER', 'WITCH'], paceScale: 1.22, enemyDelay: 7.4, focus: 'Air lanes and recovery' },
-  6: { name: 'Canopy Breakout', targetTime: 72, enemies: ['SERPENT', 'TROLL', 'BOMBER'], paceScale: 1.18, enemyDelay: 6.8, focus: 'Reset your line after jumps' },
-  7: { name: 'Magma Relay', targetTime: 78, enemies: ['CHARGER', 'BOMBER', 'GOLEM'], paceScale: 1.24, enemyDelay: 6.4, focus: 'Late slides and hard recommits' },
-  8: { name: 'Crystal Split', targetTime: 82, enemies: ['SERPENT', 'DIVER', 'WITCH'], paceScale: 1.26, enemyDelay: 6.1, focus: 'High-low rhythm under ice' },
-  9: { name: 'Rotfen Crossing', targetTime: 86, enemies: ['TROLL', 'GOLEM', 'WITCH', 'SERPENT'], paceScale: 1.28, enemyDelay: 5.9, focus: 'Center lane control' },
-  10: { name: 'Dawnwind Bastion', targetTime: 90, enemies: ['DIVER', 'CHARGER', 'BOMBER', 'WITCH'], paceScale: 1.32, enemyDelay: 5.7, focus: 'Fast swaps before the boss' },
-  11: { name: 'Thornwake Run', targetTime: 94, enemies: ['SERPENT', 'TROLL', 'CHARGER', 'GOLEM'], paceScale: 1.34, enemyDelay: 5.5, focus: 'Cross-lane pressure under speed' },
-  12: { name: 'Emberfall Causeway', targetTime: 98, enemies: ['CHARGER', 'BOMBER', 'GOLEM', 'WITCH'], paceScale: 1.36, enemyDelay: 5.3, focus: 'Heat lanes and delayed commitment' },
-  13: { name: 'Frostbite Meridian', targetTime: 102, enemies: ['SERPENT', 'DIVER', 'WITCH', 'GOLEM'], paceScale: 1.38, enemyDelay: 5.15, focus: 'Air traps with cold resets' },
-  14: { name: 'Mireglass Hollow', targetTime: 106, enemies: ['TROLL', 'WITCH', 'SERPENT', 'BOMBER'], paceScale: 1.4, enemyDelay: 5.0, focus: 'Crowding and poison rhythm' },
-  15: { name: 'Sunscar Aerie', targetTime: 110, enemies: ['DIVER', 'CHARGER', 'BOMBER', 'WITCH', 'SERPENT'], paceScale: 1.43, enemyDelay: 4.85, focus: 'Sky gauntlet before the crown' },
-  16: { name: 'Ruinroot Gauntlet', targetTime: 114, enemies: ['TROLL', 'GOLEM', 'SERPENT', 'CHARGER'], paceScale: 1.45, enemyDelay: 4.7, focus: 'Relentless jungle pressure' },
-  17: { name: 'Cindervein Descent', targetTime: 118, enemies: ['GOLEM', 'CHARGER', 'BOMBER', 'WITCH'], paceScale: 1.48, enemyDelay: 4.55, focus: 'Punishing recovery windows' },
-  18: { name: 'Shiverfang Span', targetTime: 122, enemies: ['SERPENT', 'DIVER', 'GOLEM', 'WITCH'], paceScale: 1.5, enemyDelay: 4.4, focus: 'Fast high-low reads on ice' },
-  19: { name: 'Blackfen Procession', targetTime: 126, enemies: ['TROLL', 'WITCH', 'SERPENT', 'GOLEM', 'BOMBER'], paceScale: 1.52, enemyDelay: 4.25, focus: 'Layered swamp crowd control' },
-  20: { name: 'Stormkeep Zenith', targetTime: 130, enemies: ['DIVER', 'CHARGER', 'BOMBER', 'WITCH', 'SERPENT', 'GOLEM'], paceScale: 1.56, enemyDelay: 4.1, focus: 'Full-speed sky pressure into the boss' },
+  4: { name: 'Fenrush Causeway', targetTime: 50, enemies: ['TROLL', 'SERPENT', 'GOLEM'], paceScale: 1.12, enemyDelay: 7.8, focus: 'Staggered swamp pressure' },
+  5: { name: 'Sunspire Approach', targetTime: 56, enemies: ['DIVER', 'CHARGER', 'WITCH'], paceScale: 1.16, enemyDelay: 7.4, focus: 'Air lanes and recovery' },
+  6: { name: 'Canopy Breakout', targetTime: 54, enemies: ['SERPENT', 'TROLL', 'BOMBER'], paceScale: 1.14, enemyDelay: 6.8, focus: 'Reset your line after jumps' },
+  7: { name: 'Magma Relay', targetTime: 58, enemies: ['CHARGER', 'BOMBER', 'GOLEM'], paceScale: 1.18, enemyDelay: 6.4, focus: 'Late slides and hard recommits' },
+  8: { name: 'Crystal Split', targetTime: 60, enemies: ['SERPENT', 'DIVER', 'WITCH'], paceScale: 1.2, enemyDelay: 6.1, focus: 'High-low rhythm under ice' },
+  9: { name: 'Rotfen Crossing', targetTime: 62, enemies: ['TROLL', 'GOLEM', 'WITCH', 'SERPENT'], paceScale: 1.22, enemyDelay: 5.9, focus: 'Center lane control' },
+  10: { name: 'Dawnwind Bastion', targetTime: 64, enemies: ['DIVER', 'CHARGER', 'BOMBER', 'WITCH'], paceScale: 1.24, enemyDelay: 5.7, focus: 'Fast swaps before the boss' },
+  11: { name: 'Thornwake Run', targetTime: 66, enemies: ['SERPENT', 'TROLL', 'CHARGER', 'GOLEM'], paceScale: 1.26, enemyDelay: 5.5, focus: 'Cross-lane pressure under speed' },
+  12: { name: 'Emberfall Causeway', targetTime: 68, enemies: ['CHARGER', 'BOMBER', 'GOLEM', 'WITCH'], paceScale: 1.28, enemyDelay: 5.3, focus: 'Heat lanes and delayed commitment' },
+  13: { name: 'Frostbite Meridian', targetTime: 70, enemies: ['SERPENT', 'DIVER', 'WITCH', 'GOLEM'], paceScale: 1.3, enemyDelay: 5.15, focus: 'Air traps with cold resets' },
+  14: { name: 'Mireglass Hollow', targetTime: 72, enemies: ['TROLL', 'WITCH', 'SERPENT', 'BOMBER'], paceScale: 1.32, enemyDelay: 5.0, focus: 'Crowding and poison rhythm' },
+  15: { name: 'Sunscar Aerie', targetTime: 74, enemies: ['DIVER', 'CHARGER', 'BOMBER', 'WITCH', 'SERPENT'], paceScale: 1.34, enemyDelay: 4.85, focus: 'Sky gauntlet before the crown' },
+  16: { name: 'Ruinroot Gauntlet', targetTime: 76, enemies: ['TROLL', 'GOLEM', 'SERPENT', 'CHARGER'], paceScale: 1.36, enemyDelay: 4.7, focus: 'Relentless jungle pressure' },
+  17: { name: 'Cindervein Descent', targetTime: 78, enemies: ['GOLEM', 'CHARGER', 'BOMBER', 'WITCH'], paceScale: 1.38, enemyDelay: 4.55, focus: 'Punishing recovery windows' },
+  18: { name: 'Shiverfang Span', targetTime: 80, enemies: ['SERPENT', 'DIVER', 'GOLEM', 'WITCH'], paceScale: 1.4, enemyDelay: 4.4, focus: 'Fast high-low reads on ice' },
+  19: { name: 'Blackfen Procession', targetTime: 82, enemies: ['TROLL', 'WITCH', 'SERPENT', 'GOLEM', 'BOMBER'], paceScale: 1.42, enemyDelay: 4.25, focus: 'Layered swamp crowd control' },
+  20: { name: 'Stormkeep Zenith', targetTime: 85, enemies: ['DIVER', 'CHARGER', 'BOMBER', 'WITCH', 'SERPENT', 'GOLEM'], paceScale: 1.45, enemyDelay: 4.1, focus: 'Full-speed sky pressure into the boss' },
 };
 
 function getLevelDef(n) {
   const idx = (n - 1) % LEVEL_DEFS.length;
   const d = { ...LEVEL_DEFS[idx], id: n };
   const cycle = Math.floor((n - 1) / LEVEL_DEFS.length);
-  d.targetTime = Math.round(d.targetTime * (1 + cycle * 0.3));
+  d.targetTime = Math.round(d.targetTime * (1 + cycle * 0.12));
   const override = LEVEL_OVERRIDES[n];
   if (cycle > 0 && !override) {
     const numerals = ['II','III','IV','V','VI','VII','VIII','IX','X'];
@@ -2218,7 +2338,9 @@ function getLevelEnemyDelay(levelDef) {
 }
 
 function levelDiffMult(n) {
-  return 1 + (n - 1) * 0.2;
+  // Asymptotic curve: caps near 1.55x instead of climbing to 8x+.
+  // Difficulty identity should come from enemy composition & waves, not raw speed.
+  return 1 + 0.55 * (1 - Math.exp(-Math.max(0, n - 1) / 12));
 }
 
 // ============================================================
@@ -2294,13 +2416,19 @@ const ENV_DECO = {
   },
 };
 
+// Woodcut-inked palette: each biome commits to a dominant saturated accent + bone-paper highlight
+// against near-black ink. Silhouettes read instantly on a 6" phone.
 const THEMES = {
-  JUNGLE:  { sky:['#0a1628','#152844','#1e4a2a'], mt:'#1e3a5a', hl:'#2d5a3a', gt:'#3a7a28', gf:'#4a3020', gemH:185, amb:null },
-  VOLCANO: { sky:['#1a0508','#3a1008','#5a2008'], mt:'#4a1510', hl:'#6a2810', gt:'#bb3300', gf:'#3a1808', gemH:30, amb:'EMBERS' },
-  GLACIER: { sky:['#0a1838','#1a3868','#2a58a0'], mt:'#4a80b0', hl:'#8ac0e0', gt:'#b0dff0', gf:'#5a90b0', gemH:210, amb:'SNOW' },
-  SWAMP:   { sky:['#080f06','#122010','#1a3010'], mt:'#1a3010', hl:'#2a4a18', gt:'#3a5a20', gf:'#1e2e10', gemH:100, amb:'FIREFLY' },
-  SKY:     { sky:['#3a90e0','#5ab0f8','#a0d8ff'], mt:'#d0e8ff', hl:'#e8f4ff', gt:'#a8d8f8', gf:'#7ab8e8', gemH:50, amb:null },
+  JUNGLE:  { sky:['#0E2614','#1C4429','#73C93B'], mt:'#143018', hl:'#4FA12A', gt:'#73C93B', gf:'#0E1A0E', gemH:155, amb:null },
+  VOLCANO: { sky:['#1A0A07','#3D1610','#FF5A1F'], mt:'#2A0E0B', hl:'#D43D10', gt:'#FF5A1F', gf:'#15080A', gemH:22,  amb:'EMBERS' },
+  GLACIER: { sky:['#0A1430','#182A52','#65E8FF'], mt:'#1A2B4A', hl:'#3EB8E8', gt:'#A7ECFF', gf:'#0F1B36', gemH:195, amb:'SNOW' },
+  SWAMP:   { sky:['#0A1008','#162014','#C8FF3C'], mt:'#121A10', hl:'#7BA820', gt:'#C8FF3C', gf:'#0A0E08', gemH:80,  amb:'FIREFLY' },
+  SKY:     { sky:['#2A163F','#4A266B','#FFC14D'], mt:'#34194F', hl:'#A0529B', gt:'#FFC14D', gf:'#1E0F30', gemH:42,  amb:null },
 };
+
+// Inked-comic constants used by the outline pass + paper/halftone overlay.
+const INK_COLOR = '#0E0E10';
+const BONE_COLOR = '#F4ECD8';
 
 function getThemeName(theme) {
   if (theme === THEMES.JUNGLE) return 'JUNGLE';
@@ -2325,11 +2453,12 @@ const DMG = {
 // DIFFICULTY
 // ============================================================
 function getDiff(prog, mult) {
-  const spd = lerp(200, 480, prog) * mult;
-  const oC = lerp(0.25, 0.65, prog);
-  const gC = lerp(0.40, 0.12, prog);
-  const gapC = lerp(0.06, 0.35, prog);
-  return { speed: spd, oChance: oC, gChance: gC, gapChance: gapC, boulder: prog > 0.25, ptero: prog > 0.40 };
+  // Speed ceiling softened. Obstacle chance ramp tamer so high levels don't become walls.
+  const spd = lerp(220, 440, prog) * mult;
+  const oC = lerp(0.22, 0.55, prog);
+  const gC = lerp(0.42, 0.16, prog);
+  const gapC = lerp(0.06, 0.28, prog);
+  return { speed: spd, oChance: oC, gChance: gC, gapChance: gapC, boulder: prog > 0.3, ptero: prog > 0.45 };
 }
 
 // ============================================================
@@ -2819,7 +2948,7 @@ function comboAction(points, type) {
   // Combo tiers: 5→2x, 10→3x, 15→4x, 20→5x, 30→6x, 40→7x, 50+→8x
   const ct = G.combo;
   G.comboMult = ct>=50?8 : ct>=40?7 : ct>=30?6 : ct>=20?5 : 1+Math.min(Math.floor(ct/5),4);
-  const bonus = points * G.comboMult;
+  const bonus = Math.round(points * G.comboMult * (getActiveRunPath().scoreScale || 1));
   G.score += bonus; G.runScore += bonus;
   G.comboPulse = 0.3;
   if (type === 'chain' || type === 'perfect_land' || type === 'perfect_parry' || type === 'destroy_obstacle') {
@@ -4151,7 +4280,11 @@ function spawnEnemy(levelDef) {
 // ============================================================
 class Player {
   constructor(charIdx) {
-    const ch = CHARS[charIdx]; this.ch = ch; this.charIdx = charIdx;
+    const ch = CHARS[charIdx];
+    const runPath = getActiveRunPath();
+    this.ch = ch; this.charIdx = charIdx;
+    this.runPath = runPath;
+    this.signature = getCharSignatureProfile(charIdx);
     this.screenX = PLAYER_SX; this.worldX = PLAYER_SX + worldOffset;
     this.y = GROUND_BASE; this.vy = 0;
     this.onGround = false; this.jumpsLeft = 2;
@@ -4172,10 +4305,161 @@ class Player {
     this.parryTimer = 0; this.parryCD = 0;
     // Wheel powerups
     this.tinyTimer = 0; this.speedBoost = false; this.doubleScore = false;
+    // Signature system
+    this.signatureMeter = 0; this.signatureReady = false;
+    this.signatureBoostTimer = 0; this.signatureBoostScale = 1.18;
+    this.guardAuraTimer = 0; this.guardAuraPulse = 0;
+    this.redlineTimer = 0; this.redlinePulse = 0;
+    this.arcPulseTimer = 0; this.arcPulsePulse = 0;
     // HP system (apply shop +10 HP upgrade)
     const hpBonus = save.shopUpgrades&&save.shopUpgrades.up_hp ? 10 : 0;
-    this.maxHP = ch.maxHP + hpBonus; this.hp = this.maxHP;
+    this.maxHP = Math.round((ch.maxHP + hpBonus) * (runPath.maxHpScale || 1));
+    this.hp = this.maxHP;
     this.hpFlash = 0; // red flash timer when taking damage
+    this.pathDamageScale = runPath.damageScale || 1;
+    if (runPath.startShield) this.shield = true;
+  }
+
+  heal(amount) {
+    if (!amount) return;
+    this.hp = Math.min(this.maxHP, this.hp + amount);
+  }
+
+  addSignature(amount, source) {
+    if (!this.alive || this.signatureReady) return;
+    const gain = amount * (this.runPath.signatureGain || 1);
+    this.signatureMeter = clamp(this.signatureMeter + gain, 0, 100);
+    if (this.signatureMeter >= 100) {
+      this.signatureMeter = 100;
+      this.signatureReady = true;
+      showAnnouncement(this.signature.name.toUpperCase() + ' READY', this.signature.accent);
+      spawnFloatingText(this.screenX, this.y - UNIT * 2.2, 'SIGNATURE READY', this.signature.accent, 0.95);
+      G.comboPulse = 0.35;
+    }
+  }
+
+  spendSignature() {
+    this.signatureMeter = 0;
+    this.signatureReady = false;
+  }
+
+  signaturePulse(range, damage, color, opts) {
+    opts = opts || {};
+    if (!opts.noHitStop) _hitStop(0.04);
+    if (!opts.noTrauma) addTrauma(opts.trauma == null ? 0.14 : opts.trauma);
+    spawnImpactBurst(this.screenX + (opts.frontOnly ? UNIT * 0.9 : 0), this.y - UNIT, color, {
+      count: opts.count || 14,
+      speed: UNIT * (opts.speed || 8.2),
+      size: opts.size || 0.12,
+      noRing: !!opts.noRing,
+      ringColor: opts.ringColor || 'rgba(255,255,255,0.28)'
+    });
+    const minDx = opts.frontOnly ? -UNIT * 0.7 : -range;
+    const maxDx = opts.frontOnly ? range : range;
+    for (const en of activeEnemies) {
+      if (!en.alive || en.dying) continue;
+      const ex = en.sx != null ? en.sx : en.screenX;
+      const ey = en.sy != null ? en.sy : (en.y || this.y - UNIT);
+      const dx = ex - this.screenX;
+      const dy = ey - (this.y - UNIT);
+      if (dx > minDx && dx < maxDx && Math.abs(dy) < UNIT * 3) {
+        en.takeDamage(damage);
+      }
+      if (!opts.clearProjectiles) continue;
+      for (let i = en.projectiles.length - 1; i >= 0; i--) {
+        const pr = en.projectiles[i];
+        const pdx = pr.x - this.screenX;
+        const pdy = pr.y - (this.y - UNIT);
+        if (pdx > minDx && pdx < maxDx && Math.abs(pdy) < range * 0.8) {
+          en.projectiles.splice(i, 1);
+          spawnParts(pr.x, pr.y, 6, { color: color, r: UNIT * 0.18, decay: 2, grav: 180 });
+        }
+      }
+    }
+    if (!opts.breakObstacles) return;
+    for (const chunk of chunks) {
+      const cx = chunk.worldX - worldOffset;
+      for (let i = chunk.obstacles.length - 1; i >= 0; i--) {
+        const obs = chunk.obstacles[i];
+        if (obs.type === 'BOULDER' || obs.type === 'PTERO' || obs.type === 'FIRE_GEYSER') continue;
+        const sx = cx + obs.lx;
+        const dx = sx - this.screenX;
+        if (dx > minDx && dx < maxDx) {
+          chunk.obstacles.splice(i, 1);
+          spawnParts(sx, obs.ly - UNIT * 0.35, 8, { color: color, r: UNIT * 0.16, decay: 1.8, grav: 260 });
+          comboAction(20, 'signature');
+        }
+      }
+    }
+  }
+
+  activateSignature() {
+    if (!this.alive || !this.signatureReady) return false;
+    const sig = this.signature;
+    this.spendSignature();
+    this.iframes = Math.max(this.iframes, 1.1);
+    this.squash = 0.7;
+    this.stretch = 1.45;
+    G.flashColor = hexToRgba(sig.accent, 0.22);
+    G.flashLife = 0.26;
+    G.announce = { text: sig.name.toUpperCase(), life: 1.1 };
+    comboAction(140, 'signature');
+    switch (this.ch.id) {
+      case 'gronk':
+        this.shield = true;
+        this.heal(18);
+        G.timeLeft = Math.min(99, G.timeLeft + 6);
+        this.signaturePulse(UNIT * 4.6, 28, sig.accent, { breakObstacles: true, clearProjectiles: true, count: 18, speed: 10, trauma: 0.2 });
+        break;
+      case 'pip':
+        this.signatureBoostTimer = Math.max(this.signatureBoostTimer, 5.5);
+        this.signatureBoostScale = 1.15;
+        this.dashCD = Math.min(this.dashCD, 0.15);
+        this.slideCD = Math.min(this.slideCD, 0.15);
+        triggerSlowMo(0.55);
+        this.signaturePulse(UNIT * 2.5, 12, sig.accent, { clearProjectiles: true, noHitStop: true, noTrauma: true, count: 10, speed: 7.2 });
+        break;
+      case 'bruk':
+        this.shield = true;
+        this.heal(32);
+        this.guardAuraTimer = 7;
+        this.guardAuraPulse = 0;
+        this.signaturePulse(UNIT * 4.1, 22, sig.accent, { breakObstacles: true, clearProjectiles: true, count: 16, speed: 8.5, trauma: 0.2 });
+        break;
+      case 'zara':
+        this.magnetTimer = Math.max(this.magnetTimer, 10);
+        this.signatureBoostTimer = Math.max(this.signatureBoostTimer, 4.5);
+        this.signatureBoostScale = 1.08;
+        this.heal(20);
+        G.timeLeft = Math.min(99, G.timeLeft + 8);
+        G.runGems += 6;
+        G.gems = G.runGems;
+        G.score += 280;
+        G.runScore += 280;
+        spawnFloatingText(this.screenX, this.y - UNIT * 2.35, '+6 GEMS', '#9AF9FF', 1);
+        spawnFloatingText(this.screenX + UNIT * 0.4, this.y - UNIT * 1.7, '+8s', '#7FDFFF', 0.86);
+        updateMissionProgress('gemsCollected', 6);
+        this.signaturePulse(UNIT * 2.8, 14, sig.accent, { clearProjectiles: true, noHitStop: true, count: 12, speed: 7.4 });
+        checkGemUpgrades(false);
+        break;
+      case 'rex':
+        this.redlineTimer = 6.5;
+        this.redlinePulse = 0;
+        this.signatureBoostTimer = 6.5;
+        this.signatureBoostScale = 1.24;
+        this.dashCD = 0;
+        this.signaturePulse(UNIT * 3.2, 16, sig.accent, { frontOnly: true, clearProjectiles: true, count: 14, speed: 8.4, trauma: 0.18 });
+        break;
+      case 'mog':
+        this.starTimer = Math.max(this.starTimer, 6.5);
+        this.magnetTimer = Math.max(this.magnetTimer, 10);
+        this.arcPulseTimer = 6.5;
+        this.arcPulsePulse = 0;
+        this.signaturePulse(UNIT * 3.6, 20, sig.accent, { clearProjectiles: true, count: 16, speed: 8.8, trauma: 0.18 });
+        break;
+    }
+    sfxDash();
+    return true;
   }
 
   get hitbox() {
@@ -4193,6 +4477,54 @@ class Player {
     if (inp.jp) { this.jumpBuf=7; inp.jp=false; }
     if (this.jumpBuf>0) this.jumpBuf--;
     if (this.coyote>0) this.coyote--;
+    if (this.signatureBoostTimer > 0) this.signatureBoostTimer -= dt;
+    if (this.guardAuraTimer > 0) {
+      this.guardAuraTimer -= dt;
+      this.guardAuraPulse -= dt;
+      if (this.guardAuraPulse <= 0) {
+        this.guardAuraPulse = 0.45;
+        this.heal(1);
+        this.signaturePulse(UNIT * 2.2, 8, this.signature.accent, {
+          clearProjectiles: true,
+          noHitStop: true,
+          noTrauma: true,
+          count: 7,
+          speed: 6.8,
+          noRing: true
+        });
+      }
+    }
+    if (this.redlineTimer > 0) {
+      this.redlineTimer -= dt;
+      this.redlinePulse -= dt;
+      if (this.redlinePulse <= 0) {
+        this.redlinePulse = 0.18;
+        this.signaturePulse(UNIT * 3.1, 10, this.signature.accent, {
+          frontOnly: true,
+          clearProjectiles: true,
+          noHitStop: true,
+          noTrauma: true,
+          count: 6,
+          speed: 7.4,
+          noRing: true
+        });
+      }
+    }
+    if (this.arcPulseTimer > 0) {
+      this.arcPulseTimer -= dt;
+      this.arcPulsePulse -= dt;
+      if (this.arcPulsePulse <= 0) {
+        this.arcPulsePulse = 0.35;
+        this.signaturePulse(UNIT * 3.2, 10, this.signature.accent, {
+          clearProjectiles: true,
+          noHitStop: true,
+          noTrauma: true,
+          count: 8,
+          speed: 7.1,
+          noRing: true
+        });
+      }
+    }
 
     const gY = getGroundAt(this.worldX);
     const wasG = this.onGround;
@@ -4207,6 +4539,7 @@ class Player {
           this.perfectLandTimer = 1.0;
           G.announce = {text:'PERFECT LAND! SPEED BOOST', life:0.8};
           comboAction(50, 'perfect_land');
+          this.addSignature(10, 'perfect_land');
           spawnFloatingText(this.screenX, this.y - UNIT*2, 'FAST!', '#44FF88', 0.8);
           sfxJump(); // extra boost sound
         }
@@ -4233,6 +4566,7 @@ class Player {
         if(this.jumpsLeft===2)this.jumpsLeft=1;
         this.squash=0.55; this.stretch=1.65;
         G.lastAction={type:'jump',time:G.time};
+        this.addSignature(6, 'jump');
         noteGuidedAction('jump');
         sfxJump();
         // Jump dust
@@ -4241,6 +4575,7 @@ class Player {
         this.vy=ch.jumpV2; this.jumpsLeft=0;this.jumpBuf=0;
         G.lastAction={type:'doublejump',time:G.time};
         this.squash=0.6; this.stretch=1.5;
+        this.addSignature(9, 'double_jump');
         sfxJump();
         for(let k=0;k<8;k++)spawnParticle(this.screenX,this.y-UNIT*.5,{color:'#88FFFF',r:UNIT*.18,decay:3,vx:(Math.random()-.5)*220,vy:Math.random()*80,grav:180});
       }
@@ -4260,6 +4595,7 @@ class Player {
     if (this.iframes>0) this.iframes-=dt;
     if (this.magnetTimer>0)this.magnetTimer-=dt;
     if (this.starTimer>0){this.starTimer-=dt;this.starHue=(this.starHue+720*dt)%360;}
+    if (inp.signature) this.activateSignature();
 
     // Perfect Land timer
     if (this.perfectLandTimer > 0) this.perfectLandTimer -= dt;
@@ -4304,6 +4640,7 @@ class Player {
       }
       this.slideTimer=slideDur; this.slideCD=1.0;
       this.squash=2.4; this.stretch=0.25;
+      this.addSignature(7, 'slide');
       spawnDustFX(this.screenX,this.y);
       sfxSlide();
       G.lastAction={type:'slide',time:G.time};
@@ -4329,6 +4666,7 @@ class Player {
       this._meteorChain = (G.lastAction.type==='doublejump' && G.time-G.lastAction.time<2.0);
       if (this._meteorChain) { G.announce={text:'METEOR!',life:0.8}; comboAction(75,'chain'); }
       G.lastAction={type:'pound',time:G.time};
+      this.addSignature(this._meteorChain ? 18 : 14, 'pound');
       noteGuidedAction('pound');
       spawnImpactBurst(this.screenX, this.y - UNIT * 0.2, this._meteorChain ? '#FF6C4D' : '#FFB05C', {
         count: this._meteorChain ? 20 : 14,
@@ -4360,6 +4698,7 @@ class Player {
       this.dashTimer=dashDur; this.dashCD=baseDashCD;
       this.iframes=Math.max(this.iframes,dashDur+0.05);
       this.squash=0.55; this.stretch=1.85;
+      this.addSignature(this._quakeRush ? 16 : 12, 'dash');
       addTrauma(this._quakeRush ? 0.35 : 0.2);
       _hitStop(this._quakeRush ? 0.05 : 0.03);
       spawnImpactBurst(this.screenX + UNIT * 0.4, this.y - UNIT * 0.9, this._quakeRush ? '#FFB35A' : '#8FD8FF', {
@@ -4411,9 +4750,10 @@ class Player {
     if(inp.parry && this.parryTimer<=0 && this.parryCD<=0){
       this.parryTimer=0.3; this.parryCD=1.5;
       this.squash=1.3; this.stretch=0.8;
+      this.addSignature(5, 'parry_windup');
       G.announce={text:'PARRY!',life:0.5};
     }
-    inp.down=false; inp.dash=false; inp.parry=false;
+    inp.down=false; inp.dash=false; inp.parry=false; inp.signature=false;
   }
 
   _poundSmash() {
@@ -4452,7 +4792,7 @@ class Player {
   }
 
   hit(dmgType) {
-    const dmg = DMG[dmgType] || 20;
+    const dmg = Math.round((DMG[dmgType] || 20) * this.pathDamageScale);
     this.takeDamage(dmg, dmgType);
   }
 
@@ -4462,6 +4802,7 @@ class Player {
     // Shield absorbs one full hit
     if (this.shield) {
       this.shield=false; this.iframes=1.5; addTrauma(.5, 0, 0);
+      this.addSignature(8, 'shield_break');
       _hitStop(0.06);
       sfxShield();
       G.flashColor='rgba(100,180,255,0.3)'; G.flashLife=0.25;
@@ -4478,6 +4819,7 @@ class Player {
     }
     // Apply damage
     this.hp -= amount;
+    this.addSignature(clamp(amount * 0.28, 4, 12), 'damage_taken');
     this.hpFlash = 0.4;
     sfxHit();
     comboBreak();
@@ -4527,10 +4869,19 @@ class Player {
 // ============================================================
 // INPUT
 // ============================================================
-const inp = { jp:false, jh:false, tapX:0, tapY:0, tapped:false, down:false, dash:false, parry:false, pressing:false };
+const inp = { jp:false, jh:false, tapX:0, tapY:0, tapped:false, down:false, dash:false, parry:false, signature:false, pressing:false };
 function jDown(){ inp.jp=true; inp.jh=true; }
 function jUp(){ inp.jh=false; }
 function dDown(){ inp.down=true; }
+function getSignatureButtonRect() {
+  if (G._hudLayout && G._hudLayout.signatureBtn) return G._hudLayout.signatureBtn;
+  return { x: W - SAFE_RIGHT - UNIT * 2.6, y: H - SAFE_BOTTOM - UNIT * 2.8, w: UNIT * 2.2, h: UNIT * 2.2 };
+}
+function checkSignatureTap(x, y) {
+  if (G.phase !== 'PLAYING' && G.phase !== 'BOSS_FIGHT') return false;
+  const r = getSignatureButtonRect();
+  return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h;
+}
 
 // Swipe gesture tracking
 let touchSX=0, touchSY=0, touchST=0, touchActive=false;
@@ -4543,6 +4894,7 @@ document.addEventListener('keydown',e=>{
   if(['ArrowDown','KeyS'].includes(e.code)){if(!e.repeat)dDown();e.preventDefault();}
   if(e.code==='ShiftLeft'||e.code==='ShiftRight'){if(!e.repeat)inp.dash=true;e.preventDefault();}
   if(e.code==='KeyQ'||e.code==='KeyA'){if(!e.repeat)inp.parry=true;e.preventDefault();}
+  if(e.code==='KeyE'||e.code==='KeyR'){if(!e.repeat)inp.signature=true;e.preventDefault();}
   if(!e.repeat) inp.tapped=true;
 });
 document.addEventListener('keyup',e=>{if(['Space','ArrowUp','KeyW'].includes(e.code))jUp();});
@@ -4559,8 +4911,21 @@ canvas.addEventListener('touchstart',e=>{
     if(G.phase==='PLAYING' && touchSX > W - UNIT*6.5 && touchSX < W - UNIT*0.5 && touchSY < UNIT*3.5) {
       G.phase='PAUSED'; touchActive=false; inp.jh=false; return;
     }
-    // Speaker icon tap check (top-left area in menus and HUD)
-    if(checkSpeakerTap(touchSX, touchSY, SAFE_LEFT+UNIT*0.3, SAFE_TOP+UNIT*0.15, UNIT*1.2)) {
+    if(checkSignatureTap(touchSX, touchSY)) {
+      inp.signature = true;
+      touchActive = false;
+      inp.jh = false;
+      return;
+    }
+    // Speaker icon tap check (top-left menus; in-HUD location below strip in PLAYING)
+    if(G.phase==='PLAYING') {
+      const _hudEdge = Math.max(10, UNIT*0.3);
+      const _hudStripH = (W < 1320 || H < 760 || (W/H > 1.72)) ? UNIT*1.36 : UNIT*1.48;
+      const _spkY = SAFE_TOP + _hudEdge + _hudStripH + UNIT*0.18;
+      if(checkSpeakerTap(touchSX, touchSY, SAFE_LEFT+UNIT*0.3, _spkY, UNIT*1.0)) {
+        soundMuted = !soundMuted; sfxUITap(); touchActive=false; return;
+      }
+    } else if(checkSpeakerTap(touchSX, touchSY, SAFE_LEFT+UNIT*0.3, SAFE_TOP+UNIT*0.15, UNIT*1.2)) {
       soundMuted = !soundMuted; sfxUITap(); touchActive=false; return;
     }
     // Level map scroll
@@ -4637,6 +5002,10 @@ canvas.addEventListener('mousedown',e=>{
   if(G.phase==='PLAYING' && e.clientX > W - UNIT*6.5 && e.clientX < W - UNIT*0.5 && e.clientY < UNIT*3.5) {
     G.phase='PAUSED'; return;
   }
+  if(checkSignatureTap(e.clientX, e.clientY)) {
+    inp.signature = true;
+    return;
+  }
   // Speaker icon toggle
   if(checkSpeakerTap(e.clientX, e.clientY, SAFE_LEFT+UNIT*0.3, SAFE_TOP+UNIT*0.15, UNIT*1.2)) {
     soundMuted=!soundMuted; sfxUITap(); return;
@@ -4660,7 +5029,7 @@ const G = {
   newHigh:false, lastUpgrade:-1, deathDelay:0,
   _deathTracked:false, _lastDeathCause:null,
   announce:null, flashColor:null, flashLife:0,
-  selectedChar:0, introTimer:0,
+  selectedChar:0, runPath:DEFAULT_RUN_PATH, introTimer:0,
   levelCompleteTimer:0,
   // Continue system
   continuesLeft:2, continuePromptTimer:0,
@@ -4743,8 +5112,10 @@ function startLevel(levelNum) {
   G.time=0; G.timeLeft=28; G.deathDelay=0;
   G._deathTracked=false; G._lastDeathCause=null;
   G.diff=getDiff(0,getLevelOpeningMultiplier(G.levelDef));
-  G.selectedChar = clamp(G.selectedChar || 0, 0, CHARS.length - 1);
-  G.speed=G.diff.speed*CHARS[G.selectedChar].spdM;
+  G.selectedChar = safeSelectedChar(G.selectedChar);
+  G.runPath = normalizeRunPathId(G.runPath || save.selectedPath);
+  const runPath = getActiveRunPath();
+  G.speed=G.diff.speed*CHARS[G.selectedChar].spdM*(runPath.speedScale || 1);
   G.rng=new RNG(Date.now()^(Math.random()*0x7FFFFFFF|0));
   G.announce=null; G.flashColor=null; G.flashLife=0;
   G.guidedChunkCursor = 0;
@@ -4759,7 +5130,9 @@ function startLevel(levelNum) {
   for(const c of chunks) G.levelTotalGems+=c.gems.length;
   G.levelGemsCollected=0;
   G.player=new Player(G.selectedChar);
-  G.gems = CHARS[G.selectedChar].startGems;
+  const openingGems = CHARS[G.selectedChar].startGems + (getRunPathStartState(G.runPath).gems || 0);
+  if (levelNum === 1 && G.runScore === 0 && G.runGems === 0) G.runGems = openingGems;
+  G.gems = Math.max(G.runGems, openingGems);
   G.lastUpgrade=-1;
   // Re-apply gem upgrades from previous levels in this run
   checkGemUpgrades(true);
@@ -4784,6 +5157,8 @@ function startLevel(levelNum) {
 }
 
 function startNewRun() {
+  G.selectedChar = safeSelectedChar(G.selectedChar);
+  G.runPath = normalizeRunPathId(G.runPath || save.selectedPath);
   G.endless=false; G.dailyChallenge=false;
   G.runGems=0; G.runScore=0; G.gems=0;
   G.newHigh=false; G.lastUpgrade=-1;
@@ -4817,6 +5192,8 @@ function startDailyChallenge() {
   const dayIdx = Math.floor(Date.now()/(24*60*60*1000));
   const charIdx = dayIdx % CHARS.length;
   G.selectedChar = charIdx;
+  const dailyPaths = ['assault', 'vault', 'guardian'];
+  G.runPath = dailyPaths[dayIdx % dailyPaths.length];
 
   // Fixed theme rotates daily
   const themeKeys = ['JUNGLE','VOLCANO','GLACIER','SWAMP','SKY'];
@@ -4830,7 +5207,7 @@ function startDailyChallenge() {
   // Streak bonus: higher streak = more gems earned
   G._dailyStreakBonus = Math.min(2.0, 1.0 + (save.dailyStreak - 1) * 0.1); // +10% per streak day, max 2x
   G.diff=getDiff(0, 1.3); // slightly harder
-  G.speed=G.diff.speed*CHARS[charIdx].spdM;
+  G.speed=G.diff.speed*CHARS[charIdx].spdM*(getActiveRunPath().speedScale || 1);
   G.rng=new RNG(seed); // deterministic seed
   G.flashColor='rgba(255,255,255,0.5)'; G.flashLife=0.6;
   G.announce=null;
@@ -4841,7 +5218,9 @@ function startDailyChallenge() {
   G.levelTotalGems=0; G.levelGemsCollected=0;
   for(const c of chunks) G.levelTotalGems+=c.gems.length;
   G.player=new Player(charIdx);
-  G.gems=CHARS[charIdx].startGems;
+  const openingGems = CHARS[charIdx].startGems + (getRunPathStartState(G.runPath).gems || 0);
+  if (G.runGems === 0) G.runGems = openingGems;
+  G.gems=Math.max(G.runGems, openingGems);
   G.lastUpgrade=-1;
   checkGemUpgrades(true);
   initBg();
@@ -4856,6 +5235,7 @@ function startEndlessMode() {
   G.combo=0; G.comboTimer=0; G.comboMult=1; G.comboPulse=0;
   boss=null;
   G.selectedChar = safeSelectedChar();
+  G.runPath = normalizeRunPathId(save.selectedPath);
   // Use first theme, start level 1 mechanics
   G.phase='LEVEL_INTRO'; G.levelNum=1;
   G.levelDef={name:'Endless', theme:'JUNGLE', targetTime:9999, enemies:['TROLL','SERPENT','CHARGER','GOLEM','DIVER','WITCH','BOMBER']};
@@ -4863,7 +5243,7 @@ function startEndlessMode() {
   G.introTimer=0;
   G.time=0; G.timeLeft=60; G.deathDelay=0;
   G.diff=getDiff(0, 1.0);
-  G.speed=G.diff.speed*CHARS[G.selectedChar].spdM;
+  G.speed=G.diff.speed*CHARS[G.selectedChar].spdM*(getActiveRunPath().speedScale || 1);
   G.rng=new RNG(Date.now()^(Math.random()*0x7FFFFFFF|0));
   G.announce=null; G.flashColor=null; G.flashLife=0;
   inp.jp=inp.jh=false; inp.tapped=false;
@@ -4873,7 +5253,9 @@ function startEndlessMode() {
   G.levelTotalGems=0; G.levelGemsCollected=0;
   for(const c of chunks) G.levelTotalGems+=c.gems.length;
   G.player=new Player(G.selectedChar);
-  G.gems=CHARS[G.selectedChar].startGems;
+  const openingGems = CHARS[G.selectedChar].startGems + (getRunPathStartState(G.runPath).gems || 0);
+  if (G.runGems === 0) G.runGems = openingGems;
+  G.gems=Math.max(G.runGems, openingGems);
   G.lastUpgrade=-1;
   checkGemUpgrades(true);
   initBg();
@@ -4949,6 +5331,7 @@ function checkCollisions(dt) {
           triggerSlowMo(0.15);
           G.combo += 2; // near-miss gives +2 combo
           const nm = comboAction(25, 'near_miss');
+          p.addSignature(10, 'near_miss');
           G.announce={text:\`CLOSE! +\${nm}\`,life:0.8};
           if(save.stats) save.stats.enemiesDodged++;
         }
@@ -4969,19 +5352,27 @@ function checkCollisions(dt) {
       }
       const sy=gem.ly+Math.sin(G.time*3+gem.lx*.01)*UNIT*.18;
       if(aabb(phb,{x:sx-UNIT*.55,y:sy-UNIT*.55,w:UNIT*1.1,h:UNIT*1.1})){
+        const runPath = getActiveRunPath();
         gem.collected=true; G.gems++; G.runGems++; G.levelGemsCollected++;
         // Gem juice: floating +1 text
         var _gemSX = cx+gem.lx, _gemSY = gem.ly;
         spawnFloatingText(_gemSX, _gemSY, '+1', \`hsl(\${G.theme.gemH},100%,70%)\`, 0.8);
         updateMissionProgress('gemsCollected', 1);
         const _prevTime = G.timeLeft;
-        G.timeLeft=Math.min(G.timeLeft+(G.endless?3:5),99);
+        const timeGain = (G.endless ? 3 : 5) + (runPath.gemTimeBonus || 0);
+        G.timeLeft=Math.min(G.timeLeft+timeGain,99);
         if (G.timeLeft >= 99 && _prevTime < 99) spawnFloatingText(W/2, H*0.15, 'TIME MAX!', '#4488FF', 1.2);
-        else spawnFloatingText(_gemSX, _gemSY - UNIT * 0.55, \`+\${G.endless ? 3 : 5}s\`, '#7FDFFF', 0.58);
+        else spawnFloatingText(_gemSX, _gemSY - UNIT * 0.55, \`+\${timeGain}s\`, '#7FDFFF', 0.58);
         comboAction(50, 'gem');
+        if (runPath.gemScoreBonus) {
+          G.score += runPath.gemScoreBonus;
+          G.runScore += runPath.gemScoreBonus;
+          spawnFloatingText(_gemSX + UNIT * 0.45, _gemSY - UNIT * 0.2, '+' + runPath.gemScoreBonus, '#BFFFE8', 0.62);
+        }
+        p.addSignature(4, 'gem');
         sfxGem();
         // Heal 5 HP per gem
-        if(p.hp<p.maxHP){p.hp=Math.min(p.hp+5,p.maxHP);}
+        if(p.hp<p.maxHP){p.hp=Math.min(p.hp+5+(runPath.gemHealBonus||0),p.maxHP);}
         spawnGemFX(sx,sy,G.theme.gemH);
         spawnImpactBurst(sx, sy, \`hsla(\${G.theme.gemH},100%,68%,0.9)\`, { count: _perfLevel === 0 ? 4 : 8, speed: UNIT * 5.4, size: 0.1, grav: 120, noRing: true });
         addTrauma(.06);
@@ -5008,6 +5399,7 @@ function checkCollisions(dt) {
         if(Math.sqrt(dx*dx+dy*dy)<UNIT*2.2){
           const isPerfect = p.parryTimer > 0.22; // very early in the window
           en.projectiles.splice(i,1);
+          p.addSignature(isPerfect ? 22 : 14, isPerfect ? 'perfect_parry' : 'parry');
           comboAction(isPerfect ? 200 : 100, 'parry');
           G.announce={text:isPerfect ? 'PERFECT PARRY!' : 'DEFLECT!', life:0.8};
           addTrauma(isPerfect ? 0.3 : 0.15);
@@ -5321,32 +5713,54 @@ function drawTerrain(theme){
     }
     ctx.restore();
   }
-  // Edge highlight
-  ctx.strokeStyle=lightenColor(theme.gt,40);ctx.lineWidth=1.5;ctx.lineCap='round';
+  // Inked ground contour — the defining woodcut signature line.
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineWidth = Math.max(2.4, u * 0.16);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.beginPath();
-  for(let sx=0;sx<=W;sx+=step){const gy=getGroundAt(sx+worldOffset);sx===0?ctx.moveTo(sx,gy):ctx.lineTo(sx,gy);}
+  for (let sx = 0; sx <= W; sx += step) {
+    const gy = getGroundAt(sx + worldOffset);
+    sx === 0 ? ctx.moveTo(sx, gy) : ctx.lineTo(sx, gy);
+  }
   ctx.stroke();
-  // Main terrain edge
-  ctx.strokeStyle=theme.gt;ctx.lineWidth=u*.22;ctx.lineCap='round';
+  // Bright accent highlight sitting just below the ink for depth.
+  ctx.strokeStyle = lightenColor(theme.gt, 30);
+  ctx.lineWidth = Math.max(1, u * 0.06);
   ctx.beginPath();
-  for(let sx=0;sx<=W;sx+=step){const gy=getGroundAt(sx+worldOffset);sx===0?ctx.moveTo(sx,gy):ctx.lineTo(sx,gy);}
+  for (let sx = 0; sx <= W; sx += step) {
+    const gy = getGroundAt(sx + worldOffset);
+    sx === 0 ? ctx.moveTo(sx, gy + u * 0.12) : ctx.lineTo(sx, gy + u * 0.12);
+  }
   ctx.stroke();
-  // Darker sub-edge
-  ctx.strokeStyle=darkenColor(theme.gt,20);ctx.lineWidth=u*.12;
-  ctx.beginPath();
-  for(let sx=0;sx<=W;sx+=step){const gy=getGroundAt(sx+worldOffset);sx===0?ctx.moveTo(sx,gy+u*.15):ctx.lineTo(sx,gy+u*.15);}
-  ctx.stroke();
+  // Hatched shadow bands below the contour — reinforces carved-woodcut feel.
+  if (_perfLevel > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(14,14,16,0.22)';
+    ctx.lineWidth = 1;
+    for (let band = 0; band < 3; band++) {
+      const yOff = u * (0.32 + band * 0.22);
+      ctx.beginPath();
+      for (let sx = 0; sx <= W; sx += step * 4) {
+        const gy = getGroundAt(sx + worldOffset);
+        ctx.moveTo(sx, gy + yOff);
+        ctx.lineTo(sx + step * 2, gy + yOff + 1);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 }
 
 // ============================================================
 // ATMOSPHERIC OVERLAY + VIGNETTE
 // ============================================================
 const ATMO_COLORS = {
-  JUNGLE:  { r:40, g:60, b:20, a:0.08 },
-  VOLCANO: { r:80, g:30, b:10, a:0.12 },
-  GLACIER: { r:20, g:50, b:90, a:0.10 },
-  SWAMP:   { r:20, g:40, b:10, a:0.14 },
-  SKY:     { r:60, g:80, b:100, a:0.06 },
+  JUNGLE:  { r:30, g:80, b:30, a:0.10 },
+  VOLCANO: { r:120, g:40, b:10, a:0.14 },
+  GLACIER: { r:50, g:120, b:180, a:0.10 },
+  SWAMP:   { r:80, g:120, b:20, a:0.12 },
+  SKY:     { r:90, g:50, b:120, a:0.10 },
 };
 let _vignetteCache = null;
 let _vignetteCacheW = 0;
@@ -5503,10 +5917,71 @@ function drawSpeedLines() {
   ctx.restore();
 }
 
+// Cached 128x128 paper-noise tile reused each frame (fast fillStyle = pattern)
+let _paperPatternCanvas = null;
+let _paperPatternRef = null;
+function ensurePaperPattern() {
+  if (_paperPatternCanvas) return _paperPatternCanvas;
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const pctx = c.getContext('2d');
+  const img = pctx.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = Math.random();
+    const v = n < 0.96 ? 0 : Math.floor(180 + (n - 0.96) * 1400);
+    const dark = n > 0.992 ? 40 : 0;
+    img.data[i] = dark ? 14 : v;
+    img.data[i + 1] = dark ? 14 : v;
+    img.data[i + 2] = dark ? 16 : v;
+    img.data[i + 3] = dark ? 80 : (v ? Math.min(120, v) : 0);
+  }
+  pctx.putImageData(img, 0, 0);
+  _paperPatternCanvas = c;
+  return c;
+}
+
+function drawPaperGrain() {
+  const c = ensurePaperPattern();
+  if (!_paperPatternRef) _paperPatternRef = ctx.createPattern(c, 'repeat');
+  if (!_paperPatternRef) return;
+  ctx.save();
+  ctx.globalAlpha = _perfLevel === 0 ? 0.08 : 0.16;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = _paperPatternRef;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+function drawHalftoneSkyBand() {
+  if (_perfLevel === 0) return;
+  // Subtle halftone dot strip in upper third — reinforces comic identity without hurting readability.
+  const u = UNIT;
+  const dot = Math.max(2, u * 0.12);
+  const step = dot * 2.4;
+  const bandTop = 0;
+  const bandBottom = H * 0.32;
+  ctx.save();
+  ctx.globalAlpha = 0.075;
+  ctx.fillStyle = INK_COLOR;
+  for (let y = bandTop; y < bandBottom; y += step) {
+    const rowT = (y - bandTop) / (bandBottom - bandTop);
+    const skip = Math.max(1, Math.floor(rowT * 3));
+    for (let x = (Math.floor(y / step) % 2) * step * 0.5; x < W; x += step * skip) {
+      ctx.beginPath();
+      ctx.arc(x, y, dot, 0, PI2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function drawPostEffects(themeName) {
   drawAtmosphericOverlay(themeName);
   drawThemePostFX(themeName);
+  drawHalftoneSkyBand();
   drawVignette();
+  drawPaperGrain();
 }
 
 // ============================================================
@@ -6218,6 +6693,7 @@ function drawChar(p, mini) {
   const skinDk = skin ? skin.dk : ch.dk;
   const bodyCol = dmgFlash ? '#FF4444' : p.starTimer > 0 ? \`hsl(\${p.starHue},90%,62%)\` : skinCol;
   const darkCol = dmgFlash ? '#CC2222' : p.starTimer > 0 ? \`hsl(\${p.starHue+20},85%,48%)\` : skinDk;
+  const signatureHot = !mini && (p.signatureBoostTimer > 0 || p.redlineTimer > 0 || p.guardAuraTimer > 0 || p.arcPulseTimer > 0);
   const accentCol = ch.id==='bruk' ? '#D9B574' :
     ch.id==='zara' ? '#FF99F2' :
     ch.id==='rex' ? '#FFD35A' :
@@ -6237,14 +6713,17 @@ function drawChar(p, mini) {
     ctx.translate(0, UNIT*.2);
   }
   if (!mini) ctx.scale(p.stretch, p.squash);
-  ctx.scale(sc, sc);
+  ctx.scale(sc * (mini ? 1 : 1.1), sc * (mini ? 1 : 1.1));
 
-  // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.beginPath();ctx.ellipse(0,4,u*.9,u*.18,0,0,PI2);ctx.fill();
+  // Inked contact shadow — hard-edge woodcut feel instead of soft blur.
+  ctx.fillStyle = 'rgba(14,14,16,0.55)';
+  ctx.beginPath(); ctx.ellipse(0, 4, u * 1.06, u * 0.24, 0, 0, PI2); ctx.fill();
+  ctx.strokeStyle = INK_COLOR; ctx.lineWidth = Math.max(1, u * 0.06);
+  ctx.beginPath(); ctx.ellipse(0, 4, u * 1.06, u * 0.24, 0, 0, PI2); ctx.stroke();
 
   // --- SPRITE RENDERING ---
   const _charSpr = charSprites[ch.id];
-  const _sprReady = _charSpr && _charSpr.ready && _charSpr.frames;
+  const _sprReady = CHAR_SPRITES_ENABLED && _charSpr && _charSpr.ready && _charSpr.frames;
   if (_sprReady) {
     const _sprFrames = _charSpr.frames;
     const _sprFW = _charSpr.fw;
@@ -6300,12 +6779,21 @@ function drawChar(p, mini) {
   }
 
   // Tail
-  ctx.fillStyle=darkCol;ctx.beginPath();ctx.ellipse(-u*.75,-u*.55,u*.32,u*.18,-.6,0,0,PI2);ctx.fill();
+  ctx.fillStyle=darkCol;ctx.beginPath();ctx.ellipse(-u*.82,-u*.52,u*.36,u*.2,-.6,0,0,PI2);ctx.fill();
 
   // Body
-  ctx.fillStyle=bodyCol;ctx.beginPath();ctx.ellipse(0,-u*.85,u*.88,u*1.05,0,0,PI2);ctx.fill();
+  if (signatureHot) {
+    ctx.save();
+    ctx.shadowColor = (p.signature && p.signature.accent) ? p.signature.accent : accentCol;
+    ctx.shadowBlur = mini ? 6 : 18;
+    ctx.fillStyle = hexToRgba((p.signature && p.signature.accent) ? p.signature.accent : accentCol, mini ? 0.18 : 0.28);
+    ctx.beginPath();ctx.ellipse(0,-u*.92,u*1.08,u*1.24,0,0,PI2);ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle=bodyCol;ctx.beginPath();ctx.ellipse(0,-u*.88,u*.94,u*1.1,0,0,PI2);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=u*.06;ctx.stroke();
   // Belly
-  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.beginPath();ctx.ellipse(0,-u*.65,u*.5,u*.6,0,0,PI2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.beginPath();ctx.ellipse(0,-u*.66,u*.54,u*.64,0,0,PI2);ctx.fill();
   // Character accents
   ctx.fillStyle=accentCol;
   if(ch.id==='gronk'){
@@ -6335,8 +6823,8 @@ function drawChar(p, mini) {
 
   // Arms
   ctx.fillStyle=darkCol;
-  ctx.beginPath();ctx.ellipse(-u*.85,-u*.95,u*.3,u*.18,-.5,0,PI2);ctx.fill();
-  ctx.beginPath();ctx.ellipse(u*.85,-u*.95,u*.3,u*.18,.5,0,PI2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(-u*.9,-u*.98,u*.34,u*.2,-.5,0,PI2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(u*.9,-u*.98,u*.34,u*.2,.5,0,PI2);ctx.fill();
 
   // Horns / spikes / unique features
   ctx.fillStyle=darkCol;
@@ -6377,27 +6865,39 @@ function drawChar(p, mini) {
   }
 
   // Eyes
-  const eyeScale = ch.id==='pip' ? 1.3 : ch.id==='bruk' ? .8 : 1;
+  const eyeScale = ch.id==='pip' ? 1.08 : ch.id==='bruk' ? 0.82 : 0.94;
+  const eyeDrift = (!mini && p.onGround) ? 0.04 : 0;
+  ctx.strokeStyle = darkCol;
+  ctx.lineWidth = u * 0.06;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-u*.48,-u*1.46);ctx.quadraticCurveTo(-u*.28,-u*1.58,-u*.08,-u*1.38);
+  ctx.moveTo(u*.08,-u*1.38);ctx.quadraticCurveTo(u*.28,-u*1.58,u*.48,-u*1.46);
+  ctx.stroke();
   ctx.fillStyle='white';
-  ctx.beginPath();ctx.ellipse(-u*.3,-u*1.28,u*.29*eyeScale,u*.33*eyeScale,0,0,PI2);
-  ctx.ellipse(u*.3,-u*1.28,u*.29*eyeScale,u*.33*eyeScale,0,0,PI2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(-u*.24,-u*1.24,u*.2*eyeScale,u*.24*eyeScale,-0.12,0,PI2);
+  ctx.ellipse(u*.24,-u*1.22,u*.2*eyeScale,u*.24*eyeScale,0.12,0,PI2);ctx.fill();
   // Pupils
   ctx.fillStyle='#1a1a30';
-  const el=(!mini&&p.onGround)? 0.08 :0;
-  ctx.beginPath();ctx.ellipse(-u*.2+u*el,-u*1.28,u*.17,u*.21,0,0,PI2);
-  ctx.ellipse(u*.4+u*el,-u*1.28,u*.17,u*.21,0,0,PI2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(-u*.22+u*eyeDrift,-u*1.23,u*.08,u*.14,0,0,PI2);
+  ctx.ellipse(u*.26+u*eyeDrift,-u*1.21,u*.08,u*.14,0,0,PI2);ctx.fill();
   // Shine
-  ctx.fillStyle='white';ctx.beginPath();ctx.arc(-u*.14,-u*1.36,u*.065,0,PI2);ctx.arc(u*.46,-u*1.36,u*.065,0,PI2);ctx.fill();
+  ctx.fillStyle='white';ctx.beginPath();ctx.arc(-u*.16,-u*1.31,u*.04,0,PI2);ctx.arc(u*.3,-u*1.29,u*.04,0,PI2);ctx.fill();
 
   // Mouth
-  ctx.strokeStyle='#1a3a5a';ctx.lineWidth=u*.1;ctx.lineCap='round';ctx.beginPath();
-  if(!mini&&!p.onGround){ctx.arc(0,-u*.82,u*.22,Math.PI+.35,PI2-.35);}
-  else{ctx.arc(0,-u*.92,u*.28,.15,Math.PI-.15);}
+  ctx.strokeStyle='#17304A';ctx.lineWidth=u*.08;ctx.lineCap='round';ctx.beginPath();
+  if(!mini&&!p.onGround){
+    ctx.moveTo(-u*.14,-u*.8);ctx.quadraticCurveTo(0,-u*.68,u*.16,-u*.8);
+  } else {
+    ctx.moveTo(-u*.18,-u*.86);ctx.quadraticCurveTo(0,-u*.78,u*.22,-u*.88);
+  }
   ctx.stroke();
 
   // Blush
-  ctx.fillStyle='rgba(255,150,150,0.4)';ctx.beginPath();
-  ctx.ellipse(-u*.55,-u*1.1,u*.15,u*.1,0,0,PI2);ctx.ellipse(u*.55,-u*1.1,u*.15,u*.1,0,0,PI2);ctx.fill();
+  if (ch.id === 'pip' || ch.id === 'zara') {
+    ctx.fillStyle='rgba(255,150,150,0.22)';ctx.beginPath();
+    ctx.ellipse(-u*.48,-u*1.08,u*.11,u*.08,0,0,PI2);ctx.ellipse(u*.48,-u*1.08,u*.11,u*.08,0,0,PI2);ctx.fill();
+  }
 
   // Bruk bushy eyebrows
   if(ch.id==='bruk'){
@@ -6684,90 +7184,44 @@ function drawMenu(){
   const missionReady = getUnclaimedMissionCount();
   const nextLevel = Math.min(40, save.highestLevel + 1);
   const bankedGems = Number.isFinite(save.totalGems) ? save.totalGems : (save.gems || 0);
-  const rewardHint = getRewardReadyHint(Math.max(1, save.highestLevel));
-  const currentGoal = rewardHint || (firstSession ? 'LEVEL 1 TEACHES JUMP AND DASH' : \`PUSH TO LEVEL \${nextLevel}\`);
   const resumeCooldown = save.cooldownEnd - Date.now();
-  const headerX = SAFE_LEFT + u * 0.55;
-  const headerY = SAFE_TOP + u * 0.35;
-  const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1;
-  const headerH = u * 2.28;
-  const stageY = headerY + headerH + u * 0.34;
-  const cardGap = u * 0.34;
-  const heroW = Math.min(W * 0.42, u * 6.8);
-  const infoW = headerW - heroW - cardGap;
-  const cardH = u * 4.7;
-  const heroX = headerX;
-  const infoX = heroX + heroW + cardGap;
-  const footerW = Math.min(headerW, u * 10.8);
-  const footerH = u * 1.5;
-  const footerX = W / 2 - footerW / 2;
-  const footerY = H - SAFE_BOTTOM - footerH - u * 0.88;
-  const featureY = footerY - u * 1.04;
   G._menuLayout = { speaker: { x: SAFE_LEFT + u * 0.3, y: SAFE_TOP + u * 0.3, size: u * 1.2 } };
 
-  drawMetaBackdrop(THEMES.JUNGLE, lightenColor(hero.col, 14));
+  // Bone paper background with paper grain
+  ctx.fillStyle = BONE_COLOR;
+  ctx.fillRect(0, 0, W, H);
+  if (typeof drawPaperGrain === 'function') drawPaperGrain(0.32);
 
-  drawPanel(headerX, headerY, headerW, headerH, {
-    radius: u * 0.5,
-    top: 'rgba(24,42,70,0.96)',
-    mid: 'rgba(13,24,42,0.92)',
-    bottom: 'rgba(7,12,24,0.9)',
-    stroke: 'rgba(210,230,255,0.18)',
-    accent: '#56A7D8',
-    blur: 26
-  });
+  // Diagonal accent bar behind title
+  ctx.save();
+  ctx.translate(W / 2, SAFE_TOP + u * 2.2);
+  ctx.rotate(-0.04);
+  ctx.fillStyle = INK_COLOR;
+  ctx.fillRect(-W, -u * 1.3, W * 2, u * 2.6);
+  // Accent under-slab
+  ctx.fillStyle = '#FFC14D';
+  ctx.fillRect(-W, u * 1.32, W * 2, u * 0.34);
+  ctx.restore();
+
+  // Title on the inked slab
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const titlePulse = 1 + Math.sin(Date.now() * 0.003) * 0.025;
-  ctx.save();
-  ctx.translate(W / 2, headerY + u * 0.92);
-  ctx.scale(titlePulse, titlePulse);
-  drawFitText("GRONK'S RUN", 0, 0, headerW - u * 2, {
-    basePx: u * 1.42,
-    minPx: u * 0.9,
-    weight: 'bold',
-    color: '#FFE58A',
-    shadowColor: 'rgba(0,0,0,0.34)',
-    shadowBlur: 12
-  });
-  ctx.restore();
-  drawFitText(firstSession ? 'A cinematic lane runner with dash combat and boss breaks.' : 'Pick your runner, cash out gems, and keep the climb alive.', W / 2, headerY + u * 1.52, headerW - u * 2.2, {
-    basePx: u * 0.36,
-    minPx: u * 0.24,
-    color: 'rgba(218,232,250,0.78)'
-  });
-  drawMiniChip(headerX + u * 0.34, headerY + u * 0.34, u * 3.2, u * 0.62, firstSession ? 'FIRST RUN' : \`LEVEL \${nextLevel} READY\`, {
-    accent: 'rgba(122,214,170,0.28)',
-    textColor: '#F3FFF7',
-    font: FONTS['b0.28'] || ('700 ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY)
-  });
-  drawMiniChip(headerX + headerW - u * 3.46, headerY + u * 0.34, u * 3.12, u * 0.62, missionReady > 0 ? \`\${missionReady} CLAIMS\` : \`\${bankedGems} GEMS\`, {
-    accent: missionReady > 0 ? 'rgba(255,194,70,0.26)' : 'rgba(90,200,255,0.24)',
-    textColor: missionReady > 0 ? '#FFF1C4' : '#E8FAFF',
-    font: FONTS['b0.28'] || ('700 ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY)
+  const titleBounce = Math.sin(Date.now() * 0.003) * u * 0.04;
+  drawFitText("GRONK'S RUN", W / 2, SAFE_TOP + u * 2.1 + titleBounce, W - u * 2.4, {
+    basePx: u * 2.1, minPx: u * 1.1, weight: 'bold', color: BONE_COLOR
   });
 
-  drawPanel(heroX, stageY, heroW, cardH, {
-    radius: u * 0.48,
-    top: 'rgba(23,40,66,0.95)',
-    mid: 'rgba(14,24,42,0.92)',
-    bottom: 'rgba(8,14,28,0.9)',
-    stroke: 'rgba(255,255,255,0.12)',
-    accent: lightenColor(hero.col, 10),
-    blur: 22
+  // Tagline stamp
+  const tagline = firstSession ? 'LANE RUNNER · DASH COMBAT · BOSS BREAKS' : 'PICK YOUR RUNNER · CASH GEMS · KEEP CLIMBING';
+  drawFitText(tagline, W / 2, SAFE_TOP + u * 3.85, W - u * 3, {
+    basePx: u * 0.32, minPx: u * 0.2, weight: 'bold', color: INK_COLOR
   });
-  drawMiniChip(heroX + u * 0.26, stageY + u * 0.24, u * 3.15, u * 0.56, 'ACTIVE RUNNER', {
-    accent: lightenColor(hero.col, 12),
-    textColor: '#F6FBFF'
-  });
-  drawMiniChip(heroX + heroW - u * 2.54, stageY + u * 0.24, u * 2.28, u * 0.56, getCharPassiveLabel(hero).toUpperCase(), {
-    accent: 'rgba(120,188,255,0.2)',
-    textColor: '#ECF5FF',
-    font: FONTS['b0.23'] || ('700 ' + Math.round(u * 0.23) + 'px ' + UI_FONT_DISPLAY)
-  });
+
+  // Hero display
+  const heroY = SAFE_TOP + u * 6.6;
   ctx.save();
-  ctx.translate(heroX + heroW * 0.3, stageY + cardH * 0.72);
-  ctx.scale(2.18, 2.18);
+  ctx.translate(W / 2, heroY);
+  ctx.scale(2.4, 2.4);
   drawChar({
     screenX: 0, y: 0, ch: hero, charIdx: heroIdx, onGround: true,
     legAnim: G.time * 4.5, squash: 1, stretch: 1, shield: hero.startShield,
@@ -6776,112 +7230,88 @@ function drawMenu(){
     hpFlash: 0, vy: 0
   }, true);
   ctx.restore();
-  drawFitText(hero.name.toUpperCase(), heroX + heroW * 0.7, stageY + u * 1.42, heroW * 0.45, {
-    basePx: u * 0.66,
-    minPx: u * 0.38,
-    weight: 'bold',
-    color: lightenColor(hero.col, 26)
-  });
-  ctx.fillStyle = 'rgba(220,228,245,0.74)';
-  ctx.font = FONTS['n0.32'] || ('500 ' + Math.round(u * 0.32) + 'px ' + UI_FONT_BODY);
-  drawTextBlock(firstSession ? 'Balanced opener with the cleanest first-session read.' : hero.desc, heroX + heroW * 0.7, stageY + u * 1.88, heroW * 0.42, u * 0.38, { align: 'center' });
-  drawValueCard(heroX + heroW * 0.47, stageY + u * 2.88, u * 1.86, u * 1.06, 'HP', hero.maxHP, null, {
-    accent: 'rgba(126,214,152,0.24)',
-    valueColor: '#F0FFF5',
-    kickerPx: u * 0.18,
-    valuePx: u * 0.34
-  });
-  drawValueCard(heroX + heroW * 0.47 + u * 2.02, stageY + u * 2.88, u * 1.86, u * 1.06, 'SPD', hero.spdM.toFixed(2) + 'x', null, {
-    accent: 'rgba(120,188,255,0.22)',
-    valueColor: '#E8F3FF',
-    kickerPx: u * 0.18,
-    valuePx: u * 0.34
+
+  // Runner name banner
+  const bnW = Math.min(W * 0.5, u * 9);
+  const bnH = u * 0.86;
+  fillRR(W / 2 - bnW / 2, heroY + u * 1.7, bnW, bnH, u * 0.14, INK_COLOR, '#FFC14D', Math.max(2, u * 0.08));
+  drawFitText(hero.name.toUpperCase(), W / 2, heroY + u * 1.7 + bnH / 2, bnW - u * 0.3, {
+    basePx: u * 0.54, minPx: u * 0.3, weight: 'bold', color: '#FFC14D'
   });
 
-  drawPanel(infoX, stageY, infoW, cardH, {
-    radius: u * 0.48,
-    top: 'rgba(21,36,58,0.95)',
-    mid: 'rgba(12,22,38,0.92)',
-    bottom: 'rgba(7,12,24,0.9)',
-    stroke: 'rgba(255,255,255,0.12)',
-    accent: 'rgba(255,215,90,0.22)',
-    blur: 22
-  });
-  drawMiniChip(infoX + u * 0.26, stageY + u * 0.24, u * 2.9, u * 0.56, 'RUN STATUS', {
-    accent: 'rgba(255,215,90,0.24)',
-    textColor: '#FFF5D1'
-  });
-  drawMiniChip(infoX + infoW - u * 3.42, stageY + u * 0.24, u * 3.16, u * 0.56, save.savedLevel > 1 ? 'RESUME READY' : 'CLEAN START', {
-    accent: save.savedLevel > 1 ? 'rgba(122,214,170,0.24)' : 'rgba(110,126,152,0.18)',
-    textColor: save.savedLevel > 1 ? '#EFFFF4' : 'rgba(230,236,248,0.74)'
-  });
-  drawValueCard(infoX + u * 0.28, stageY + u * 0.98, (infoW - u * 0.82) / 2, u * 1.18, 'BEST RUN', save.bestScore || 0, \`LEVEL \${save.highestLevel || 0}\`, {
-    accent: 'rgba(255,215,90,0.2)',
-    valueColor: '#FFE58A',
-    subColor: 'rgba(220,228,246,0.72)',
-    kickerPx: u * 0.18,
-    valuePx: u * 0.44
-  });
-  drawValueCard(infoX + infoW / 2 + u * 0.13, stageY + u * 0.98, (infoW - u * 0.82) / 2, u * 1.18, 'BANK', save.totalGems, missionReady > 0 ? \`\${missionReady} READY\` : 'KEEP PUSHING', {
-    accent: missionReady > 0 ? 'rgba(255,194,70,0.2)' : 'rgba(95,229,255,0.2)',
-    valueColor: '#A8F3FF',
-    subColor: missionReady > 0 ? '#FFF0C8' : 'rgba(220,233,252,0.68)',
-    kickerPx: u * 0.18,
-    valuePx: u * 0.44
-  });
-  drawActionCard(infoX + u * 0.28, stageY + u * 2.58, infoW - u * 0.56, u * 1.32, currentGoal, firstSession ? 'Tap anywhere to begin the guided opener.' : 'Open the map, replay nodes, or claim ready rewards.', {
-    top: 'rgba(49,94,71,0.96)',
-    bottom: 'rgba(22,48,34,0.92)',
-    stroke: 'rgba(133,224,162,0.34)',
-    accent: '#68D29B',
-    labelColor: '#F5FFF7',
-    subColor: 'rgba(222,241,231,0.78)',
-    labelPx: u * 0.46,
-    labelMinPx: u * 0.25,
-    subPx: u * 0.24
-  });
+  // Stats row: BEST · LEVEL · GEMS
+  const statsY = heroY + u * 3.2;
+  const statGap = u * 0.2;
+  const statW = Math.min((W - u * 3) / 3, u * 4.6);
+  const statH = u * 1.3;
+  const statsStartX = W / 2 - (statW * 3 + statGap * 2) / 2;
+  const stats = [
+    { label: 'BEST', val: String(save.bestScore || 0), col: '#FFC14D' },
+    { label: 'LEVEL', val: String(save.highestLevel || 0), col: '#4BB5CB' },
+    { label: 'GEMS', val: String(bankedGems), col: '#3C8F2A' }
+  ];
+  for (let i = 0; i < 3; i++) {
+    const sx = statsStartX + i * (statW + statGap);
+    fillRR(sx, statsY, statW, statH, u * 0.14, BONE_COLOR, INK_COLOR, Math.max(2, u * 0.09));
+    // Colored accent bar
+    fillRR(sx, statsY, statW, u * 0.18, u * 0.14, stats[i].col, null, 0);
+    drawFitText(stats[i].label, sx + statW / 2, statsY + u * 0.44, statW - u * 0.2, {
+      basePx: u * 0.22, minPx: u * 0.16, weight: 'bold', color: INK_COLOR
+    });
+    drawFitText(stats[i].val, sx + statW / 2, statsY + statH - u * 0.4, statW - u * 0.2, {
+      basePx: u * 0.6, minPx: u * 0.3, weight: 'bold', color: INK_COLOR
+    });
+  }
 
-  drawMiniChip(W / 2 - u * 5.05, featureY, u * 3.15, u * 0.68, 'AUTHORED RUNS', {
-    accent: 'rgba(120,188,255,0.22)',
-    font: FONTS['b0.26'] || ('700 ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY)
+  // Primary CTA
+  const ctaW = Math.min(W * 0.56, u * 9);
+  const ctaH = u * 1.6;
+  const ctaX = W / 2 - ctaW / 2;
+  const ctaY = statsY + statH + u * 0.9;
+  const ctaPulse = 1 + Math.sin(Date.now() * 0.005) * 0.02;
+  ctx.save();
+  ctx.translate(ctaX + ctaW / 2, ctaY + ctaH / 2);
+  ctx.scale(ctaPulse, ctaPulse);
+  fillRR(-ctaW / 2, -ctaH / 2, ctaW, ctaH, u * 0.18, '#FFC14D', INK_COLOR, Math.max(3, u * 0.12));
+  // Woodcut accent slab under label
+  ctx.fillStyle = 'rgba(14,14,16,0.12)';
+  ctx.fillRect(-ctaW / 2 + u * 0.2, ctaH / 2 - u * 0.28, ctaW - u * 0.4, u * 0.16);
+  drawFitText(firstSession ? 'TAP TO START' : 'TAP TO OPEN MAP', 0, 0, ctaW - u * 0.6, {
+    basePx: u * 0.7, minPx: u * 0.38, weight: 'bold', color: INK_COLOR
   });
-  drawMiniChip(W / 2 - u * 1.55, featureY, u * 3.1, u * 0.68, 'DASH COMBAT', {
-    accent: 'rgba(125,240,155,0.22)',
-    font: FONTS['b0.26'] || ('700 ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY)
-  });
-  drawMiniChip(W / 2 + u * 1.95, featureY, u * 3.15, u * 0.68, 'BOSSES + LOOT', {
-    accent: 'rgba(255,146,110,0.22)',
-    font: FONTS['b0.26'] || ('700 ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY)
-  });
+  ctx.restore();
 
+  // Resume chip if mid-run
   if (save.savedLevel > 1) {
     let resumeLabel = \`RESUME LEVEL \${save.savedLevel}\`;
+    let accent = '#3C8F2A';
     if (resumeCooldown > 0) {
       const mins = Math.max(0, Math.floor(resumeCooldown / 60000));
       const secs = Math.max(0, Math.min(59, Math.ceil((resumeCooldown % 60000) / 1000)));
       resumeLabel = \`RESUME IN \${mins}:\${secs < 10 ? '0' : ''}\${secs}\`;
+      accent = '#D84040';
     }
-    drawMiniChip(W / 2 - u * 4.9, featureY + u * 0.82, u * 9.8, u * 0.68, resumeLabel, {
-      accent: resumeCooldown > 0 ? 'rgba(255,154,104,0.22)' : 'rgba(104,210,155,0.22)',
-      textColor: resumeCooldown > 0 ? '#FFE1D0' : '#F1FFF6',
-      font: FONTS['b0.28'] || ('700 ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY)
+    const resW = Math.min(W * 0.5, u * 8);
+    const resH = u * 0.76;
+    const resX = W / 2 - resW / 2;
+    const resY = ctaY + ctaH + u * 0.4;
+    fillRR(resX, resY, resW, resH, u * 0.12, accent, INK_COLOR, Math.max(1.8, u * 0.08));
+    drawFitText(resumeLabel, W / 2, resY + resH / 2, resW - u * 0.3, {
+      basePx: u * 0.32, minPx: u * 0.2, weight: 'bold', color: BONE_COLOR
     });
   }
 
-  const footerPulse = 0.76 + Math.sin(Date.now() * 0.004) * 0.18;
-  ctx.save();
-  ctx.globalAlpha = footerPulse;
-  drawActionCard(footerX, footerY, footerW, footerH, firstSession ? 'TAP ANYWHERE TO START' : 'TAP ANYWHERE TO OPEN THE MAP', 'Speaker icon stays live in the corner.', {
-    top: 'rgba(58,86,126,0.96)',
-    bottom: 'rgba(26,42,74,0.92)',
-    stroke: 'rgba(164,197,255,0.34)',
-    accent: '#78A6FF',
-    labelColor: '#F4F8FF',
-    subColor: 'rgba(224,233,248,0.74)',
-    labelPx: u * 0.54,
-    labelMinPx: u * 0.3
-  });
-  ctx.restore();
+  // Mission ready badge top-right
+  if (missionReady > 0) {
+    const mbW = u * 3.2;
+    const mbH = u * 0.64;
+    const mbX = W - SAFE_RIGHT - mbW - u * 0.4;
+    const mbY = SAFE_TOP + u * 0.4;
+    fillRR(mbX, mbY, mbW, mbH, u * 0.1, '#D84040', INK_COLOR, Math.max(1.8, u * 0.07));
+    drawFitText(\`\${missionReady} CLAIMS READY\`, mbX + mbW / 2, mbY + mbH / 2, mbW - u * 0.2, {
+      basePx: u * 0.24, minPx: u * 0.18, weight: 'bold', color: BONE_COLOR
+    });
+  }
 
   drawSpeakerIcon(G._menuLayout.speaker.x, G._menuLayout.speaker.y, G._menuLayout.speaker.size);
 }
@@ -6974,6 +7404,17 @@ function DEPRECATED_drawCharSelect(){
 function handleCharSelectTap(){
   const tx=inp.tapX, ty=inp.tapY;
   const L = G._charSelectLayout;
+  if (L && Array.isArray(L.pathCards)) {
+    for (let i = 0; i < L.pathCards.length; i++) {
+      const card = L.pathCards[i];
+      if (tx > card.x && tx < card.x + card.w && ty > card.y && ty < card.y + card.h) {
+        G.runPath = card.id;
+        save.selectedPath = card.id;
+        persistSave();
+        return;
+      }
+    }
+  }
   if (L && Array.isArray(L.cards)) {
     for (let i = 0; i < L.cards.length; i++) {
       const card = L.cards[i];
@@ -6989,6 +7430,7 @@ function handleCharSelectTap(){
   if (L && L.startBtn && tx > L.startBtn.x && tx < L.startBtn.x + L.startBtn.w && ty > L.startBtn.y && ty < L.startBtn.y + L.startBtn.h) {
     sfxUITap();
     if(!save.tutorialSeen){ G.phase='TUTORIAL'; return; }
+    G.runPath = normalizeRunPathId(save.selectedPath);
     startNewRun();
     return;
   }
@@ -7940,15 +8382,18 @@ function drawBoss(){
       ctx.save();
       ctx.translate(side * u * 0.72, -u * 0.92);
       ctx.rotate(side * (0.24 + wingSwing * 0.55));
-      polygon(ctx, [[0, 0], [side * u * 1.04, -u * 0.42], [side * u * 0.54, u * 0.48]], 'rgba(194,236,255,0.68)', '#2A587A', u * 0.04);
+      polygon(ctx, [[0, 0], [side * u * 1.08, -u * 0.46], [side * u * 0.7, -u * 0.08], [side * u * 0.54, u * 0.52]], 'rgba(194,236,255,0.68)', '#2A587A', u * 0.04);
       ctx.restore();
       strokeLine(ctx, [[side * u * 0.22, u * 0.12], [side * u * 0.42, u * 0.72]], '#3A789C', u * 0.1);
       ellipse(ctx, side * u * 0.46, u * 0.82, u * 0.16, u * 0.1, '#C6F1FF', '#2A587A', u * 0.03);
     }
-    ellipse(ctx, 0, -u * 0.86, u * 0.88, u * 1.0, grad, '#2A587A', u * 0.05);
-    ellipse(ctx, 0, -u * 0.54, u * 0.42, u * 0.54, 'rgba(255,255,255,0.18)', null, 0);
-    polygon(ctx, [[0, -u * 1.92], [-u * 0.18, -u * 1.3], [u * 0.18, -u * 1.3]], '#EAF8FF', '#2A587A', u * 0.03);
-    strokeLine(ctx, [[u * 0.18, -u * 0.86], [u * 0.72, -u * 0.44], [u * 1.06, -u * 0.2]], '#7ACBFF', u * 0.08);
+    strokeLine(ctx, [[-u * 0.2, -u * 0.24], [-u * 0.58, u * 0.12], [-u * 0.86, u * 0.06]], '#4DA1D1', u * 0.08);
+    ellipse(ctx, 0, -u * 0.9, u * 0.78, u * 1.02, grad, '#2A587A', u * 0.05);
+    ellipse(ctx, -u * 0.04, -u * 0.56, u * 0.34, u * 0.48, 'rgba(255,255,255,0.14)', null, 0);
+    polygon(ctx, [[0, -u * 1.94], [-u * 0.18, -u * 1.32], [u * 0.18, -u * 1.32]], '#EAF8FF', '#2A587A', u * 0.03);
+    polygon(ctx, [[u * 0.04, -u * 0.94], [u * 0.46, -u * 0.8], [u * 0.7, -u * 0.56], [u * 0.26, -u * 0.42], [-u * 0.02, -u * 0.58]], '#D5F0FF', '#2A587A', u * 0.04);
+    polygon(ctx, [[u * 0.16, -u * 0.5], [u * 0.6, -u * 0.4], [u * 0.34, -u * 0.16], [u * 0.04, -u * 0.24]], '#A2DFFF', '#2A587A', u * 0.03);
+    strokeLine(ctx, [[u * 0.2, -u * 0.9], [u * 0.78, -u * 0.5], [u * 1.08, -u * 0.2]], '#7ACBFF', u * 0.08);
   } else if (boss.typeIdx === 3) {
     polygon(ctx, [[-u * 0.72, -u * 0.22], [0, u * 1.18], [u * 0.72, -u * 0.22]], '#48266D', '#1A0F28', u * 0.05);
     ellipse(ctx, 0, -u * 0.96, u * 0.76, u * 0.92, grad, '#1A0F28', u * 0.05);
@@ -7979,11 +8424,16 @@ function drawBoss(){
     polygon(ctx, [[u * 0.36, -u * 0.88], [u * 0.86, -u * 0.8], [u * 0.34, -u * 0.66]], '#D78D42', '#5D3916', u * 0.03);
   }
 
-  ellipse(ctx, -u * 0.22, -u * 1.02, u * 0.14, u * 0.16, '#FFF3A8', '#20160D', u * 0.04);
-  ellipse(ctx, u * 0.22, -u * 1.0, u * 0.14, u * 0.16, '#FFF3A8', '#20160D', u * 0.04);
-  ellipse(ctx, -u * 0.2, -u * 1.0, u * 0.05, u * 0.06, '#18130F', null, 0);
-  ellipse(ctx, u * 0.24, -u * 0.98, u * 0.05, u * 0.06, '#18130F', null, 0);
-  strokeLine(ctx, [[-u * 0.22, -u * 0.66], [0, -u * 0.48], [u * 0.22, -u * 0.66]], '#221815', u * 0.07);
+  strokeLine(ctx, [[-u * 0.42, -u * 1.2], [-u * 0.16, -u * 1.34], [u * 0.02, -u * 1.12]], '#20160D', u * 0.06);
+  strokeLine(ctx, [[u * 0.42, -u * 1.18], [u * 0.16, -u * 1.34], [-u * 0.02, -u * 1.1]], '#20160D', u * 0.06);
+  ellipse(ctx, -u * 0.22, -u * 1.02, u * 0.12, u * 0.14, '#FFF3A8', '#20160D', u * 0.035);
+  ellipse(ctx, u * 0.22, -u * 1.0, u * 0.12, u * 0.14, '#FFF3A8', '#20160D', u * 0.035);
+  ellipse(ctx, -u * 0.22, -u * 1.0, u * 0.04, u * 0.08, '#18130F', null, 0);
+  ellipse(ctx, u * 0.22, -u * 0.98, u * 0.04, u * 0.08, '#18130F', null, 0);
+  if (boss.typeIdx === 2) {
+    polygon(ctx, [[0, -u * 0.88], [u * 0.32, -u * 0.72], [0, -u * 0.48], [-u * 0.32, -u * 0.72]], '#D5F0FF', '#2A587A', u * 0.03);
+  }
+  strokeLine(ctx, [[-u * 0.2, -u * 0.62], [0, -u * 0.7], [u * 0.22, -u * 0.62]], '#221815', u * 0.08);
   if (boss.windUp > 0) {
     const cueColor = (boss.attackCue && boss.attackCue.color) || pal.glow;
     ctx.save();
@@ -8059,6 +8509,7 @@ function checkBossCollisions(dt){
       if(Math.sqrt(dx*dx+dy*dy)<UNIT*2.5){
         boss.projectiles.splice(i,1);
         if (boss.takeDamage(25, 'parry')) {
+          p.addSignature(18, 'boss_parry');
           comboAction(100,'parry');
           G.announce={text:'DEFLECT! -25 Boss HP',life:0.8};
           addTrauma(0.24);
@@ -8073,6 +8524,7 @@ function checkBossCollisions(dt){
   // Parry damages boss on direct contact
   if(p.parryTimer>0 && aabb(phb,boss.hitbox)){
     if (boss.takeDamage(15, 'parry')) {
+      p.addSignature(12, 'boss_parry');
       addTrauma(.18);
       G.announce={text:'PARRY BREAK!',life:0.7};
       p.parryTimer=0;
@@ -8083,12 +8535,14 @@ function checkBossCollisions(dt){
   if(p.pounding && p.onGround){
     const dist=Math.abs(p.screenX-boss.x);
     if(dist<UNIT*5 && boss.takeDamage(15, 'pound')){
+      p.addSignature(12, 'boss_pound');
       addTrauma(.22);
       G.announce={text:'GROUND BREAK!',life:0.7};
     }
   }
   if(p.dashTimer>0 && aabb(phb,bHB)){
     if (boss.takeDamage(10, 'dash')) {
+      p.addSignature(8, 'boss_dash');
       addTrauma(.16);
     }
   }
@@ -8690,7 +9144,7 @@ function handleContinueTap(){
     G.phase='LEVEL_INTRO'; G.introTimer=0;
     G.time=0; G.timeLeft=28; G.deathDelay=0;
     G.diff=getDiff(0,getLevelOpeningMultiplier(G.levelDef));
-    G.speed=G.diff.speed*CHARS[G.selectedChar].spdM;
+    G.speed=G.diff.speed*getPlayerSpeedScale(G.player);
     G.rng=new RNG(Date.now()^(Math.random()*0x7FFFFFFF|0));
     G.announce=null; G.flashColor=null; G.flashLife=0;
     inp.jp=inp.jh=false; inp.tapped=false;
@@ -10122,6 +10576,288 @@ function drawHUD(dt){
   }
 }
 
+function drawHUD(dt) {
+  const u = UNIT;
+  const p = G.player;
+  if (!p) return;
+  const runner = CHARS[G.selectedChar] || CHARS[0];
+  const sig = p.signature || getCharSignatureProfile(G.selectedChar);
+  const tl = G.timeLeft;
+  const compact = W < 1320 || H < 760 || (W / H > 1.72);
+  const edge = Math.max(10, u * 0.3);
+  const top = SAFE_TOP + edge;
+  const left = SAFE_LEFT + edge;
+  const right = W - SAFE_RIGHT - edge;
+  const hpPct = clamp(p.hp / p.maxHP, 0, 1);
+  const prog = clamp(G.time / Math.max(1, G.levelDef.targetTime || 1), 0, 1);
+  const urg = clamp(1 - tl / 10, 0, 1);
+  const chargePct = clamp(p.signatureMeter / 100, 0, 1);
+  const comboVisible = G.combo >= 5;
+
+  if (G.comboPulse > 0) G.comboPulse = Math.max(0, G.comboPulse - dt * 2);
+
+  // ---------- Single inked HUD strip ----------
+  const stripH = compact ? u * 1.36 : u * 1.48;
+  const stripW = right - left;
+  const stripY = top;
+  const stripX = left;
+
+  // Bone-paper strip w/ thick ink border (woodcut panel)
+  fillRR(stripX, stripY, stripW, stripH, u * 0.22, BONE_COLOR, INK_COLOR, Math.max(2.4, u * 0.1));
+  // Dropped ink slab behind — micro-shadow for depth without glow
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  fillRR(stripX + u * 0.12, stripY + u * 0.14, stripW, stripH, u * 0.22, 'rgba(14,14,16,0.35)', null, 0);
+  ctx.restore();
+  // Re-draw the strip on top after the shadow
+  fillRR(stripX, stripY, stripW, stripH, u * 0.22, BONE_COLOR, INK_COLOR, Math.max(2.4, u * 0.1));
+
+  // Zone widths
+  const leftW = compact ? stripW * 0.4 : stripW * 0.42;
+  const centerW = compact ? stripW * 0.22 : stripW * 0.2;
+  const rightW = stripW - leftW - centerW;
+  const leftX = stripX;
+  const centerX = stripX + leftW;
+  const rightX = centerX + centerW;
+  const padX = u * 0.34;
+  const cy = stripY + stripH / 2;
+
+  // Vertical ink separators
+  ctx.save();
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineWidth = Math.max(2, u * 0.08);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(centerX, stripY + u * 0.22);
+  ctx.lineTo(centerX, stripY + stripH - u * 0.22);
+  ctx.moveTo(rightX, stripY + u * 0.22);
+  ctx.lineTo(rightX, stripY + stripH - u * 0.22);
+  ctx.stroke();
+  ctx.restore();
+
+  // --- LEFT ZONE: L# · RUNNER · HP ---
+  const bannerW = u * 1.5;
+  const bannerH = u * 0.62;
+  fillRR(leftX + padX, stripY + u * 0.22, bannerW, bannerH, u * 0.14, INK_COLOR, null, 0);
+  drawFitText('L' + G.levelNum, leftX + padX + bannerW / 2, stripY + u * 0.22 + bannerH / 2, bannerW - u * 0.2, {
+    basePx: u * 0.4, minPx: u * 0.22, weight: 'bold', color: BONE_COLOR
+  });
+  drawFitText(runner.name.toUpperCase(), leftX + padX + bannerW + u * 0.34, stripY + u * 0.3, leftW - bannerW - u * 1.0, {
+    basePx: compact ? u * 0.4 : u * 0.46, minPx: u * 0.24,
+    weight: 'bold', color: INK_COLOR, align: 'left', baseline: 'top'
+  });
+  // Inked heart + HP bar
+  const heartX = leftX + padX + bannerW + u * 0.48;
+  const heartY = stripY + u * 0.94;
+  drawHeartShape(heartX, heartY, u * 0.34, hpPct > 0.3 ? '#D84040' : '#6E1818', INK_COLOR);
+  const hpBarX = heartX + u * 0.6;
+  const hpBarW = leftX + leftW - hpBarX - padX;
+  const hpBarH = u * 0.32;
+  const hpBarY = heartY - hpBarH / 2;
+  fillRR(hpBarX, hpBarY, hpBarW, hpBarH, u * 0.08, BONE_COLOR, INK_COLOR, Math.max(1.4, u * 0.05));
+  const hpFillW = Math.max(0, (hpBarW - u * 0.12) * hpPct);
+  const hpCol = hpPct > 0.5 ? '#3C8F2A' : (hpPct > 0.25 ? '#E2A318' : '#D84040');
+  fillRR(hpBarX + u * 0.06, hpBarY + u * 0.06, hpFillW, hpBarH - u * 0.12, u * 0.06, hpCol, null, 0);
+  if (p.hpFlash > 0) {
+    ctx.save();
+    ctx.globalAlpha = clamp(p.hpFlash, 0, 1) * 0.5;
+    fillRR(hpBarX + u * 0.06, hpBarY + u * 0.06, hpBarW - u * 0.12, hpBarH - u * 0.12, u * 0.06, '#FFFFFF', null, 0);
+    ctx.restore();
+  }
+  drawFitText(\`\${Math.ceil(p.hp)}/\${p.maxHP}\`, hpBarX + hpBarW - u * 0.14, heartY, u * 1.4, {
+    basePx: u * 0.22, minPx: u * 0.16, weight: 'bold', color: INK_COLOR, align: 'right'
+  });
+
+  // --- CENTER ZONE: RADIAL TIMER + SLAB NUMERAL ---
+  const ringR = Math.min(centerW, stripH) * 0.42;
+  const ringCX = centerX + centerW / 2;
+  const ringCY = cy;
+  ctx.save();
+  // Outer ink ring
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineWidth = Math.max(2.2, u * 0.12);
+  ctx.beginPath(); ctx.arc(ringCX, ringCY, ringR, 0, PI2); ctx.stroke();
+  // Track
+  ctx.strokeStyle = 'rgba(14,14,16,0.18)';
+  ctx.lineWidth = Math.max(2, u * 0.16);
+  ctx.beginPath(); ctx.arc(ringCX, ringCY, ringR - u * 0.12, 0, PI2); ctx.stroke();
+  // Progress arc (biome accent)
+  const progCol = G.theme && G.theme.gt ? G.theme.gt : '#FFC14D';
+  ctx.strokeStyle = progCol;
+  ctx.lineWidth = Math.max(2, u * 0.16);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(ringCX, ringCY, ringR - u * 0.12, -Math.PI / 2, -Math.PI / 2 + PI2 * prog);
+  ctx.stroke();
+  ctx.restore();
+  const tPulse = tl < 5 ? 1 + Math.sin(G.time * 12) * 0.08 : 1;
+  ctx.save();
+  ctx.translate(ringCX, ringCY);
+  ctx.scale(tPulse, tPulse);
+  const urgCol = tl < 5 ? '#D84040' : INK_COLOR;
+  drawFitText(\`\${Math.ceil(tl)}\`, 0, 0, centerW - u * 0.6, {
+    basePx: compact ? u * 0.7 : u * 0.86, minPx: u * 0.4, weight: 'bold', color: urgCol
+  });
+  ctx.restore();
+  drawFitText('SEC', ringCX, ringCY + ringR + u * 0.1, centerW - u * 0.3, {
+    basePx: u * 0.2, minPx: u * 0.14, weight: 'bold', color: INK_COLOR, baseline: 'top'
+  });
+
+  // --- RIGHT ZONE: SCORE · GEM · SIGNATURE ---
+  drawFitText('SCORE', rightX + padX, stripY + u * 0.22, rightW - padX * 2, {
+    basePx: u * 0.22, minPx: u * 0.16, weight: 'bold', color: 'rgba(14,14,16,0.62)',
+    align: 'left', baseline: 'top'
+  });
+  drawFitText(\`\${G.runScore}\`, rightX + padX, stripY + u * 0.52, rightW - u * 2.3, {
+    basePx: compact ? u * 0.54 : u * 0.62, minPx: u * 0.3,
+    weight: 'bold', color: INK_COLOR, align: 'left', baseline: 'top'
+  });
+  // Gem chip
+  const gemChipW = u * 1.8;
+  const gemChipH = u * 0.48;
+  const gemChipX = rightX + rightW - padX - gemChipW;
+  const gemChipY = stripY + u * 0.22;
+  fillRR(gemChipX, gemChipY, gemChipW, gemChipH, u * 0.1, progCol, INK_COLOR, Math.max(1.6, u * 0.06));
+  drawFitText(\`♦ \${G.runGems}\`, gemChipX + gemChipW / 2, gemChipY + gemChipH / 2, gemChipW - u * 0.16, {
+    basePx: u * 0.28, minPx: u * 0.2, weight: 'bold', color: INK_COLOR
+  });
+  // Save/continue chip
+  const saveChipY = gemChipY + gemChipH + u * 0.08;
+  fillRR(gemChipX, saveChipY, gemChipW, gemChipH, u * 0.1,
+    G.continuesLeft > 0 ? '#FFC14D' : BONE_COLOR, INK_COLOR, Math.max(1.6, u * 0.06));
+  drawFitText(\`\${Math.max(0, G.continuesLeft)} SAVE\`, gemChipX + gemChipW / 2, saveChipY + gemChipH / 2, gemChipW - u * 0.16, {
+    basePx: u * 0.22, minPx: u * 0.16, weight: 'bold', color: INK_COLOR
+  });
+
+  // ---------- Pause button (inked) ----------
+  const pauseW = u * 0.94;
+  const pauseH = u * 0.94;
+  const pauseX = right - pauseW;
+  const pauseY = stripY + stripH + u * 0.18;
+  fillRR(pauseX, pauseY, pauseW, pauseH, u * 0.16, BONE_COLOR, INK_COLOR, Math.max(2, u * 0.08));
+  ctx.save();
+  ctx.fillStyle = INK_COLOR;
+  ctx.fillRect(pauseX + pauseW * 0.3, pauseY + pauseH * 0.25, pauseW * 0.14, pauseH * 0.5);
+  ctx.fillRect(pauseX + pauseW * 0.56, pauseY + pauseH * 0.25, pauseW * 0.14, pauseH * 0.5);
+  ctx.restore();
+  drawSpeakerIcon(SAFE_LEFT + u * 0.3, stripY + stripH + u * 0.18, u * 1.0);
+
+  // ---------- Signature button bottom-right ----------
+  const sigSize = compact ? u * 1.92 : u * 2.08;
+  const sigX = right - sigSize;
+  const sigY = H - SAFE_BOTTOM - edge - sigSize;
+  G._hudLayout = { signatureBtn: { x: sigX, y: sigY, w: sigSize, h: sigSize } };
+
+  // Inked disc button
+  ctx.save();
+  const btnCX = sigX + sigSize / 2;
+  const btnCY = sigY + sigSize / 2;
+  const btnR = sigSize * 0.48;
+  ctx.fillStyle = p.signatureReady ? '#FFC14D' : BONE_COLOR;
+  ctx.beginPath(); ctx.arc(btnCX, btnCY, btnR, 0, PI2); ctx.fill();
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineWidth = Math.max(2.4, u * 0.12);
+  ctx.beginPath(); ctx.arc(btnCX, btnCY, btnR, 0, PI2); ctx.stroke();
+  // Charge ring outside the button
+  const chargeR = btnR + u * 0.2;
+  ctx.strokeStyle = 'rgba(14,14,16,0.18)';
+  ctx.lineWidth = Math.max(2.4, u * 0.14);
+  ctx.beginPath(); ctx.arc(btnCX, btnCY, chargeR, 0, PI2); ctx.stroke();
+  ctx.strokeStyle = sig.accent;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(2.4, u * 0.14);
+  ctx.beginPath();
+  ctx.arc(btnCX, btnCY, chargeR, -Math.PI / 2, -Math.PI / 2 + PI2 * chargePct);
+  ctx.stroke();
+  ctx.restore();
+  drawFitText(p.signatureReady ? 'TAP!' : \`\${Math.round(p.signatureMeter)}%\`, btnCX, btnCY, sigSize - u * 0.6, {
+    basePx: p.signatureReady ? u * 0.46 : u * 0.36,
+    minPx: u * 0.22, weight: 'bold', color: INK_COLOR
+  });
+
+  // Combo chip above signature disc
+  if (comboVisible) {
+    const comboPulse = 1 + G.comboPulse * 0.15;
+    const comboCol = G.combo >= 30 ? \`hsl(\${(G.time * 360) % 360},100%,58%)\` : (G.combo >= 20 ? '#FF7E63' : '#FFC14D');
+    ctx.save();
+    ctx.translate(sigX + sigSize / 2, sigY - u * 0.44);
+    ctx.scale(comboPulse, comboPulse);
+    const comboW = u * 2.6;
+    const comboH = u * 0.56;
+    fillRR(-comboW / 2, -comboH / 2, comboW, comboH, u * 0.12, comboCol, INK_COLOR, Math.max(1.8, u * 0.08));
+    drawFitText(\`COMBO x\${G.combo}\`, 0, 0, comboW - u * 0.2, {
+      basePx: u * 0.3, minPx: u * 0.2, weight: 'bold', color: INK_COLOR
+    });
+    ctx.restore();
+  }
+
+  // Guided lesson strip below HUD strip
+  const guidedOffset = drawGuidedLessonStrip(stripY + stripH + u * 0.24, compact);
+  if (G.announce && G.announce.life > 0) {
+    const al = clamp(G.announce.life, 0, 1);
+    const annW = Math.min(W * (compact ? 0.44 : 0.5), u * (compact ? 6.2 : 7.2));
+    const annH = u * (compact ? 0.66 : 0.74);
+    const tooltipActive = !!(tooltipState.active && tooltipState.alpha > 0);
+    const annY = stripY + stripH + guidedOffset + u * 0.32 + (tooltipActive ? u * 0.96 : 0);
+    ctx.save();
+    ctx.globalAlpha = al;
+    fillRR(W / 2 - annW / 2, annY, annW, annH, u * 0.14, INK_COLOR, '#FFC14D', Math.max(2, u * 0.09));
+    drawFitText(G.announce.text, W / 2, annY + annH / 2, annW - u * 0.3, {
+      basePx: u * 0.34, minPx: u * 0.22, weight: 'bold', color: '#FFC14D'
+    });
+    ctx.restore();
+    G.announce.life -= dt * 0.75;
+  }
+
+  const powerups = [];
+  if (p.shield) powerups.push({ label: 'SHIELD', accent: '#8BD8FF' });
+  if (p.magnetTimer > 0) powerups.push({ label: 'MAGNET', accent: '#7FFFD4' });
+  if (p.extraLife) powerups.push({ label: 'EXTRA', accent: '#FF8A80' });
+  if (p.starTimer > 0) powerups.push({ label: 'STAR', accent: '#FFD65A' });
+  if (p.tinyTimer > 0) powerups.push({ label: 'TINY', accent: '#22CCAA' });
+  if (p.speedBoost) powerups.push({ label: 'FAST', accent: '#CC8822' });
+  if (p.doubleScore) powerups.push({ label: 'x2', accent: '#FF6644' });
+  if (p.slideTimer > 0) powerups.push({ label: 'SLIDE', accent: '#88CCFF' });
+  if (p.dashTimer > 0) powerups.push({ label: 'DASH', accent: '#88FFCC' });
+  if (p.parryTimer > 0) powerups.push({ label: 'PARRY', accent: '#FFFF66' });
+  if (p.pounding) powerups.push({ label: 'POUND', accent: '#FFAA44' });
+  if (p.redlineTimer > 0) powerups.push({ label: 'REDLINE', accent: '#FF6A4D' });
+  if (p.guardAuraTimer > 0) powerups.push({ label: 'AURA', accent: '#C08A62' });
+  if (p.arcPulseTimer > 0) powerups.push({ label: 'ARC', accent: '#59D9C8' });
+
+  let chipX = left;
+  let chipRow = 0;
+  const chipH = u * 0.58;
+  const chipBaseY = H - SAFE_BOTTOM - edge - chipH;
+  const chipLimit = sigX - u * 0.26;
+  for (let i = 0; i < powerups.length; i++) {
+    const chip = powerups[i];
+    const chipW = Math.max(u * 1.25, chip.label.length * u * 0.3 + u * 0.5);
+    if (chipX + chipW > chipLimit && chipRow === 0) {
+      chipRow = 1;
+      chipX = left;
+    }
+    if (chipRow > 1) break;
+    const chipY = chipBaseY - chipRow * (chipH + u * 0.14);
+    fillRR(chipX, chipY, chipW, chipH, u * 0.12, chip.accent, INK_COLOR, Math.max(1.6, u * 0.06));
+    drawFitText(chip.label, chipX + chipW / 2, chipY + chipH / 2, chipW - u * 0.2, {
+      basePx: u * 0.26, minPx: u * 0.18, weight: 'bold', color: INK_COLOR
+    });
+    chipX += chipW + u * 0.14;
+  }
+
+  if (_saveFailWarning > 0) {
+    _saveFailWarning -= dt;
+    ctx.save();
+    ctx.globalAlpha = clamp(_saveFailWarning, 0, 1);
+    fillRR(W / 2 - u * 4.5, H - SAFE_BOTTOM - u * 1.78, u * 9, u * 0.66, u * 0.14, '#D84040', INK_COLOR, Math.max(2, u * 0.09));
+    drawFitText('STORAGE FULL - PROGRESS MAY NOT SAVE', W / 2, H - SAFE_BOTTOM - u * 1.78 + u * 0.33, u * 8.6, {
+      basePx: u * 0.26, minPx: u * 0.18, weight: 'bold', color: BONE_COLOR
+    });
+    ctx.restore();
+  }
+}
+
 function DEPRECATED_drawMenu(){
   const u = UNIT;
   const hero = CHARS[safeSelectedChar()] || CHARS[0];
@@ -11347,24 +12083,31 @@ function getCharPassiveLabel(ch) {
 function drawCharSelect() {
   const u = UNIT;
   const cols = 3, rows = 2, totalChars = CHARS.length;
+  const pathIds = ['assault', 'vault', 'guardian'];
   const headerX = SAFE_LEFT + u * 0.55, headerY = SAFE_TOP + u * 0.35;
   const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, headerH = u * 2.2;
   const selIdx = clamp(G.selectedChar || 0, 0, CHARS.length - 1);
   const selChar = CHARS[selIdx];
+  const selPath = getSelectedRunPath();
+  const selSignature = getCharSignatureProfile(selIdx);
   const firstSession = save.highestLevel === 0;
   const starterGuide = firstSession ? getGuidedLevel(1) : null;
   const spotlightX = SAFE_LEFT + u * 0.72;
   const spotlightY = headerY + headerH + u * 0.34;
   const spotlightW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.44;
-  const spotlightH = u * 3.56;
-  const gridTop = spotlightY + spotlightH + u * 0.3;
+  const spotlightH = u * 3.28;
+  const pathGap = u * 0.14;
+  const pathCardW = (spotlightW - pathGap * 2) / 3;
+  const pathCardH = u * 1.22;
+  const pathY = spotlightY + spotlightH + u * 0.2;
+  const gridTop = pathY + pathCardH + u * 0.24;
   const cardW = Math.min(u * 4.3, (W - SAFE_LEFT - SAFE_RIGHT - u * 1.8) / cols);
-  const cardH = u * 2.62;
+  const cardH = u * 2.34;
   const gapX = (W - SAFE_LEFT - SAFE_RIGHT - cardW * cols) / (cols + 1);
-  const gapY = u * 0.16;
+  const gapY = u * 0.12;
   const btnY = H - SAFE_BOTTOM - u * 1.5;
   const bankedGems = Number.isFinite(save.totalGems) ? save.totalGems : (save.gems || 0);
-  G._charSelectLayout = { cards: [] };
+  G._charSelectLayout = { cards: [], pathCards: [] };
 
   drawMetaBackdrop(THEMES.JUNGLE, '#4C87C5');
 
@@ -11387,7 +12130,7 @@ function drawCharSelect() {
   });
   ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px monospace');
   ctx.fillStyle = 'rgba(220,235,255,0.8)';
-  ctx.fillText(firstSession ? 'Start clean: Gronk is the easiest opener. Level 1 teaches jump plus dash.' : 'Each hero reshapes your run with a different passive and stat profile.', W / 2, headerY + headerH * 0.76);
+  ctx.fillText(firstSession ? 'Pick a runner, lock a run path, then learn the lane on Level 1.' : 'Each runner now pairs with a run path and signature burst for a more distinct build.', W / 2, headerY + headerH * 0.76);
 
   drawMiniChip(headerX + u * 0.35, headerY + u * 0.42, u * 4.4, u * 0.72, 'BEST L' + save.highestLevel + ' - ' + save.bestScore, {
     accent: '#6B8FB9',
@@ -11409,8 +12152,8 @@ function drawCharSelect() {
     accent: lightenColor(selChar.col, 14),
     textColor: '#F7FBFF'
   });
-  drawMiniChip(spotlightX + spotlightW - u * 3.05, spotlightY + u * 0.22, u * 2.75, u * 0.56, getCharPassiveLabel(selChar).toUpperCase(), {
-    accent: 'rgba(120,188,255,0.18)',
+  drawMiniChip(spotlightX + spotlightW - u * 3.1, spotlightY + u * 0.22, u * 2.8, u * 0.56, selPath.name.toUpperCase(), {
+    accent: hexToRgba(selPath.accent, 0.22),
     textColor: '#EAF4FF',
     font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace')
   });
@@ -11431,12 +12174,18 @@ function drawCharSelect() {
     weight: 'bold',
     color: lightenColor(selChar.col, 22)
   });
-  drawFitText(firstSession && starterGuide ? 'Clean first-session pick with the clearest opening lesson.' : selChar.desc, spotlightX + spotlightW * 0.58, spotlightY + u * 1.52, spotlightW * 0.42, {
+  drawFitText(selSignature.name.toUpperCase(), spotlightX + spotlightW * 0.58, spotlightY + u * 1.35, spotlightW * 0.36, {
+    basePx: u * 0.28,
+    minPx: u * 0.18,
+    weight: 'bold',
+    color: selSignature.accent
+  });
+  drawFitText(firstSession && starterGuide ? 'Clean first-session pick with the clearest opening lesson.' : (selSignature.desc + ' ' + selPath.desc), spotlightX + spotlightW * 0.58, spotlightY + u * 1.74, spotlightW * 0.42, {
     basePx: u * 0.34,
     minPx: u * 0.2,
     color: 'rgba(220,228,245,0.74)'
   });
-  const spotStatY = spotlightY + u * 2.0;
+  const spotStatY = spotlightY + u * 2.12;
   const spotStatW = u * 1.95;
   const spotGap = u * 0.16;
   drawValueCard(spotlightX + spotlightW * 0.43, spotStatY, spotStatW, u * 0.96, 'HP', selChar.maxHP, null, {
@@ -11454,6 +12203,41 @@ function drawCharSelect() {
     valueColor: '#FFF2C8',
     kickerPx: u * 0.2, valuePx: u * 0.34
   });
+
+  ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
+  ctx.fillStyle = 'rgba(229,239,255,0.76)';
+  ctx.textAlign = 'left';
+  ctx.fillText('RUN PATH', spotlightX + u * 0.08, pathY - u * 0.08);
+  for (let i = 0; i < pathIds.length; i++) {
+    const pathId = pathIds[i];
+    const path = getRunPathDef(pathId);
+    const x = spotlightX + i * (pathCardW + pathGap);
+    const selected = selPath.id === pathId;
+    G._charSelectLayout.pathCards.push({ x: x, y: pathY, w: pathCardW, h: pathCardH, id: pathId });
+    drawPanel(x, pathY, pathCardW, pathCardH, {
+      top: selected ? 'rgba(18,34,54,0.97)' : 'rgba(12,22,38,0.92)',
+      bottom: selected ? 'rgba(8,16,30,0.95)' : 'rgba(8,14,28,0.88)',
+      stroke: selected ? lightenColor(path.accent, 28) : 'rgba(255,255,255,0.08)',
+      accent: path.accent,
+      blur: selected ? 20 : 12
+    });
+    drawMiniChip(x + u * 0.14, pathY + u * 0.12, u * 1.62, u * 0.34, path.short, {
+      accent: selected ? hexToRgba(path.accent, 0.26) : 'rgba(98,126,168,0.18)',
+      textColor: '#F4FAFF',
+      font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px monospace')
+    });
+    drawFitText(path.name.toUpperCase(), x + pathCardW / 2, pathY + u * 0.48, pathCardW - u * 0.32, {
+      basePx: u * 0.28,
+      minPx: u * 0.2,
+      weight: 'bold',
+      color: selected ? lightenColor(path.accent, 18) : '#E8F2FF'
+    });
+    drawFitText(path.desc, x + pathCardW / 2, pathY + u * 0.86, pathCardW - u * 0.42, {
+      basePx: u * 0.18,
+      minPx: u * 0.15,
+      color: 'rgba(215,227,247,0.72)'
+    });
+  }
 
   for (let i = 0; i < totalChars; i++) {
     const row = Math.floor(i / cols), col = i % cols;
@@ -11568,15 +12352,15 @@ function drawCharSelect() {
     top: 'rgba(18,30,52,0.94)',
     bottom: 'rgba(8,14,26,0.9)',
     stroke: 'rgba(255,255,255,0.1)',
-    accent: lightenColor(selChar.col, 14)
+    accent: selPath.accent
   });
-  drawFitText(firstSession ? ('RECOMMENDED START - ' + selChar.name.toUpperCase()) : (selChar.name.toUpperCase() + ' - ' + getCharPassiveLabel(selChar).toUpperCase()), W / 2, H - SAFE_BOTTOM - u * 2.78, u * 10.8, {
+  drawFitText(selChar.name.toUpperCase() + ' - ' + selPath.name.toUpperCase() + ' - ' + selSignature.name.toUpperCase(), W / 2, H - SAFE_BOTTOM - u * 2.78, u * 10.8, {
     basePx: u * 0.46,
     minPx: u * 0.28,
     weight: 'bold',
     color: '#F6FAFF'
   });
-  drawFitText(firstSession && starterGuide ? 'Balanced opener. Level 1 teaches jump, then dash.' : 'Pick a style, own the lane, and cash out gems before the pressure spikes.', W / 2, H - SAFE_BOTTOM - u * 2.4, u * 10.8, {
+  drawFitText(firstSession && starterGuide ? 'Balanced opener plus a clear build choice. Level 1 teaches jump, then dash.' : (getCharPassiveLabel(selChar) + '. ' + selPath.desc), W / 2, H - SAFE_BOTTOM - u * 2.4, u * 10.8, {
     basePx: u * 0.32,
     minPx: u * 0.2,
     color: 'rgba(224,233,248,0.74)'
@@ -11587,7 +12371,7 @@ function drawCharSelect() {
   ctx.save();
   ctx.translate(W / 2, startBtnY + btnH / 2);
   ctx.scale(startPulse, startPulse);
-  drawActionCard(-btnW / 2, -btnH / 2, btnW, btnH, firstSession && starterGuide ? starterGuide.cta : 'START RUN', firstSession && starterGuide ? starterGuide.title.toUpperCase() : null, {
+  drawActionCard(-btnW / 2, -btnH / 2, btnW, btnH, firstSession && starterGuide ? starterGuide.cta : 'START RUN', selPath.name.toUpperCase(), {
     top: '#3A7A45',
     bottom: '#1E4F2A',
     stroke: '#85E0A2',
@@ -11623,152 +12407,113 @@ function drawCharSelect() {
 
 function drawDeathScreen() {
   const u = UNIT;
-  const guide = G.onboarding && G.onboarding.level === G.levelNum ? G.onboarding : null;
   const pendingGuide = getGuidedPendingStep();
   const compact = W < 1100 || H < 560 || (W / H > 1.8);
-  const panelW = Math.min(W * (compact ? 0.8 : 0.74), u * 11.8);
-  const panelH = u * 3.2;
-  const panelX = W / 2 - panelW / 2, panelY = SAFE_TOP + u * 0.58;
-  const statGap = u * 0.18;
-  const statW = (panelW - u * 1.04 - statGap * 2) / 3;
-  const adBtnW = u * 5.1, adBtnH = u * 1.22;
   const showAdContinue = adReady && !G.endless && !G.dailyChallenge && canShowAd();
   const showDoubleGems = adReady && !adDoubleGemsUsed && G.runGems > 0 && canShowAd();
-  const adY = panelY + panelH + u * 0.52;
-  const retryY = adY + (showAdContinue || showDoubleGems ? adBtnH + u * 0.46 : u * 0.2);
-  const actionW = u * 7.2, actionH = u * 1.2;
-  const secondaryY = retryY + actionH + u * 0.32;
-  const bottomY = secondaryY + actionH * 0.9 + u * 0.42;
+  const actionW = Math.min(W * 0.56, u * 8.4);
+  const actionH = u * 1.26;
+  const adBtnW = Math.min(W * 0.42, u * 5.4);
+  const adBtnH = u * 1.08;
   G._deadLayout = { adButtons: [] };
 
-  drawMetaBackdrop(G.theme || THEMES.JUNGLE, '#B94444');
-  ctx.fillStyle = 'rgba(74,16,18,0.22)';
+  // Bone paper background with grain
+  ctx.fillStyle = BONE_COLOR;
   ctx.fillRect(0, 0, W, H);
+  if (typeof drawPaperGrain === 'function') drawPaperGrain(0.34);
 
-  drawPanel(panelX, panelY, panelW, panelH, {
-    top: 'rgba(52,15,20,0.92)',
-    bottom: 'rgba(16,9,16,0.9)',
-    stroke: 'rgba(255,154,154,0.18)',
-    accent: '#A63E46',
-    blur: 22
-  });
+  // Diagonal KO splash bar
+  ctx.save();
+  ctx.translate(W / 2, SAFE_TOP + u * 2.6);
+  ctx.rotate(-0.07);
+  // Red under-slab
+  ctx.fillStyle = '#D84040';
+  ctx.fillRect(-W, -u * 1.4, W * 2, u * 2.8);
+  // Ink outline stripes
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineWidth = Math.max(3, u * 0.14);
+  ctx.strokeRect(-W, -u * 1.4, W * 2, u * 2.8);
+  ctx.restore();
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  drawFitText('RUN OVER', W / 2, panelY + u * 0.58, panelW - u * 1.2, {
-    basePx: u * 1.18,
-    minPx: u * 0.66,
-    weight: 'bold',
-    color: '#FFBCB2'
+  // KO title
+  ctx.save();
+  ctx.translate(W / 2, SAFE_TOP + u * 2.5);
+  ctx.rotate(-0.07);
+  drawFitText('RUN OVER', 0, 0, W - u * 2, {
+    basePx: compact ? u * 1.6 : u * 2.2, minPx: u * 1.0, weight: 'bold', color: BONE_COLOR
   });
-  drawFitText(G.newHigh ? 'NEW BEST RUN' : 'REGROUP, THEN PUSH AGAIN', W / 2, panelY + u * 1.12, panelW - u * 1.2, {
-    basePx: u * 0.34,
-    minPx: u * 0.22,
-    color: G.newHigh ? '#FFE28A' : 'rgba(245,232,192,0.68)'
-  });
-  drawValueCard(panelX + u * 0.28, panelY + u * 1.52, statW, u * 1.08, 'LEVEL', G.levelNum, null, {
-    accent: '#7C8DAA',
-    valueColor: '#F4F8FF',
-    kickerPx: u * 0.26,
-    valuePx: u * 0.4
-  });
-  drawValueCard(panelX + u * 0.28 + statW + statGap, panelY + u * 1.52, statW, u * 1.08, 'GEMS', G.runGems + (adDoubleGemsUsed ? ' x2' : ''), null, {
-    accent: '#D2A84A',
-    valueColor: '#FFF8E8',
-    kickerPx: u * 0.26,
-    valuePx: u * 0.4
-  });
-  drawValueCard(panelX + u * 0.28 + (statW + statGap) * 2, panelY + u * 1.52, statW, u * 1.08, 'SCORE', G.runScore, 'BEST ' + save.bestScore, {
-    accent: '#4E90C9',
-    valueColor: '#FFE27A',
-    kickerPx: u * 0.26,
-    valuePx: u * 0.4,
-    subPx: u * 0.24
+  ctx.restore();
+
+  // Subhead
+  drawFitText(G.newHigh ? 'NEW BEST · FRAME IT' : 'REGROUP · PUSH AGAIN', W / 2, SAFE_TOP + u * 4.6, W - u * 3, {
+    basePx: u * 0.42, minPx: u * 0.26, weight: 'bold', color: INK_COLOR
   });
 
+  // Big score splash
+  const splashY = SAFE_TOP + u * 6.5;
+  drawFitText('SCORE', W / 2, splashY, W - u * 3, {
+    basePx: u * 0.32, minPx: u * 0.22, weight: 'bold', color: 'rgba(14,14,16,0.64)'
+  });
+  drawFitText(String(G.runScore), W / 2, splashY + u * 1.25, W - u * 3, {
+    basePx: compact ? u * 2.2 : u * 2.8, minPx: u * 1.2, weight: 'bold', color: INK_COLOR
+  });
+  drawFitText(\`BEST \${save.bestScore || 0}   ·   LVL \${G.levelNum}   ·   ♦ \${G.runGems}\${adDoubleGemsUsed ? ' x2' : ''}\`, W / 2, splashY + u * 2.68, W - u * 3, {
+    basePx: u * 0.32, minPx: u * 0.22, weight: 'bold', color: INK_COLOR
+  });
+
+  // Retry CTA
+  const retryY = splashY + u * 3.7;
+  fillRR(W / 2 - actionW / 2, retryY, actionW, actionH, u * 0.18, '#3C8F2A', INK_COLOR, Math.max(3, u * 0.12));
+  drawFitText(pendingGuide ? 'RETRY LESSON' : 'RETRY', W / 2, retryY + actionH / 2, actionW - u * 0.6, {
+    basePx: u * 0.68, minPx: u * 0.36, weight: 'bold', color: BONE_COLOR
+  });
+  G._deadLayout.retryBtn = { x: W / 2 - actionW / 2, y: retryY, w: actionW, h: actionH };
+
+  // Ad buttons under retry
+  const adY = retryY + actionH + u * 0.3;
   if (showAdContinue && showDoubleGems) {
-    const gap = u * 0.4;
+    const gap = u * 0.3;
     const lx = W / 2 - adBtnW - gap / 2, rx = W / 2 + gap / 2;
-    drawActionCard(lx, adY, adBtnW, adBtnH, 'WATCH AD', 'FREE CONTINUE', {
-      top: 'rgba(84,48,140,0.96)',
-      bottom: 'rgba(44,24,76,0.92)',
-      stroke: 'rgba(191,154,255,0.42)',
-      accent: '#A879FF',
-      labelColor: '#FBF7FF',
-      subColor: '#E4D4FF'
+    fillRR(lx, adY, adBtnW, adBtnH, u * 0.14, '#A879FF', INK_COLOR, Math.max(2.2, u * 0.09));
+    drawFitText('▶ FREE CONTINUE', lx + adBtnW / 2, adY + adBtnH / 2, adBtnW - u * 0.3, {
+      basePx: u * 0.34, minPx: u * 0.22, weight: 'bold', color: INK_COLOR
     });
     G._deadLayout.adButtons.push({ x: lx, y: adY, w: adBtnW, h: adBtnH, reward: 'continue' });
-    drawActionCard(rx, adY, adBtnW, adBtnH, 'WATCH AD', '2X GEMS', {
-      top: 'rgba(120,90,18,0.96)',
-      bottom: 'rgba(64,44,10,0.92)',
-      stroke: 'rgba(255,211,112,0.4)',
-      accent: '#F0C449',
-      labelColor: '#FFFDF2',
-      subColor: '#FFE69D'
+    fillRR(rx, adY, adBtnW, adBtnH, u * 0.14, '#FFC14D', INK_COLOR, Math.max(2.2, u * 0.09));
+    drawFitText('▶ 2X GEMS', rx + adBtnW / 2, adY + adBtnH / 2, adBtnW - u * 0.3, {
+      basePx: u * 0.34, minPx: u * 0.22, weight: 'bold', color: INK_COLOR
     });
     G._deadLayout.adButtons.push({ x: rx, y: adY, w: adBtnW, h: adBtnH, reward: 'doubleGems' });
   } else if (showAdContinue || showDoubleGems) {
-    drawActionCard(W / 2 - adBtnW / 2, adY, adBtnW, adBtnH, 'WATCH AD', showAdContinue ? 'FREE CONTINUE' : '2X GEMS', {
-      top: showAdContinue ? 'rgba(84,48,140,0.96)' : 'rgba(120,90,18,0.96)',
-      bottom: showAdContinue ? 'rgba(44,24,76,0.92)' : 'rgba(64,44,10,0.92)',
-      stroke: showAdContinue ? 'rgba(191,154,255,0.42)' : 'rgba(255,211,112,0.4)',
-      accent: showAdContinue ? '#A879FF' : '#F0C449',
-      labelColor: '#FBF7FF',
-      subColor: showAdContinue ? '#E4D4FF' : '#FFE69D'
+    fillRR(W / 2 - adBtnW / 2, adY, adBtnW, adBtnH, u * 0.14, showAdContinue ? '#A879FF' : '#FFC14D', INK_COLOR, Math.max(2.2, u * 0.09));
+    drawFitText(showAdContinue ? '▶ FREE CONTINUE' : '▶ 2X GEMS', W / 2, adY + adBtnH / 2, adBtnW - u * 0.3, {
+      basePx: u * 0.34, minPx: u * 0.22, weight: 'bold', color: INK_COLOR
     });
     G._deadLayout.adButtons.push({ x: W / 2 - adBtnW / 2, y: adY, w: adBtnW, h: adBtnH, reward: showAdContinue ? 'continue' : 'doubleGems' });
   }
 
-  drawMiniChip(W / 2 - u * 4.2, retryY - u * 0.76, u * 8.4, u * 0.6, pendingGuide ? ('LESSON CHECKPOINT - ' + pendingGuide.label.toUpperCase()) : ('PROGRESS SAVED AT LEVEL ' + G.levelNum), {
-    accent: pendingGuide ? '#58C68D' : '#D48D3C',
-    top: pendingGuide ? 'rgba(14,44,26,0.94)' : 'rgba(55,33,12,0.94)',
-    bottom: pendingGuide ? 'rgba(10,20,14,0.92)' : 'rgba(22,14,10,0.92)',
-    textColor: pendingGuide ? '#E6FFF0' : '#FFF3D1'
+  const secondaryY = adY + (showAdContinue || showDoubleGems ? adBtnH + u * 0.3 : u * 0.1);
+  const halfBtn = actionW * 0.48;
+  fillRR(W / 2 - halfBtn - u * 0.12, secondaryY, halfBtn, actionH * 0.8, u * 0.14, BONE_COLOR, INK_COLOR, Math.max(2, u * 0.08));
+  drawFitText('NEW RUN', W / 2 - halfBtn / 2 - u * 0.12, secondaryY + actionH * 0.4, halfBtn - u * 0.3, {
+    basePx: u * 0.4, minPx: u * 0.24, weight: 'bold', color: INK_COLOR
   });
-  if (pendingGuide && guide) {
-    drawFitText(\`Retry the \${guide.title.toLowerCase()} lesson and finish \${pendingGuide.label.toLowerCase()}.\`, W / 2, retryY - u * 0.28, u * 8.9, {
-      basePx: u * 0.3,
-      minPx: u * 0.18,
-      color: 'rgba(230,238,248,0.74)'
-    });
-  }
+  G._deadLayout.newRunBtn = { x: W / 2 - halfBtn - u * 0.12, y: secondaryY, w: halfBtn, h: actionH * 0.8 };
+  fillRR(W / 2 + u * 0.12, secondaryY, halfBtn, actionH * 0.8, u * 0.14, BONE_COLOR, INK_COLOR, Math.max(2, u * 0.08));
+  drawFitText('LEVEL MAP', W / 2 + halfBtn / 2 + u * 0.12, secondaryY + actionH * 0.4, halfBtn - u * 0.3, {
+    basePx: u * 0.4, minPx: u * 0.24, weight: 'bold', color: INK_COLOR
+  });
+  G._deadLayout.mapBtn = { x: W / 2 + u * 0.12, y: secondaryY, w: halfBtn, h: actionH * 0.8 };
 
-  drawActionCard(W / 2 - actionW / 2, retryY, actionW, actionH, pendingGuide ? 'RETRY LESSON' : 'RETRY', pendingGuide ? pendingGuide.label.toUpperCase() : 'Resume saved run', {
-    top: '#2F7A48',
-    bottom: '#184327',
-    stroke: '#76DEA0',
-    accent: '#4ED37D',
-    labelColor: '#F7FFF8'
+  const shareY = secondaryY + actionH * 0.8 + u * 0.24;
+  const shareW = Math.min(actionW, u * 5);
+  fillRR(W / 2 - shareW / 2, shareY, shareW, actionH * 0.7, u * 0.12, '#4BB5CB', INK_COLOR, Math.max(1.8, u * 0.08));
+  drawFitText('SHARE', W / 2, shareY + actionH * 0.35, shareW - u * 0.3, {
+    basePx: u * 0.36, minPx: u * 0.22, weight: 'bold', color: INK_COLOR
   });
-  G._deadLayout.retryBtn = { x: W / 2 - actionW / 2, y: retryY, w: actionW, h: actionH };
-
-  drawActionCard(W / 2 - actionW / 2, secondaryY, actionW, actionH * 0.88, 'NEW RUN', 'Reset the lane', {
-    top: 'rgba(44,64,114,0.96)',
-    bottom: 'rgba(22,30,58,0.92)',
-    stroke: 'rgba(167,192,255,0.36)',
-    accent: '#6288D9',
-    labelColor: '#EDF4FF',
-    subColor: 'rgba(214,228,255,0.72)'
-  });
-  G._deadLayout.newRunBtn = { x: W / 2 - actionW / 2, y: secondaryY, w: actionW, h: actionH * 0.88 };
-
-  const halfBtn = actionW * 0.46;
-  drawActionCard(W / 2 - halfBtn - u * 0.22, bottomY, halfBtn, actionH * 0.8, 'SHARE', null, {
-    top: 'rgba(34,88,132,0.95)',
-    bottom: 'rgba(16,36,70,0.92)',
-    stroke: 'rgba(134,204,255,0.34)',
-    accent: '#4DADE6',
-    labelFont: FONTS['b0.48'] || ('bold ' + Math.round(u * 0.48) + 'px monospace')
-  });
-  G._deadLayout.shareBtn = { x: W / 2 - halfBtn - u * 0.22, y: bottomY, w: halfBtn, h: actionH * 0.8 };
-  drawActionCard(W / 2 + u * 0.22, bottomY, halfBtn, actionH * 0.8, 'LEVEL MAP', null, {
-    top: 'rgba(24,30,42,0.95)',
-    bottom: 'rgba(10,15,26,0.92)',
-    stroke: 'rgba(221,229,245,0.16)',
-    accent: '#8593A8',
-    labelColor: '#F1F5FF',
-    labelFont: FONTS['b0.46'] || ('bold ' + Math.round(u * 0.46) + 'px monospace')
-  });
-  G._deadLayout.mapBtn = { x: W / 2 + u * 0.22, y: bottomY, w: halfBtn, h: actionH * 0.8 };
+  G._deadLayout.shareBtn = { x: W / 2 - shareW / 2, y: shareY, w: shareW, h: actionH * 0.7 };
 }
 
 function drawPausedScreen() {
@@ -12027,6 +12772,8 @@ function resumeFromSave(source) {
   G.newHigh=false; G.lastUpgrade=-1;
   G.continuesLeft = 2 + (save.shopUpgrades&&save.shopUpgrades.up_continue ? 1 : 0);
   G.wheelResult=null;
+  G.selectedChar = safeSelectedChar(save.savedChar);
+  G.runPath = normalizeRunPathId(save.savedPath || save.selectedPath);
   save.cooldownEnd=0; persistSave();
   startLevel(save.savedLevel);
 }
@@ -12345,10 +13092,12 @@ function loop(ts){
       const _selReady = charSprites[_selCharId].ready || charSprites[_selCharId].blocked;
       if (!_selReady && lt < 5) break; // still loading
       if (save.highestLevel === 0 && !save.tutorialSeen) {
-          // First-run: skip menu, go straight to playing
+          // First-run: surface runner + path choice before the tutorial.
           G.selectedChar = 0; save.selectedChar = 0;
-          startNewRun();
-          startMusic(G.theme ? G.theme.name || 'JUNGLE' : 'JUNGLE');
+          save.selectedPath = DEFAULT_RUN_PATH;
+          G.runPath = DEFAULT_RUN_PATH;
+          G.phase = 'CHAR_SELECT';
+          startMusic('JUNGLE');
         } else {
           G.phase = 'MENU';
           startMusic('JUNGLE');
@@ -12486,10 +13235,7 @@ function loop(ts){
       }
       // Only update speed if alive — freeze world on death
       if(p.alive) {
-        let spdM=CHARS[G.selectedChar].spdM;
-        if(p.speedBoost) spdM*=1.15;
-        if(p.perfectLandTimer>0) spdM*=1.15; // 15% boost for perfect land
-        if(p.dashTimer>0) spdM*=1.6; // dash gives big speed burst
+        let spdM=getPlayerSpeedScale(p);
         G.speed=(G.hitStop > 0 ? 0 : G.diff.speed*spdM);
       }
       else G.speed=Math.max(0,G.speed-800*DT); // decelerate to 0
@@ -12541,7 +13287,7 @@ function loop(ts){
         enemySpawnCD-=DT;
         if(enemySpawnCD<=0){
           const spawnProg=clamp(G.time/G.levelDef.targetTime,0,1);
-          enemySpawnCD=Math.max(4,9-spawnProg*4);
+          enemySpawnCD=Math.max(4.6, 9 - spawnProg*3.4);
           spawnEnemy(G.levelDef);
         }
       }
@@ -12584,6 +13330,8 @@ function loop(ts){
             save.savedLevel=G.levelNum;
             save.savedScore=G.runScore;
             save.savedGems=G.runGems;
+            save.savedChar=G.selectedChar;
+            save.savedPath=G.runPath;
             save.cooldownEnd=0; // 5 minute cooldown
             updateStatsEndRun();
           }
@@ -12701,7 +13449,7 @@ function loop(ts){
             }
             boss=null;
             if(G.continuesLeft>0){G.phase='CONTINUE_PROMPT';G.continuePromptTimer=0;}
-            else{adDeathCount++; G.phase='DEAD';save.savedLevel=G.levelNum;save.savedScore=G.runScore;save.savedGems=G.runGems;save.cooldownEnd=0;updateStatsEndRun();}
+            else{adDeathCount++; G.phase='DEAD';save.savedLevel=G.levelNum;save.savedScore=G.runScore;save.savedGems=G.runGems;save.savedChar=G.selectedChar;save.savedPath=G.runPath;save.cooldownEnd=0;updateStatsEndRun();}
             if(G.runScore>save.bestScore){save.bestScore=G.runScore;G.newHigh=true;}
             save.totalGems+=G.runGems;persistSave();
           }
@@ -12906,7 +13654,11 @@ window.render_game_to_text = function renderGameToText() {
     grounded: !!G.player.onGround,
     hp: Number.isFinite(G.player.hp) ? G.player.hp : null,
     max_hp: Number.isFinite(G.player.maxHP) ? G.player.maxHP : null,
+    path: getActiveRunPath().id,
     shield: !!G.player.shield,
+    signature: G.player.signature ? G.player.signature.name : null,
+    signature_charge: roundSnapshotValue(G.player.signatureMeter),
+    signature_ready: !!G.player.signatureReady,
     x: roundSnapshotValue(G.player.x),
     y: roundSnapshotValue(G.player.y),
     vx: roundSnapshotValue(G.player.vx),
@@ -12933,7 +13685,9 @@ window.render_game_to_text = function renderGameToText() {
       continues_left: G.continuesLeft,
       gems: G.runGems,
       perf_level: _perfLevel,
+      run_path: getActiveRunPath().id,
       score: G.runScore,
+      signature_charge: G.player ? roundSnapshotValue(G.player.signatureMeter) : null,
       time_left: roundSnapshotValue(G.timeLeft),
     },
     level: G.levelNum,

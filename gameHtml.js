@@ -1064,20 +1064,21 @@ function loadSave() {
 }
 let _saveFailWarning = 0;
 let _saveFailCount = 0;
+let _saveFailWarningShownSession = false;
 function persistSave() {
   const payload = JSON.stringify(save);
   try {
     localStorage.setItem('gronk2', payload);
     _saveFailCount = 0;
-    _saveFailWarning = 0;
   } catch(e) {
     _saveFailCount++;
-    // Silently fall back to sessionStorage for the current session
     try { sessionStorage.setItem('gronk2', payload); } catch(e2) {}
-    // Only show the banner after multiple consecutive failures — avoids
-    // a scary red warning on the very first save if localStorage is
-    // temporarily unavailable (e.g. WebView quota shared with other apps)
-    if (_saveFailCount >= 3) _saveFailWarning = 5;
+    // Show the banner at most once per session, and only after sustained
+    // failures so a transient WebView hiccup doesn't scare players.
+    if (_saveFailCount >= 6 && !_saveFailWarningShownSession) {
+      _saveFailWarning = 3.5;
+      _saveFailWarningShownSession = true;
+    }
     console.warn('Storage save failed (' + _saveFailCount + '):', e && e.message);
   }
 }
@@ -7579,16 +7580,26 @@ function drawLevelComplete(dt){
   const stars = G._levelStarsEarned || 1;
   const rewardReadyHint = getRewardReadyHint(G.levelNum);
   const runner = CHARS[safeSelectedChar()] || CHARS[0];
-  const panelW = Math.min(W * (compact ? 0.78 : 0.72), u * (compact ? 11.2 : 12.4));
-  const panelH = u * (compact ? 8.4 : 9.1);
+  const panelW = Math.min(W * (compact ? 0.82 : 0.74), u * (compact ? 11.6 : 12.6));
+  const panelH = u * (compact ? 9.4 : 10.0);
   const panelX = W / 2 - panelW / 2;
-  const panelY = Math.max(SAFE_TOP + u * 0.55, H * (compact ? 0.08 : 0.1));
-  const innerPad = u * 0.54;
-  const statGap = u * 0.2;
-  const statW = (panelW - innerPad * 2 - statGap * 2) / 3;
-  const statY = panelY + u * 3.08;
-  const starY = panelY + u * 5.5;
-  const ctaY = panelY + panelH - u * 1.42;
+  const panelY = Math.max(SAFE_TOP + u * 0.45, H * (compact ? 0.06 : 0.08));
+  const innerPad = u * 0.56;
+  const innerW = panelW - innerPad * 2;
+  const statGap = u * 0.22;
+  const statW = (innerW - statGap * 2) / 3;
+  const statH = u * 1.34;
+  const titleY = panelY + u * 0.92;
+  const levelChipY = panelY + u * 1.55;
+  const runnerChipY = panelY + u * 2.36;
+  const newBestY = panelY + u * 3.04;
+  const statY = G.newHigh ? panelY + u * 3.74 : panelY + u * 3.4;
+  const taglineY = statY + statH + u * 0.4;
+  const starY = taglineY + u * 0.78;
+  const ctaH = u * 1.08;
+  const ctaY = panelY + panelH - ctaH - u * 0.32;
+  const hintH = u * 0.62;
+  const hintY = ctaY - hintH - u * 0.22;
 
   ctx.fillStyle = 'rgba(5,8,14,0.62)';
   ctx.fillRect(0, 0, W, H);
@@ -7604,11 +7615,11 @@ function drawLevelComplete(dt){
 
   const pulse = 1 + Math.sin(G.levelCompleteTimer * 4) * 0.03;
   ctx.save();
-  ctx.translate(W / 2, panelY + u * 0.92);
+  ctx.translate(W / 2, titleY);
   ctx.scale(pulse, pulse);
   drawFitText('LEVEL CLEAR', 0, 0, panelW - u * 1.6, {
-    basePx: compact ? u * 0.96 : u * 1.08,
-    minPx: u * 0.5,
+    basePx: compact ? u * 0.92 : u * 1.04,
+    minPx: u * 0.48,
     weight: 'bold',
     color: '#FFE58A',
     shadowColor: 'rgba(0,0,0,0.32)',
@@ -7616,57 +7627,79 @@ function drawLevelComplete(dt){
   });
   ctx.restore();
 
-  drawMiniChip(panelX + innerPad, panelY + u * 1.45, panelW - innerPad * 2, u * 0.68, G.levelDef.name.toUpperCase(), {
+  drawPanel(panelX + innerPad, levelChipY, innerW, u * 0.66, {
+    radius: u * 0.22,
+    top: 'rgba(19,34,56,0.94)',
+    bottom: 'rgba(8,14,28,0.88)',
+    stroke: 'rgba(202,228,255,0.12)',
     accent: 'rgba(95,229,255,0.22)',
-    textColor: '#EBFAFF',
-    font: FONTS['b0.34'] || ('700 ' + Math.round(u * 0.34) + 'px ' + UI_FONT_DISPLAY)
+    blur: 12
   });
-  drawMiniChip(W / 2 - u * 2.45, panelY + u * 2.22, u * 4.9, u * 0.58, \`\${runner.name.toUpperCase()} FINISHED STRONG\`, {
+  drawFitText(G.levelDef.name.toUpperCase(), W / 2, levelChipY + u * 0.33, innerW - u * 0.6, {
+    basePx: u * 0.34, minPx: u * 0.22, weight: 'bold', color: '#EBFAFF'
+  });
+
+  const runnerChipW = Math.min(u * 5.4, innerW - u * 0.4);
+  drawPanel(W / 2 - runnerChipW / 2, runnerChipY, runnerChipW, u * 0.58, {
+    radius: u * 0.2,
+    top: 'rgba(20,30,50,0.92)',
+    bottom: 'rgba(10,16,30,0.88)',
+    stroke: 'rgba(202,228,255,0.1)',
     accent: lightenColor(runner.col, 16),
-    textColor: '#F8FCFF',
-    font: FONTS['b0.28'] || ('700 ' + Math.round(u * 0.28) + 'px ' + UI_FONT_DISPLAY)
+    blur: 10
   });
+  drawFitText(\`\${runner.name.toUpperCase()} FINISHED STRONG\`, W / 2, runnerChipY + u * 0.29, runnerChipW - u * 0.5, {
+    basePx: u * 0.28, minPx: u * 0.2, weight: 'bold', color: '#F8FCFF'
+  });
+
   if (G.newHigh) {
-    drawMiniChip(W / 2 - u * 2.36, panelY + u * 2.9, u * 4.72, u * 0.58, 'NEW BEST SCORE', {
+    const nbW = Math.min(u * 4.6, innerW - u * 0.4);
+    drawPanel(W / 2 - nbW / 2, newBestY, nbW, u * 0.58, {
+      radius: u * 0.2,
+      top: 'rgba(60,18,22,0.92)',
+      bottom: 'rgba(28,8,12,0.88)',
+      stroke: 'rgba(255,170,170,0.18)',
       accent: 'rgba(255,124,124,0.26)',
-      textColor: '#FFF0F2',
-      font: FONTS['b0.3'] || ('700 ' + Math.round(u * 0.3) + 'px ' + UI_FONT_DISPLAY)
+      blur: 10
+    });
+    drawFitText('NEW BEST SCORE', W / 2, newBestY + u * 0.29, nbW - u * 0.5, {
+      basePx: u * 0.3, minPx: u * 0.2, weight: 'bold', color: '#FFF0F2'
     });
   }
 
-  drawValueCard(panelX + innerPad, statY, statW, u * 1.34, 'SCORE', \`\${G.runScore}\`, null, {
+  drawValueCard(panelX + innerPad, statY, statW, statH, 'SCORE', \`\${G.runScore}\`, null, {
     accent: 'rgba(255,215,90,0.24)',
     valueColor: '#FFE58A',
     kickerPx: u * 0.26,
     valuePx: u * 0.46
   });
-  drawValueCard(panelX + innerPad + statW + statGap, statY, statW, u * 1.34, 'BONUS', \`+\${timeBonus}\`, null, {
+  drawValueCard(panelX + innerPad + statW + statGap, statY, statW, statH, 'BONUS', \`+\${timeBonus}\`, null, {
     accent: 'rgba(118,222,136,0.22)',
     valueColor: '#9BFFBC',
     kickerPx: u * 0.26,
     valuePx: u * 0.46
   });
-  drawValueCard(panelX + innerPad + (statW + statGap) * 2, statY, statW, u * 1.34, 'GEMS', \`\${G.runGems}\`, null, {
+  drawValueCard(panelX + innerPad + (statW + statGap) * 2, statY, statW, statH, 'GEMS', \`\${G.runGems}\`, null, {
     accent: 'rgba(95,229,255,0.2)',
     valueColor: \`hsl(\${G.theme.gemH},100%,70%)\`,
     kickerPx: u * 0.26,
     valuePx: u * 0.46
   });
 
-  drawFitText(stars === 3 ? 'THREE STAR CLEAR' : (stars === 2 ? 'SOLID CLEAR' : 'LEVEL SURVIVED'), W / 2, panelY + u * 4.98, panelW - u * 1.6, {
-    basePx: u * 0.34,
+  drawFitText(stars === 3 ? 'THREE STAR CLEAR' : (stars === 2 ? 'SOLID CLEAR' : 'LEVEL SURVIVED'), W / 2, taglineY, panelW - u * 1.6, {
+    basePx: u * 0.32,
     minPx: u * 0.22,
-    color: 'rgba(196,208,228,0.72)'
+    color: 'rgba(196,208,228,0.78)'
   });
   for (let s = 0; s < 3; s++) {
-    const sx = W / 2 + (s - 1) * u * 1.3;
+    const sx = W / 2 + (s - 1) * u * 1.28;
     const active = s < stars && G.levelCompleteTimer > 0.55 + s * 0.22;
     const scale = active ? 1 + Math.sin((G.levelCompleteTimer - s * 0.08) * 5.2) * 0.04 : 1;
     ctx.save();
     ctx.translate(sx, starY);
     ctx.scale(scale, scale);
-    drawPanel(-u * 0.48, -u * 0.48, u * 0.96, u * 0.96, {
-      radius: u * 0.28,
+    drawPanel(-u * 0.46, -u * 0.46, u * 0.92, u * 0.92, {
+      radius: u * 0.26,
       top: active ? 'rgba(44,36,14,0.92)' : 'rgba(20,24,34,0.9)',
       mid: active ? 'rgba(30,22,10,0.9)' : 'rgba(12,16,24,0.88)',
       bottom: active ? 'rgba(14,10,8,0.88)' : 'rgba(8,10,16,0.88)',
@@ -7674,30 +7707,40 @@ function drawLevelComplete(dt){
       accent: active ? 'rgba(255,215,90,0.24)' : 'rgba(110,120,150,0.12)',
       blur: 12
     });
-    drawStarShape(0, 0, u * 0.28, active ? '#FFD45E' : 'rgba(120,130,155,0.42)', active ? 'rgba(255,245,190,0.2)' : 'rgba(255,255,255,0.04)');
+    drawStarShape(0, 0, u * 0.27, active ? '#FFD45E' : 'rgba(120,130,155,0.42)', active ? 'rgba(255,245,190,0.2)' : 'rgba(255,255,255,0.04)');
     ctx.restore();
   }
 
   if (rewardReadyHint) {
-    drawMiniChip(panelX + innerPad, panelY + panelH - u * 2.42, panelW - innerPad * 2, u * 0.62, rewardReadyHint.toUpperCase(), {
+    drawPanel(panelX + innerPad, hintY, innerW, hintH, {
+      radius: u * 0.2,
+      top: 'rgba(60,42,18,0.92)',
+      bottom: 'rgba(30,20,8,0.88)',
+      stroke: 'rgba(255,210,140,0.2)',
       accent: 'rgba(255,194,70,0.22)',
-      textColor: '#FFF1C8',
-      font: FONTS['b0.26'] || ('700 ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY)
+      blur: 10
+    });
+    drawFitText(rewardReadyHint.toUpperCase(), W / 2, hintY + hintH / 2, innerW - u * 0.6, {
+      basePx: u * 0.26, minPx: u * 0.18, weight: 'bold', color: '#FFF1C8'
     });
   }
 
   const ctaAlpha = G.levelCompleteTimer > 1.4 ? 0.84 + Math.sin(Date.now() * 0.005) * 0.12 : 0.56;
+  const ctaLabel = G.levelCompleteTimer > 2 ? 'TAP TO SPIN AND CONTINUE' : 'BONUS SPIN LOADING';
+  const ctaSub = G.levelCompleteTimer > 2 ? 'CASH OUT, THEN BACK TO MAP' : 'STARS LOCKED - REWARD INBOUND';
   ctx.save();
   ctx.globalAlpha = Math.max(0.2, ctaAlpha);
-  drawActionCard(panelX + innerPad, ctaY, panelW - innerPad * 2, u * 0.98, G.levelCompleteTimer > 2 ? 'TAP TO SPIN AND CONTINUE' : 'BONUS SPIN LOADING', G.levelCompleteTimer > 2 ? 'Cash out a reward, then head back to the journey map.' : 'Stars locked. Reward card coming online.', {
+  drawActionCard(panelX + innerPad, ctaY, innerW, ctaH, ctaLabel, ctaSub, {
     top: 'rgba(54,92,58,0.96)',
     bottom: 'rgba(22,48,28,0.92)',
     stroke: 'rgba(152,222,138,0.26)',
     accent: '#8CCB57',
     labelColor: '#F4FFE8',
-    subColor: 'rgba(224,239,214,0.76)',
-    labelPx: u * 0.38,
-    labelMinPx: u * 0.24
+    subColor: 'rgba(224,239,214,0.78)',
+    labelPx: u * 0.42,
+    labelMinPx: u * 0.26,
+    subPx: u * 0.28,
+    subMinPx: u * 0.18
   });
   ctx.restore();
 }
@@ -10848,11 +10891,14 @@ function drawHUD(dt) {
 
   if (_saveFailWarning > 0) {
     _saveFailWarning -= dt;
+    const bannerW = u * 5.6, bannerH = u * 0.5;
+    const bannerX = W / 2 - bannerW / 2;
+    const bannerY = stripY + stripH + guidedOffset + u * 0.12;
     ctx.save();
-    ctx.globalAlpha = clamp(_saveFailWarning, 0, 1);
-    fillRR(W / 2 - u * 4.5, H - SAFE_BOTTOM - u * 1.78, u * 9, u * 0.66, u * 0.14, '#D84040', INK_COLOR, Math.max(2, u * 0.09));
-    drawFitText('STORAGE FULL - PROGRESS MAY NOT SAVE', W / 2, H - SAFE_BOTTOM - u * 1.78 + u * 0.33, u * 8.6, {
-      basePx: u * 0.26, minPx: u * 0.18, weight: 'bold', color: BONE_COLOR
+    ctx.globalAlpha = clamp(_saveFailWarning * 0.6, 0, 0.85);
+    fillRR(bannerX, bannerY, bannerW, bannerH, u * 0.12, 'rgba(102,40,46,0.92)', 'rgba(255,200,200,0.45)', Math.max(1, u * 0.04));
+    drawFitText('SAVE PAUSED - FREE UP STORAGE', bannerX + bannerW / 2, bannerY + bannerH / 2, bannerW - u * 0.4, {
+      basePx: u * 0.24, minPx: u * 0.16, weight: 'bold', color: '#FFE6E6'
     });
     ctx.restore();
   }
@@ -11161,22 +11207,22 @@ function getLevelMapLayout() {
   const speakerX = SAFE_LEFT + u * 0.3;
   const speakerY = SAFE_TOP + u * 0.3;
   const speakerSize = u * 1;
-  const settingsW = u * 1.15;
-  const settingsH = u * 0.95;
-  const settingsX = SAFE_LEFT + u * 1.6;
+  const settingsW = u * 1.5;
+  const settingsH = u * 1.04;
+  const settingsX = SAFE_LEFT + u * 1.65;
   const settingsY = topPad;
-  const shopW = u * 3.2;
-  const shopH = u * 0.95;
-  const statsW = u * 3.2;
-  const statsH = u * 0.95;
+  const shopW = u * 3.4;
+  const shopH = u * 1.04;
+  const statsW = u * 3.4;
+  const statsH = u * 1.04;
   const statsX = W - SAFE_RIGHT - statsW - u * 0.32;
   const statsY = topPad;
   const shopX = statsX - shopW - u * 0.28;
   const shopY = topPad;
   const headerX = SAFE_LEFT + u * 0.55;
-  const headerY = topPad + u * 1.18;
+  const headerY = topPad + u * 1.32;
   const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1;
-  const headerH = u * 1.88;
+  const headerH = u * 2.0;
   const quickGap = u * 0.28;
   const quickH = u * 0.88;
   const quickTotalW = Math.min(W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, u * 9.6);
@@ -11187,10 +11233,10 @@ function getLevelMapLayout() {
   const loginX = missionX + missionW + quickGap;
   const quickY = headerY + headerH + u * 0.24;
   const mapTop = quickY + quickH + u * 0.42;
-  const infoY = H - SAFE_BOTTOM - u * 2.08;
-  const infoH = u * 0.66;
-  const runnerW = u * 4.4;
-  const progressW = u * 4.3;
+  const infoH = u * 0.78;
+  const infoY = H - SAFE_BOTTOM - u * 1.42 - u * 0.32 - infoH;
+  const runnerW = u * 4.8;
+  const progressW = u * 4.6;
   const runnerX = W / 2 - runnerW - u * 0.16;
   const progressX = W / 2 + u * 0.16;
   const actionW = u * 5.1;
@@ -11263,19 +11309,19 @@ function drawLevelMap(dt) {
   }
 
   drawMiniChip(layout.shopX, layout.shopY, layout.shopW, layout.shopH, 'SHOP', {
-    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
+    font: FONTS['b0.46'] || ('bold ' + Math.round(u * 0.46) + 'px monospace'),
     accent: 'rgba(255,208,90,0.28)',
     textColor: '#FFE27A'
   });
   drawMiniChip(layout.statsX, layout.statsY, layout.statsW, layout.statsH, 'STATS', {
-    font: FONTS['b0.4'] || ('bold ' + Math.round(u * 0.4) + 'px monospace'),
+    font: FONTS['b0.46'] || ('bold ' + Math.round(u * 0.46) + 'px monospace'),
     accent: 'rgba(120,180,255,0.24)',
     textColor: '#CBE4FF'
   });
   drawMiniChip(layout.settingsX, layout.settingsY, layout.settingsW, layout.settingsH, 'SET', {
-    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
-    accent: 'rgba(255,255,255,0.12)',
-    textColor: 'rgba(244,247,255,0.76)'
+    font: FONTS['b0.42'] || ('bold ' + Math.round(u * 0.42) + 'px monospace'),
+    accent: 'rgba(255,255,255,0.14)',
+    textColor: 'rgba(244,247,255,0.86)'
   });
 
   drawPanel(layout.headerX, layout.headerY, layout.headerW, layout.headerH, {
@@ -11290,42 +11336,43 @@ function drawLevelMap(dt) {
   ctx.textBaseline = 'top';
   const currentLevel = Math.min(40, save.highestLevel + 1);
   const progressFrac = clamp(save.highestLevel / 40, 0, 1);
-  drawFitText("JOURNEY MAP", layout.headerX + u * 0.5, layout.headerY + u * 0.34, layout.headerW * 0.44, {
-    basePx: compact ? u * 0.58 : u * 0.68,
-    minPx: u * 0.32,
+  drawFitText("JOURNEY MAP", layout.headerX + u * 0.5, layout.headerY + u * 0.36, layout.headerW * 0.44, {
+    basePx: compact ? u * 0.62 : u * 0.74,
+    minPx: u * 0.36,
     weight: 'bold',
     color: '#FFE27A',
     align: 'left',
     baseline: 'top'
   });
-  drawFitText(\`LEVEL \${currentLevel} OF 40\`, layout.headerX + u * 0.5, layout.headerY + u * 0.96, layout.headerW * 0.28, {
-    basePx: u * 0.26,
-    minPx: u * 0.18,
-    color: 'rgba(214,228,248,0.74)',
+  drawFitText(\`LEVEL \${currentLevel} OF 40\`, layout.headerX + u * 0.5, layout.headerY + u * 1.06, layout.headerW * 0.28, {
+    basePx: u * 0.32,
+    minPx: u * 0.22,
+    color: 'rgba(220,232,250,0.82)',
     align: 'left',
     baseline: 'top'
   });
-  drawProgressBar(layout.headerX + u * 0.5, layout.headerY + u * 1.34, layout.headerW * 0.46, u * 0.22, progressFrac, ['#FFE27A', '#C98618']);
-  drawFitText(\`BEST \${save.bestScore}\`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.38, layout.headerW * 0.28, {
-    basePx: u * 0.28,
-    minPx: u * 0.18,
+  drawProgressBar(layout.headerX + u * 0.5, layout.headerY + u * 1.5, layout.headerW * 0.46, u * 0.24, progressFrac, ['#FFE27A', '#C98618']);
+  drawFitText(\`BEST \${save.bestScore}\`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.42, layout.headerW * 0.32, {
+    basePx: u * 0.36,
+    minPx: u * 0.24,
     weight: 'bold',
-    color: 'rgba(244,247,255,0.82)',
+    color: 'rgba(248,250,255,0.92)',
     align: 'right',
     baseline: 'top'
   });
-  drawFitText(\`\${save.totalGems} GEMS BANKED\`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 0.88, layout.headerW * 0.28, {
-    basePx: u * 0.24,
-    minPx: u * 0.18,
-    color: 'rgba(140,226,255,0.76)',
+  drawFitText(\`\${save.totalGems} GEMS BANKED\`, layout.headerX + layout.headerW - u * 0.5, layout.headerY + u * 1.0, layout.headerW * 0.32, {
+    basePx: u * 0.32,
+    minPx: u * 0.22,
+    weight: 'bold',
+    color: 'rgba(150,232,255,0.88)',
     align: 'right',
     baseline: 'top'
   });
   const mapHint = rewardReadyHint || (guidedGoal ? guidedGoal.mapHint : 'Tap a node to replay or push forward.');
-  drawFitText(mapHint, layout.headerX + layout.headerW * 0.52, layout.headerY + u * 1.42, layout.headerW * 0.42, {
-    basePx: u * 0.24,
-    minPx: u * 0.16,
-    color: 'rgba(188,204,228,0.68)',
+  drawFitText(mapHint, layout.headerX + layout.headerW * 0.52, layout.headerY + u * 1.58, layout.headerW * 0.42, {
+    basePx: u * 0.28,
+    minPx: u * 0.18,
+    color: 'rgba(200,216,238,0.78)',
     align: 'left',
     baseline: 'middle'
   });
@@ -11449,29 +11496,51 @@ function drawLevelMap(dt) {
     const showLabel = current || isBoss || Math.abs(lvl - (save.highestLevel + 1)) <= 1;
     if (showLabel) {
       const label = isBoss ? 'BOSS - ' + def.name.toUpperCase() : def.name.toUpperCase();
-      const lw = Math.min(u * 4.6, Math.max(u * 2.2, label.length * u * 0.23 + u * 0.7));
+      const lh = u * 0.86;
+      const lw = Math.min(u * 6.2, Math.max(u * 2.6, label.length * u * 0.28 + u * 0.9));
       const lx = (lvl%2===0) ? nx+nodeR+u*0.45 : nx-nodeR-u*0.45-lw;
-      const ly = ny - u * 0.38;
-      drawMiniChip(lx, ly, lw, u * 0.72, label, {
-        font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace'),
-        accent: locked ? 'rgba(110,120,150,0.18)' : completed ? 'rgba(255,215,90,0.18)' : 'rgba(120,220,255,0.18)',
-        textColor: locked ? 'rgba(178,186,206,0.48)' : 'rgba(245,247,255,0.82)',
+      const ly = ny - lh / 2;
+      drawPanel(lx, ly, lw, lh, {
         radius: u * 0.22,
+        top: 'rgba(19,34,56,0.94)',
+        bottom: 'rgba(8,14,28,0.88)',
+        stroke: 'rgba(202,228,255,0.1)',
+        accent: locked ? 'rgba(110,120,150,0.18)' : completed ? 'rgba(255,215,90,0.22)' : 'rgba(120,220,255,0.22)',
         blur: 10
+      });
+      drawFitText(label, lx + lw / 2, ly + lh / 2, lw - u * 0.5, {
+        basePx: u * 0.38,
+        minPx: u * 0.24,
+        weight: 'bold',
+        color: locked ? 'rgba(184,192,212,0.62)' : 'rgba(248,250,255,0.94)'
       });
     }
   }
   ctx.restore();
 
-  drawMiniChip(layout.runnerX, layout.infoY, layout.runnerW, layout.infoH, 'RUNNER ' + runner.name.toUpperCase(), {
-    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
+  drawPanel(layout.runnerX, layout.infoY, layout.runnerW, layout.infoH, {
+    radius: u * 0.22,
+    top: 'rgba(19,34,56,0.94)',
+    bottom: 'rgba(8,14,28,0.88)',
+    stroke: 'rgba(202,228,255,0.1)',
     accent: lightenColor(runner.col, 12),
-    textColor: '#F5F7FF'
+    blur: 12
   });
-  drawMiniChip(layout.progressX, layout.infoY, layout.progressW, layout.infoH, rewardReadyHint ? 'CLAIM BONUS GEMS' : guidedGoal ? ('NEXT ' + guidedGoal.steps.map(function(step) { return step.short; }).join(' + ')) : \`CLEARED \${save.highestLevel}/40\`, {
-    font: FONTS['b0.34'] || ('bold ' + Math.round(u * 0.34) + 'px monospace'),
-    accent: rewardReadyHint ? 'rgba(255,194,70,0.24)' : guidedGoal ? 'rgba(125,240,155,0.2)' : 'rgba(120,188,255,0.24)',
-    textColor: rewardReadyHint ? '#FFECC8' : guidedGoal ? '#E7FFF0' : '#D8ECFF'
+  drawFitText('RUNNER ' + runner.name.toUpperCase(), layout.runnerX + layout.runnerW / 2, layout.infoY + layout.infoH / 2, layout.runnerW - u * 0.5, {
+    basePx: u * 0.4, minPx: u * 0.26, weight: 'bold', color: '#F5F7FF'
+  });
+  const progressLabel = rewardReadyHint ? 'CLAIM BONUS GEMS' : guidedGoal ? ('NEXT ' + guidedGoal.steps.map(function(step) { return step.short; }).join(' + ')) : \`CLEARED \${save.highestLevel}/40\`;
+  drawPanel(layout.progressX, layout.infoY, layout.progressW, layout.infoH, {
+    radius: u * 0.22,
+    top: 'rgba(19,34,56,0.94)',
+    bottom: 'rgba(8,14,28,0.88)',
+    stroke: 'rgba(202,228,255,0.1)',
+    accent: rewardReadyHint ? 'rgba(255,194,70,0.26)' : guidedGoal ? 'rgba(125,240,155,0.22)' : 'rgba(120,188,255,0.26)',
+    blur: 12
+  });
+  drawFitText(progressLabel, layout.progressX + layout.progressW / 2, layout.infoY + layout.infoH / 2, layout.progressW - u * 0.5, {
+    basePx: u * 0.4, minPx: u * 0.24, weight: 'bold',
+    color: rewardReadyHint ? '#FFECC8' : guidedGoal ? '#E7FFF0' : '#D8ECFF'
   });
 
   if (hasNextLevel) {
@@ -12085,7 +12154,7 @@ function drawCharSelect() {
   const cols = 3, rows = 2, totalChars = CHARS.length;
   const pathIds = ['assault', 'vault', 'guardian'];
   const headerX = SAFE_LEFT + u * 0.55, headerY = SAFE_TOP + u * 0.35;
-  const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, headerH = u * 2.2;
+  const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, headerH = u * 2.4;
   const selIdx = clamp(G.selectedChar || 0, 0, CHARS.length - 1);
   const selChar = CHARS[selIdx];
   const selPath = getSelectedRunPath();
@@ -12093,19 +12162,19 @@ function drawCharSelect() {
   const firstSession = save.highestLevel === 0;
   const starterGuide = firstSession ? getGuidedLevel(1) : null;
   const spotlightX = SAFE_LEFT + u * 0.72;
-  const spotlightY = headerY + headerH + u * 0.34;
+  const spotlightY = headerY + headerH + u * 0.28;
   const spotlightW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.44;
-  const spotlightH = u * 3.28;
-  const pathGap = u * 0.14;
+  const spotlightH = u * 3.4;
+  const pathGap = u * 0.16;
   const pathCardW = (spotlightW - pathGap * 2) / 3;
-  const pathCardH = u * 1.22;
-  const pathY = spotlightY + spotlightH + u * 0.2;
+  const pathCardH = u * 1.3;
+  const pathY = spotlightY + spotlightH + u * 0.42;
   const gridTop = pathY + pathCardH + u * 0.24;
   const cardW = Math.min(u * 4.3, (W - SAFE_LEFT - SAFE_RIGHT - u * 1.8) / cols);
-  const cardH = u * 2.34;
+  const cardH = u * 2.04;
   const gapX = (W - SAFE_LEFT - SAFE_RIGHT - cardW * cols) / (cols + 1);
-  const gapY = u * 0.12;
-  const btnY = H - SAFE_BOTTOM - u * 1.5;
+  const gapY = u * 0.1;
+  const btnY = H - SAFE_BOTTOM - u * 1.4;
   const bankedGems = Number.isFinite(save.totalGems) ? save.totalGems : (save.gems || 0);
   G._charSelectLayout = { cards: [], pathCards: [] };
 
@@ -12120,25 +12189,29 @@ function drawCharSelect() {
   });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['b1.2'] || ('bold ' + Math.round(u * 1.2) + 'px monospace');
-  ctx.fillStyle = '#F5D76C';
-  drawFitText('CHOOSE YOUR RUNNER', W / 2, headerY + headerH * 0.4, headerW - u * 1.8, {
-    basePx: u * 1.34,
-    minPx: u * 0.78,
+  const headerChipW = u * 3.6;
+  const headerChipH = u * 0.7;
+  drawMiniChip(headerX + u * 0.35, headerY + u * 0.4, headerChipW, headerChipH, 'BEST L' + save.highestLevel + ' - ' + save.bestScore, {
+    accent: '#6B8FB9',
+    textColor: '#EFF6FF',
+    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace')
+  });
+  drawMiniChip(headerX + headerW - headerChipW - u * 0.35, headerY + u * 0.4, headerChipW, headerChipH, bankedGems + ' GEMS', {
+    accent: '#4BB5CB',
+    textColor: '#EFFAFF',
+    font: FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace')
+  });
+  const titleMaxW = headerW - (headerChipW + u * 0.5) * 2;
+  drawFitText('CHOOSE YOUR RUNNER', W / 2, headerY + headerH * 0.36, titleMaxW, {
+    basePx: u * 1.0,
+    minPx: u * 0.62,
     weight: 'bold',
     color: '#F5D76C'
   });
-  ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px monospace');
-  ctx.fillStyle = 'rgba(220,235,255,0.8)';
-  ctx.fillText(firstSession ? 'Pick a runner, lock a run path, then learn the lane on Level 1.' : 'Each runner now pairs with a run path and signature burst for a more distinct build.', W / 2, headerY + headerH * 0.76);
-
-  drawMiniChip(headerX + u * 0.35, headerY + u * 0.42, u * 4.4, u * 0.72, 'BEST L' + save.highestLevel + ' - ' + save.bestScore, {
-    accent: '#6B8FB9',
-    textColor: '#EFF6FF'
-  });
-  drawMiniChip(headerX + headerW - u * 3.9, headerY + u * 0.42, u * 3.55, u * 0.72, bankedGems + ' GEMS', {
-    accent: '#4BB5CB',
-    textColor: '#EFFAFF'
+  drawFitText(firstSession ? 'Pick a runner, lock a run path, then learn the lane on Level 1.' : 'Each runner now pairs with a run path and signature burst for a more distinct build.', W / 2, headerY + headerH * 0.78, headerW - u * 1.4, {
+    basePx: u * 0.36,
+    minPx: u * 0.22,
+    color: 'rgba(220,235,255,0.82)'
   });
 
   drawPanel(spotlightX, spotlightY, spotlightW, spotlightH, {
@@ -12148,44 +12221,45 @@ function drawCharSelect() {
     accent: lightenColor(selChar.col, 18),
     blur: 22
   });
-  drawMiniChip(spotlightX + u * 0.3, spotlightY + u * 0.22, u * 3.8, u * 0.56, firstSession ? 'RECOMMENDED START' : 'SELECTED RUNNER', {
+  drawMiniChip(spotlightX + u * 0.3, spotlightY + u * 0.22, u * 3.8, u * 0.6, firstSession ? 'RECOMMENDED START' : 'SELECTED RUNNER', {
     accent: lightenColor(selChar.col, 14),
-    textColor: '#F7FBFF'
+    textColor: '#F7FBFF',
+    font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace')
   });
-  drawMiniChip(spotlightX + spotlightW - u * 3.1, spotlightY + u * 0.22, u * 2.8, u * 0.56, selPath.name.toUpperCase(), {
-    accent: hexToRgba(selPath.accent, 0.22),
-    textColor: '#EAF4FF',
-    font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace')
+  drawMiniChip(spotlightX + spotlightW - u * 3.1, spotlightY + u * 0.22, u * 2.8, u * 0.6, selPath.name.toUpperCase(), {
+    accent: hexToRgba(selPath.accent, 0.32),
+    textColor: '#F4FBFF',
+    font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace')
   });
   ctx.save();
-  ctx.translate(spotlightX + u * 1.78, spotlightY + spotlightH * 0.62);
-  ctx.scale(1.96, 1.96);
+  ctx.translate(spotlightX + u * 1.78, spotlightY + spotlightH * 0.66);
+  ctx.scale(1.5, 1.5);
   drawChar({
     screenX: 0, y: 0, ch: selChar, charIdx: selIdx, onGround: true,
     legAnim: G.time * 4.2, squash: 1, stretch: 1, shield: selChar.startShield,
     magnetTimer: selChar.startMagnet ? 1 : 0, starTimer: 0, starHue: 0,
-    extraLife: false, iframes: 0, dashTimer: 0.08, slideTimer: 0, pounding: false,
+    extraLife: false, iframes: 0, dashTimer: 0, slideTimer: 0, pounding: false,
     hpFlash: 0, vy: 0
   }, true);
   ctx.restore();
-  drawFitText(selChar.name.toUpperCase(), spotlightX + spotlightW * 0.58, spotlightY + u * 1.0, spotlightW * 0.36, {
-    basePx: u * 0.64,
-    minPx: u * 0.38,
+  drawFitText(selChar.name.toUpperCase(), spotlightX + spotlightW * 0.58, spotlightY + u * 1.05, spotlightW * 0.36, {
+    basePx: u * 0.54,
+    minPx: u * 0.34,
     weight: 'bold',
     color: lightenColor(selChar.col, 22)
   });
-  drawFitText(selSignature.name.toUpperCase(), spotlightX + spotlightW * 0.58, spotlightY + u * 1.35, spotlightW * 0.36, {
+  drawFitText(selSignature.name.toUpperCase(), spotlightX + spotlightW * 0.58, spotlightY + u * 1.5, spotlightW * 0.36, {
     basePx: u * 0.28,
     minPx: u * 0.18,
     weight: 'bold',
     color: selSignature.accent
   });
-  drawFitText(firstSession && starterGuide ? 'Clean first-session pick with the clearest opening lesson.' : (selSignature.desc + ' ' + selPath.desc), spotlightX + spotlightW * 0.58, spotlightY + u * 1.74, spotlightW * 0.42, {
-    basePx: u * 0.34,
-    minPx: u * 0.2,
-    color: 'rgba(220,228,245,0.74)'
+  drawFitText(firstSession && starterGuide ? 'Clean first-session pick with the clearest opening lesson.' : (selSignature.desc + ' ' + selPath.desc), spotlightX + spotlightW * 0.58, spotlightY + u * 1.9, spotlightW * 0.42, {
+    basePx: u * 0.26,
+    minPx: u * 0.18,
+    color: 'rgba(220,228,245,0.78)'
   });
-  const spotStatY = spotlightY + u * 2.12;
+  const spotStatY = spotlightY + u * 2.34;
   const spotStatW = u * 1.95;
   const spotGap = u * 0.16;
   drawValueCard(spotlightX + spotlightW * 0.43, spotStatY, spotStatW, u * 0.96, 'HP', selChar.maxHP, null, {
@@ -12204,10 +12278,12 @@ function drawCharSelect() {
     kickerPx: u * 0.2, valuePx: u * 0.34
   });
 
-  ctx.font = FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace');
-  ctx.fillStyle = 'rgba(229,239,255,0.76)';
+  ctx.font = FONTS['b0.32'] || ('bold ' + Math.round(u * 0.32) + 'px monospace');
+  ctx.fillStyle = 'rgba(229,239,255,0.82)';
   ctx.textAlign = 'left';
-  ctx.fillText('RUN PATH', spotlightX + u * 0.08, pathY - u * 0.08);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('RUN PATH', spotlightX + u * 0.08, pathY - u * 0.18);
+  ctx.textBaseline = 'middle';
   for (let i = 0; i < pathIds.length; i++) {
     const pathId = pathIds[i];
     const path = getRunPathDef(pathId);
@@ -12221,21 +12297,21 @@ function drawCharSelect() {
       accent: path.accent,
       blur: selected ? 20 : 12
     });
-    drawMiniChip(x + u * 0.14, pathY + u * 0.12, u * 1.62, u * 0.34, path.short, {
-      accent: selected ? hexToRgba(path.accent, 0.26) : 'rgba(98,126,168,0.18)',
+    drawMiniChip(x + u * 0.16, pathY + u * 0.16, u * 1.7, u * 0.4, path.short, {
+      accent: selected ? hexToRgba(path.accent, 0.32) : 'rgba(98,126,168,0.22)',
       textColor: '#F4FAFF',
-      font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px monospace')
+      font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace')
     });
-    drawFitText(path.name.toUpperCase(), x + pathCardW / 2, pathY + u * 0.48, pathCardW - u * 0.32, {
-      basePx: u * 0.28,
-      minPx: u * 0.2,
+    drawFitText(path.name.toUpperCase(), x + pathCardW / 2, pathY + u * 0.66, pathCardW - u * 0.32, {
+      basePx: u * 0.34,
+      minPx: u * 0.22,
       weight: 'bold',
       color: selected ? lightenColor(path.accent, 18) : '#E8F2FF'
     });
-    drawFitText(path.desc, x + pathCardW / 2, pathY + u * 0.86, pathCardW - u * 0.42, {
-      basePx: u * 0.18,
-      minPx: u * 0.15,
-      color: 'rgba(215,227,247,0.72)'
+    drawFitText(path.desc, x + pathCardW / 2, pathY + u * 1.08, pathCardW - u * 0.36, {
+      basePx: u * 0.24,
+      minPx: u * 0.16,
+      color: 'rgba(215,227,247,0.78)'
     });
   }
 
@@ -12324,46 +12400,51 @@ function drawCharSelect() {
     drawChar(preview, true);
     ctx.restore();
 
-    drawMiniChip(rx + u * 0.18, ry + u * 0.12, cardW * 0.4, u * 0.38, firstSession && i === 0 ? 'STARTER' : (sel ? 'SELECTED' : 'READY'), {
+    drawMiniChip(rx + u * 0.14, ry + u * 0.08, cardW * 0.42, u * 0.36, firstSession && i === 0 ? 'STARTER' : (sel ? 'SELECTED' : 'READY'), {
       accent: sel ? lightenColor(ch.col, 22) : darkenColor(ch.col, 12),
       textColor: '#F7FBFF',
       top: 'rgba(16,28,42,0.92)',
-      bottom: 'rgba(8,14,26,0.9)'
+      bottom: 'rgba(8,14,26,0.9)',
+      font: FONTS['b0.22'] || ('bold ' + Math.round(u * 0.22) + 'px monospace')
     });
 
-    drawFitText(ch.name.toUpperCase(), cx, ry + cardH * 0.62, cardW - u * 0.36, {
-      basePx: u * 0.42,
-      minPx: u * 0.26,
+    drawFitText(ch.name.toUpperCase(), cx, ry + cardH * 0.66, cardW - u * 0.36, {
+      basePx: u * 0.4,
+      minPx: u * 0.24,
       weight: 'bold',
       color: sel ? lightenColor(ch.col, 26) : ch.col
     });
-    drawFitText(getCharPassiveLabel(ch).toUpperCase(), cx, ry + cardH * 0.74, cardW - u * 0.48, {
-      basePx: u * 0.24,
-      minPx: u * 0.16,
+    drawFitText(getCharPassiveLabel(ch).toUpperCase(), cx, ry + cardH * 0.8, cardW - u * 0.42, {
+      basePx: u * 0.22,
+      minPx: u * 0.15,
       weight: 'bold',
-      color: 'rgba(228,238,252,0.76)'
+      color: 'rgba(228,238,252,0.78)'
     });
-    ctx.font = FONTS['n0.26'] || (Math.round(u * 0.26) + 'px monospace');
-    ctx.fillStyle = 'rgba(220,228,245,0.68)';
-    ctx.fillText('HP ' + ch.maxHP + '   SPD ' + ch.spdM.toFixed(2) + 'x', cx, ry + cardH * 0.86);
+    drawFitText('HP ' + ch.maxHP + '   SPD ' + ch.spdM.toFixed(2) + 'x', cx, ry + cardH * 0.93, cardW - u * 0.36, {
+      basePx: u * 0.22,
+      minPx: u * 0.15,
+      color: 'rgba(220,228,245,0.7)'
+    });
   }
 
-  drawPanel(W / 2 - u * 5.8, H - SAFE_BOTTOM - u * 3.2, u * 11.6, u * 1.02, {
+  const stripH = u * 1.22;
+  const stripY = btnY - stripH - u * 0.22;
+  drawPanel(W / 2 - u * 6.2, stripY, u * 12.4, stripH, {
     top: 'rgba(18,30,52,0.94)',
     bottom: 'rgba(8,14,26,0.9)',
     stroke: 'rgba(255,255,255,0.1)',
     accent: selPath.accent
   });
-  drawFitText(selChar.name.toUpperCase() + ' - ' + selPath.name.toUpperCase() + ' - ' + selSignature.name.toUpperCase(), W / 2, H - SAFE_BOTTOM - u * 2.78, u * 10.8, {
-    basePx: u * 0.46,
-    minPx: u * 0.28,
+  drawFitText(selChar.name.toUpperCase() + ' - ' + selPath.name.toUpperCase() + ' - ' + selSignature.name.toUpperCase(), W / 2, stripY + u * 0.4, u * 11.6, {
+    basePx: u * 0.42,
+    minPx: u * 0.26,
     weight: 'bold',
     color: '#F6FAFF'
   });
-  drawFitText(firstSession && starterGuide ? 'Balanced opener plus a clear build choice. Level 1 teaches jump, then dash.' : (getCharPassiveLabel(selChar) + '. ' + selPath.desc), W / 2, H - SAFE_BOTTOM - u * 2.4, u * 10.8, {
-    basePx: u * 0.32,
-    minPx: u * 0.2,
-    color: 'rgba(224,233,248,0.74)'
+  drawFitText(firstSession && starterGuide ? 'Balanced opener plus a clear build choice. Level 1 teaches jump, then dash.' : (getCharPassiveLabel(selChar) + '. ' + selPath.desc), W / 2, stripY + u * 0.86, u * 11.6, {
+    basePx: u * 0.28,
+    minPx: u * 0.18,
+    color: 'rgba(224,233,248,0.78)'
   });
 
   const btnW = u * 5, btnH = u * 1.3, btnX = W / 2 - btnW / 2, startBtnY = btnY;

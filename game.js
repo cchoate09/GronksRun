@@ -2137,6 +2137,23 @@ function getDiff(prog, mult) {
   return { speed: spd, oChance: oC, gChance: gC, gapChance: gapC, boulder: prog > 0.3, ptero: prog > 0.45 };
 }
 
+const SURVIVAL_SURGE = {
+  levelGate: 4,
+  initialDelay: 10.5,
+  cooldownMin: 12,
+  cooldownMax: 16,
+  baseDuration: 5.2,
+  maxExtraDuration: 1.2,
+  speedScale: 1.08,
+  rewardTime: 3,
+  rewardGems: 2,
+  rewardScore: 120,
+  rewardSignature: 18,
+  flawlessTimeBonus: 1,
+  flawlessGemBonus: 1,
+  flawlessScoreBonus: 80,
+};
+
 // ============================================================
 // GEM UPGRADE THRESHOLDS (per-run)
 // ============================================================
@@ -3609,6 +3626,13 @@ class Chunk {
 function pickChunkType(rng, diff, last) {
   const w={FLAT:Math.max(.3,2-diff.oChance*2),HILLS:1.5,GAP:last==='GAP'?0:diff.gapChance*4,
     GEM_RUN:diff.gChance*2,GAUNTLET:diff.oChance*2,VALLEY:1,RIDGE:diff.oChance*1.5};
+  if (typeof G !== 'undefined' && G.surgeTimer > 0) {
+    w.FLAT *= 0.68;
+    w.GEM_RUN *= 0.45;
+    w.GAUNTLET *= 1.9;
+    w.RIDGE *= 1.35;
+    w.VALLEY *= 1.2;
+  }
   const total=Object.values(w).reduce((s,v)=>s+v,0);
   let r=rng.next()*total;
   for(const[type,wt]of Object.entries(w)){r-=wt;if(r<=0)return type;}
@@ -4477,6 +4501,7 @@ class Player {
     if (this.iframes>0) return;
     // Shield absorbs one full hit
     if (this.shield) {
+      registerSurvivalSurgeDamage();
       this.shield=false; this.iframes=1.5; addTrauma(.5, 0, 0);
       this.addSignature(8, 'shield_break');
       _hitStop(0.06);
@@ -4494,6 +4519,7 @@ class Player {
       return;
     }
     // Apply damage
+    registerSurvivalSurgeDamage();
     this.hp -= amount;
     this.addSignature(clamp(amount * 0.28, 4, 12), 'damage_taken');
     this.hpFlash = 0.4;
@@ -4719,6 +4745,8 @@ const G = {
   _nextLevelNum:0, _pendingWheelResult:null, _postWheelDest:null,
   // Combo system
   combo:0, comboTimer:0, comboMult:1, comboPulse:0,
+  // Survival surge loop
+  surgeTimer:0, surgeCooldown:999, surgeFlawless:true, surgeCount:0,
   // Move chaining
   lastAction:{type:null, time:0},
   // Stats scroll
@@ -4731,6 +4759,102 @@ const G = {
   onboarding:null,
   guidedChunkCursor:0,
 };
+
+function canRunSurvivalSurges() {
+  if (typeof G === 'undefined') return false;
+  if (G.dailyChallenge) return false;
+  if (G.endless) return true;
+  return G.levelNum >= SURVIVAL_SURGE.levelGate;
+}
+
+function getSurvivalSurgeAccent() {
+  const runPath = typeof getActiveRunPath === 'function' ? getActiveRunPath() : null;
+  if (runPath && runPath.accent) return runPath.accent;
+  if (G.theme && G.theme.gt) return G.theme.gt;
+  return '#FF7E63';
+}
+
+function scheduleNextSurvivalSurge(initial) {
+  G.surgeTimer = 0;
+  G.surgeFlawless = true;
+  if (!canRunSurvivalSurges()) {
+    G.surgeCooldown = 999;
+    return;
+  }
+  const lvlFactor = clamp((G.levelNum - SURVIVAL_SURGE.levelGate) / 18, 0, 1);
+  const baseCooldown = initial
+    ? SURVIVAL_SURGE.initialDelay
+    : lerp(SURVIVAL_SURGE.cooldownMax, SURVIVAL_SURGE.cooldownMin, lvlFactor);
+  G.surgeCooldown = baseCooldown + (initial ? 0 : Math.random() * 1.25);
+}
+
+function registerSurvivalSurgeDamage() {
+  if (G.surgeTimer > 0) G.surgeFlawless = false;
+}
+
+function startSurvivalSurge() {
+  if (!canRunSurvivalSurges() || G.surgeTimer > 0 || !G.player || !G.player.alive) return;
+  const lvlFactor = clamp((G.levelNum - SURVIVAL_SURGE.levelGate) / 18, 0, 1);
+  const accent = getSurvivalSurgeAccent();
+  G.surgeTimer = SURVIVAL_SURGE.baseDuration + lvlFactor * SURVIVAL_SURGE.maxExtraDuration;
+  G.surgeCooldown = 0;
+  G.surgeFlawless = true;
+  G.surgeCount = (G.surgeCount || 0) + 1;
+  G.announce = { text: 'SURVIVAL SURGE', life: 1.05 };
+  G.flashColor = hexToRgba(accent, 0.16);
+  G.flashLife = 0.14;
+  addTrauma(0.12);
+  sfxDash();
+  if (G.levelDef && G.levelDef.enemies.length && activeEnemies.length < 2) {
+    spawnEnemy(G.levelDef);
+    if (G.levelNum >= 8 && Math.random() < 0.45) spawnEnemy(G.levelDef);
+  }
+}
+
+function finishSurvivalSurge() {
+  const p = G.player;
+  const accent = getSurvivalSurgeAccent();
+  const flawless = !!G.surgeFlawless;
+  G.surgeTimer = 0;
+  if (!p || !p.alive) {
+    scheduleNextSurvivalSurge(false);
+    return;
+  }
+  const rewardTime = SURVIVAL_SURGE.rewardTime + (flawless ? SURVIVAL_SURGE.flawlessTimeBonus : 0);
+  const rewardGems = SURVIVAL_SURGE.rewardGems + (flawless ? SURVIVAL_SURGE.flawlessGemBonus : 0);
+  const rewardScore = SURVIVAL_SURGE.rewardScore + (flawless ? SURVIVAL_SURGE.flawlessScoreBonus : 0);
+  G.timeLeft = Math.min(99, G.timeLeft + rewardTime);
+  G.runGems += rewardGems;
+  G.gems = G.runGems;
+  G.score += rewardScore;
+  G.runScore += rewardScore;
+  grantSignatureCharge(SURVIVAL_SURGE.rewardSignature + (flawless ? 6 : 0), 'surge_clear');
+  showAnnouncement(
+    flawless
+      ? `FLAWLESS SURGE +${rewardTime}S +${rewardGems}G`
+      : `SURGE CLEAR +${rewardTime}S +${rewardGems}G`,
+    accent
+  );
+  spawnFloatingText(p.screenX, p.y - UNIT * 2.45, `+${rewardTime}S`, '#FFE38A', 1.02);
+  spawnFloatingText(p.screenX + UNIT * 0.46, p.y - UNIT * 1.82, `+${rewardGems} GEMS`, accent, 0.88);
+  if (flawless) {
+    spawnFloatingText(p.screenX - UNIT * 0.4, p.y - UNIT * 3.08, 'NO-HIT BONUS', '#FFF3C9', 0.76);
+  }
+  sfxGem();
+  checkGemUpgrades(false);
+  scheduleNextSurvivalSurge(false);
+}
+
+function updateSurvivalSurge(dt) {
+  if (!canRunSurvivalSurges()) return;
+  if (G.surgeTimer > 0) {
+    G.surgeTimer = Math.max(0, G.surgeTimer - dt);
+    if (G.surgeTimer <= 0) finishSurvivalSurge();
+    return;
+  }
+  G.surgeCooldown -= dt;
+  if (G.surgeCooldown <= 0) startSurvivalSurge();
+}
 
 // Smooth phase transition: fade out → change phase → fade in
 function transitionTo(newPhase, callback) {
@@ -4796,9 +4920,11 @@ function startLevel(levelNum) {
   G.announce=null; G.flashColor=null; G.flashLife=0;
   G.guidedChunkCursor = 0;
   G.scriptedChunkCursor = 0;
+  G.surgeCount = 0;
   inp.jp=inp.jh=false; inp.tapped=false;
   particles.length=0; activeEnemies.length=0; ambients.length=0;
   trauma=0; enemySpawnCD=getLevelEnemyDelay(G.levelDef); nearMissCD=0;
+  scheduleNextSurvivalSurge(true);
   configureGuidedLevel(levelNum);
   initWorld(G.rng,G.diff,G.levelDef.theme);
   // Count total gems for star rating
@@ -4890,6 +5016,7 @@ function startDailyChallenge() {
   inp.jp=inp.jh=false; inp.tapped=false;
   particles.length=0; activeEnemies.length=0; ambients.length=0;
   trauma=0; enemySpawnCD=6; nearMissCD=0;
+  scheduleNextSurvivalSurge(true);
   initWorld(G.rng,G.diff,G.levelDef.theme);
   G.levelTotalGems=0; G.levelGemsCollected=0;
   for(const c of chunks) G.levelTotalGems+=c.gems.length;
@@ -4925,6 +5052,7 @@ function startEndlessMode() {
   inp.jp=inp.jh=false; inp.tapped=false;
   particles.length=0; activeEnemies.length=0; ambients.length=0;
   trauma=0; enemySpawnCD=6; nearMissCD=0;
+  scheduleNextSurvivalSurge(true);
   initWorld(G.rng,G.diff,G.levelDef.theme);
   G.levelTotalGems=0; G.levelGemsCollected=0;
   for(const c of chunks) G.levelTotalGems+=c.gems.length;
@@ -10542,6 +10670,7 @@ function drawHUD(dt) {
   if (p.redlineTimer > 0) powerups.push({ label: 'REDLINE', accent: '#FF6A4D' });
   if (p.guardAuraTimer > 0) powerups.push({ label: 'AURA', accent: '#C08A62' });
   if (p.arcPulseTimer > 0) powerups.push({ label: 'ARC', accent: '#59D9C8' });
+  if (G.surgeTimer > 0) powerups.push({ label: 'SURGE', accent: getSurvivalSurgeAccent() });
 
   let chipX = left;
   let chipRow = 0;
@@ -12979,6 +13108,7 @@ function loop(ts){
         if(G.endlessBossTimer<=0 && !boss && p.alive){
           G.endlessBossTimer=180;
           const bossLvl = 5*(1+Math.floor(G.endlessTime/180)%BOSS_TYPES.length);
+          scheduleNextSurvivalSurge(false);
           boss=new Boss(bossLvl);
           G.phase='BOSS_FIGHT';
           G.announce={text:`BOSS: ${boss.name}!`,life:2.5};
@@ -12989,9 +13119,11 @@ function loop(ts){
         const prog=clamp(G.time/G.levelDef.targetTime,0,1);
         G.diff=getDiff(prog,levelDiffMult(G.levelNum));
       }
+      updateSurvivalSurge(DT);
       // Only update speed if alive — freeze world on death
       if(p.alive) {
         let spdM=getPlayerSpeedScale(p);
+        if (G.surgeTimer > 0) spdM *= SURVIVAL_SURGE.speedScale;
         G.speed=(G.hitStop > 0 ? 0 : G.diff.speed*spdM);
       }
       else G.speed=Math.max(0,G.speed-800*DT); // decelerate to 0
@@ -13005,6 +13137,7 @@ function loop(ts){
       if(!G.endless && !G.dailyChallenge && G.time>=G.levelDef.targetTime && p.alive){
         // Boss fight on every 5th level
         if(G.levelNum % 5 === 0 && !boss) {
+          scheduleNextSurvivalSurge(false);
           boss = new Boss(G.levelNum);
           G.phase = 'BOSS_FIGHT';
           G.announce = {text: `BOSS: ${boss.name}!`, life: 2.5};
@@ -13043,8 +13176,11 @@ function loop(ts){
         enemySpawnCD-=DT;
         if(enemySpawnCD<=0){
           const spawnProg=clamp(G.time/G.levelDef.targetTime,0,1);
-          enemySpawnCD=Math.max(4.6, 9 - spawnProg*3.4);
-          spawnEnemy(G.levelDef);
+          const baseDelay = Math.max(3.2, getLevelEnemyDelay(G.levelDef) - spawnProg * 1.85);
+          const spawnDelay = G.surgeTimer > 0 ? baseDelay * 0.72 : baseDelay;
+          enemySpawnCD=Math.max(G.surgeTimer > 0 ? 2.2 : 3.3, spawnDelay);
+          const enemyCap = G.surgeTimer > 0 ? 5 : 3;
+          if (activeEnemies.length < enemyCap) spawnEnemy(G.levelDef);
         }
       }
       // Update enemies
@@ -13462,6 +13598,12 @@ window.render_game_to_text = function renderGameToText() {
     missions: {
       rewards_ready: rewardReadyCount,
     },
+    survival_surge: canRunSurvivalSurges() ? {
+      active: G.surgeTimer > 0,
+      timer: roundSnapshotValue(G.surgeTimer),
+      next_in: roundSnapshotValue(G.surgeTimer > 0 ? 0 : G.surgeCooldown),
+      flawless: !!G.surgeFlawless,
+    } : null,
     level_plan: levelPlan,
     continue_prompt: continuePrompt ? {
       title: continuePrompt.title,

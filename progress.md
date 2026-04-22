@@ -132,3 +132,16 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Added adaptive performance stepping plus particle trimming so sustained low-FPS runs can fall back gracefully on weaker Android hardware instead of staying pinned to a too-expensive effects budget.
 - Finished the boss-fight HUD pass by removing the overlapping standard gameplay HUD during boss encounters and replacing the cramped inline player readout with a dedicated compact stat row inside the boss panel.
 - Upgraded the smoke harness and runtime text snapshot so coverage now asserts an authored scripted midgame level plus boss cue / telegraph state in addition to the earlier onboarding and meta-screen checks.
+2026-04-21
+- Gameplay engagement pass focused on the live run rather than more meta systems.
+- Added a recurring `SURVIVAL SURGE` loop in `game.js` for levels 4+ and endless mode: short pressure spikes that boost pace, immediately inject extra enemy pressure, and award time/gems/score/signature charge if the player survives.
+- Added flawless-surge detection by marking shield breaks and damage taken during surge windows, then paying a larger reward on a clean survive.
+- Tightened enemy pacing so repeat spawns now respect authored `enemyDelay` level data instead of falling back to the old global `9 - progress * 3.4` timing. This makes midgame scripted levels feel less empty and lets the authored level overrides matter.
+- Added a small in-run `SURGE` chip to the HUD and exposed `survival_surge` in `render_game_to_text()` for automated verification.
+- Regenerated the shipped WebView bundle via `node gen-gamehtmljs.js`.
+- Verification for this pass:
+- `node --check game.js`
+- `node gen-gamehtmljs.js`
+- `npm run smoke:mobile-webview`
+- Ran the `develop-web-game` Playwright client against a local static server (it only captured the loading screen in this repo's current boot timing).
+- Ran a targeted Puppeteer gameplay capture forcing Level 11 into an early surge window, then reviewed `output/surge-check/surge-active.png` plus `output/surge-check/surge-active.json`. Result: surge UI visible, extra enemies present, and the lane read materially busier than the prior midgame screenshot.

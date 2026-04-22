@@ -145,3 +145,16 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - `npm run smoke:mobile-webview`
 - Ran the `develop-web-game` Playwright client against a local static server (it only captured the loading screen in this repo's current boot timing).
 - Ran a targeted Puppeteer gameplay capture forcing Level 11 into an early surge window, then reviewed `output/surge-check/surge-active.png` plus `output/surge-check/surge-active.json`. Result: surge UI visible, extra enemies present, and the lane read materially busier than the prior midgame screenshot.
+2026-04-22
+- Researched current survival / runner reference points before the gameplay pass, using Canabalt, Alto's Odyssey, Jetpack Joyride, Dan the Man, Dead Ahead, and Vector as the mechanic fit check for what this game could borrow without breaking its lane-runner identity.
+- Added two new mid-run engagement hooks in `game.js`: timed `BOUNTY` enemies for higher-pressure elite kills, and `RELIC` pickups that sit on riskier lines and pay out extra gems, clock, score, and signature charge.
+- Gave bounty enemies explicit presentation instead of hiding the mechanic in tuning alone: aura ring, bounty chip, and a dedicated health-bar treatment. Also exposed `bounty_hunt`, enemy `bounty` flags, and visible `relics` through `render_game_to_text()` for future automation.
+- Tightened the menu and runner-select readability pass again after screenshot review: lowered and shrank the main title, moved the menu support copy into a chip, shortened runner-select copy, and replaced the long path descriptions with shorter pitches so text stays inside its panels.
+- Bumped the release metadata to `1.5.5` / Android `versionCode 36`, regenerated `gameHtml.js` and `assets/gameHtml.js`, and produced a fresh local Play bundle at `dist/gronks-run-1.5.5-36-release.aab`.
+- Verification for this pass:
+- `node --check game.js`
+- `node gen-gamehtmljs.js`
+- `node --check scripts/mobile_webview_smoke.js`
+- `npm run smoke:mobile-webview`
+- `android\\gradlew.bat bundleRelease --no-daemon`
+- Captured fresh UI review frames at `output/ui-check-2026-04-22/menu-after.png` and `output/ui-check-2026-04-22/char-select-after.png`, plus a targeted bounty / relic runtime capture at `output/engagement-check-2026-04-22/bounty-relic.png`.

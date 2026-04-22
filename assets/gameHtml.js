@@ -2479,6 +2479,27 @@ const SURVIVAL_SURGE = {
   flawlessScoreBonus: 80,
 };
 
+const BOUNTY_ENEMY = {
+  levelGate: 6,
+  initialDelay: 8.5,
+  cooldownMin: 12,
+  cooldownMax: 16,
+  hpScale: 1.65,
+  rewardTime: 2,
+  rewardGems: 3,
+  rewardScore: 180,
+  rewardSignature: 16,
+};
+
+const RELIC_PICKUP = {
+  levelGate: 4,
+  baseChance: 0.16,
+  rewardTime: 4,
+  rewardGems: 4,
+  rewardScore: 220,
+  rewardSignature: 14,
+};
+
 // ============================================================
 // GEM UPGRADE THRESHOLDS (per-run)
 // ============================================================
@@ -3819,12 +3840,50 @@ function drawAmbient(type) {
 const SAMPLE_D = 55;
 let chunks = [], worldOffset = 0;
 
+function canRunRelics() {
+  if (typeof G === 'undefined') return false;
+  if (G.dailyChallenge) return false;
+  if (G.endless) return true;
+  return G.levelNum >= RELIC_PICKUP.levelGate;
+}
+
+function canChunkSpawnRelic(type) {
+  return type === 'GEM_RUN' || type === 'RIDGE' || type === 'VALLEY' || type === 'GAUNTLET' || type === 'HILLS';
+}
+
+function getChunkRelicSpec(chunk, rng, script) {
+  if (!canRunRelics()) return null;
+  if (!chunk || !canChunkSpawnRelic(chunk.type)) return null;
+  if (shouldUseGuidedChunkPlan()) return null;
+  if (script && script.allowRelics === false) return null;
+  const chance = chunk.type === 'GAUNTLET'
+    ? RELIC_PICKUP.baseChance + 0.08
+    : chunk.type === 'GEM_RUN'
+      ? RELIC_PICKUP.baseChance * 0.7
+      : RELIC_PICKUP.baseChance;
+  if (!rng.bool(chance)) return null;
+  const at = chunk.type === 'GAUNTLET'
+    ? rng.range(0.58, 0.82)
+    : chunk.type === 'VALLEY'
+      ? rng.range(0.38, 0.62)
+      : chunk.type === 'RIDGE'
+        ? rng.range(0.42, 0.72)
+        : rng.range(0.28, 0.74);
+  const lx = chunk.w * clamp(at, 0.16, 0.88);
+  const lift = chunk.type === 'GAUNTLET' ? 2.9 : chunk.type === 'GEM_RUN' ? 2.3 : 2.5;
+  return {
+    lx,
+    ly: chunk.groundAt(lx) - UNIT * lift,
+    collected: false,
+  };
+}
+
 class Chunk {
   constructor(worldX, type, rng, diff, theme, script) {
     this.worldX = worldX; this.type = type;
     this.w = Math.round(W * 1.5);
     this.sampleCount = Math.ceil(this.w / SAMPLE_D) + 2;
-    this.heights = []; this.obstacles = []; this.gems = []; this.powerup = null;
+    this.heights = []; this.obstacles = []; this.gems = []; this.relics = []; this.powerup = null;
     this.script = script || null;
     this._gen(rng, diff, theme);
   }
@@ -3938,6 +3997,22 @@ class Chunk {
         const lx=rng.range(UNIT*2,this.w-UNIT*2); const gnd=this.groundAt(lx); if(gnd>H*.9)continue;
         this.gems.push({lx,ly:gnd-UNIT*rng.range(.9,2.8),collected:false});}
     }
+    if (script && Array.isArray(script.relics)) {
+      for (let ri = 0; ri < script.relics.length; ri++) {
+        const entry = script.relics[ri];
+        const at = typeof entry === 'number' ? entry : entry.at;
+        const lift = typeof entry === 'number' ? 2.4 : (entry.lift == null ? 2.4 : entry.lift);
+        const lx = this.w * clamp(at, 0.12, 0.9);
+        this.relics.push({
+          lx,
+          ly: this.groundAt(lx) - UNIT * lift,
+          collected: false,
+        });
+      }
+    } else {
+      const relic = getChunkRelicSpec(this, rng, script);
+      if (relic) this.relics.push(relic);
+    }
   }
   groundAt(lx){
     const i=lx/SAMPLE_D; const i0=clamp(Math.floor(i),0,this.heights.length-1);
@@ -4035,6 +4110,9 @@ class Enemy {
     this.projectiles = [];
     this.screenX = 0; this.worldX = 0; this.y = 0;
     this.state = 'IDLE'; this.timer = 0; this.fireCD = 0;
+    this.isBounty = false;
+    this.bountyAccent = null;
+    this.bountyLabel = null;
     // HP system
     const baseHP = ENEMY_HP[type] || 30;
     const diffScale = G.levelDef ? levelDiffMult(G.levelDef.id) : 1;
@@ -4291,13 +4369,24 @@ class Enemy {
       spawnFloatingText(_sx, _sy - UNIT*3, 'KO +50', '#FFD700', 1.16);
       spawnDeathFX(_sx, _sy - UNIT);
       updateMissionProgress('enemiesKilled', 1);
+      if (this.isBounty) resolveBountyEnemyDefeat(this, _sx, _sy);
     }
   }
 }
 
 function spawnEnemy(levelDef) {
   const t = levelDef.enemies[Math.floor(Math.random()*levelDef.enemies.length)];
-  activeEnemies.push(new Enemy(t));
+  const enemy = new Enemy(t);
+  if (
+    canRunBountyEnemies() &&
+    G.bountyCooldown <= 0 &&
+    !activeEnemies.some(function(active) { return active && active.isBounty && active.alive; }) &&
+    Math.random() < (G.surgeTimer > 0 ? 0.38 : 0.24)
+  ) {
+    promoteEnemyToBounty(enemy);
+  }
+  activeEnemies.push(enemy);
+  return enemy;
 }
 
 // ============================================================
@@ -5072,6 +5161,7 @@ const G = {
   combo:0, comboTimer:0, comboMult:1, comboPulse:0,
   // Survival surge loop
   surgeTimer:0, surgeCooldown:999, surgeFlawless:true, surgeCount:0,
+  bountyCooldown:999,
   // Move chaining
   lastAction:{type:null, time:0},
   // Stats scroll
@@ -5090,6 +5180,13 @@ function canRunSurvivalSurges() {
   if (G.dailyChallenge) return false;
   if (G.endless) return true;
   return G.levelNum >= SURVIVAL_SURGE.levelGate;
+}
+
+function canRunBountyEnemies() {
+  if (typeof G === 'undefined') return false;
+  if (G.dailyChallenge) return false;
+  if (G.endless) return true;
+  return G.levelNum >= BOUNTY_ENEMY.levelGate;
 }
 
 function getSurvivalSurgeAccent() {
@@ -5181,6 +5278,45 @@ function updateSurvivalSurge(dt) {
   if (G.surgeCooldown <= 0) startSurvivalSurge();
 }
 
+function scheduleNextBountyEnemy(initial) {
+  if (!canRunBountyEnemies()) {
+    G.bountyCooldown = 999;
+    return;
+  }
+  const lvlFactor = clamp((G.levelNum - BOUNTY_ENEMY.levelGate) / 18, 0, 1);
+  const baseCooldown = initial
+    ? BOUNTY_ENEMY.initialDelay
+    : lerp(BOUNTY_ENEMY.cooldownMax, BOUNTY_ENEMY.cooldownMin, lvlFactor);
+  G.bountyCooldown = baseCooldown + (initial ? 0 : Math.random() * 1.5);
+}
+
+function promoteEnemyToBounty(enemy) {
+  if (!enemy || enemy.isBounty) return enemy;
+  enemy.isBounty = true;
+  enemy.maxHP = Math.round(enemy.maxHP * BOUNTY_ENEMY.hpScale);
+  enemy.hp = enemy.maxHP;
+  if (enemy.fireInterval) enemy.fireInterval = Math.max(0.8, enemy.fireInterval * 0.85);
+  enemy.bountyAccent = getSurvivalSurgeAccent();
+  enemy.bountyLabel = enemy.type === 'GOLEM' ? 'ELITE' : 'BOUNTY';
+  return enemy;
+}
+
+function resolveBountyEnemyDefeat(enemy, sx, sy) {
+  const accent = enemy && enemy.bountyAccent ? enemy.bountyAccent : getSurvivalSurgeAccent();
+  G.timeLeft = Math.min(99, G.timeLeft + BOUNTY_ENEMY.rewardTime);
+  G.runGems += BOUNTY_ENEMY.rewardGems;
+  G.gems = G.runGems;
+  G.score += BOUNTY_ENEMY.rewardScore;
+  G.runScore += BOUNTY_ENEMY.rewardScore;
+  grantSignatureCharge(BOUNTY_ENEMY.rewardSignature, 'bounty_enemy');
+  spawnFloatingText(sx, sy - UNIT * 2.8, enemy && enemy.bountyLabel ? enemy.bountyLabel : 'BOUNTY', accent, 0.92);
+  spawnFloatingText(sx + UNIT * 0.45, sy - UNIT * 2.1, \`+\${BOUNTY_ENEMY.rewardGems} GEMS\`, '#FFE08A', 0.82);
+  spawnFloatingText(sx - UNIT * 0.35, sy - UNIT * 1.55, \`+\${BOUNTY_ENEMY.rewardTime}S\`, '#8FE6FF', 0.76);
+  showAnnouncement((enemy && enemy.bountyLabel ? enemy.bountyLabel : 'BOUNTY') + ' DOWN', accent);
+  checkGemUpgrades(false);
+  scheduleNextBountyEnemy(false);
+}
+
 // Smooth phase transition: fade out → change phase → fade in
 function transitionTo(newPhase, callback) {
   G.fadeDir = 1; // fading out
@@ -5246,10 +5382,12 @@ function startLevel(levelNum) {
   G.guidedChunkCursor = 0;
   G.scriptedChunkCursor = 0;
   G.surgeCount = 0;
+  G.bountyCooldown = 999;
   inp.jp=inp.jh=false; inp.tapped=false;
   particles.length=0; activeEnemies.length=0; ambients.length=0;
   trauma=0; enemySpawnCD=getLevelEnemyDelay(G.levelDef); nearMissCD=0;
   scheduleNextSurvivalSurge(true);
+  scheduleNextBountyEnemy(true);
   configureGuidedLevel(levelNum);
   initWorld(G.rng,G.diff,G.levelDef.theme);
   // Count total gems for star rating
@@ -5342,6 +5480,7 @@ function startDailyChallenge() {
   particles.length=0; activeEnemies.length=0; ambients.length=0;
   trauma=0; enemySpawnCD=6; nearMissCD=0;
   scheduleNextSurvivalSurge(true);
+  scheduleNextBountyEnemy(true);
   initWorld(G.rng,G.diff,G.levelDef.theme);
   G.levelTotalGems=0; G.levelGemsCollected=0;
   for(const c of chunks) G.levelTotalGems+=c.gems.length;
@@ -5378,6 +5517,7 @@ function startEndlessMode() {
   particles.length=0; activeEnemies.length=0; ambients.length=0;
   trauma=0; enemySpawnCD=6; nearMissCD=0;
   scheduleNextSurvivalSurge(true);
+  scheduleNextBountyEnemy(true);
   initWorld(G.rng,G.diff,G.levelDef.theme);
   G.levelTotalGems=0; G.levelGemsCollected=0;
   for(const c of chunks) G.levelTotalGems+=c.gems.length;
@@ -5428,6 +5568,33 @@ function checkGemUpgrades(silent) {
 function aabb(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
 
 let nearMissCD = 0; // cooldown to avoid spamming
+
+function collectRelicPickup(p, relic, sx, sy) {
+  if (!p || !relic || relic.collected) return;
+  relic.collected = true;
+  G.runGems += RELIC_PICKUP.rewardGems;
+  G.gems = G.runGems;
+  G.score += RELIC_PICKUP.rewardScore;
+  G.runScore += RELIC_PICKUP.rewardScore;
+  G.timeLeft = Math.min(99, G.timeLeft + RELIC_PICKUP.rewardTime);
+  comboAction(120, 'relic');
+  grantSignatureCharge(RELIC_PICKUP.rewardSignature, 'relic_pickup');
+  updateMissionProgress('gemsCollected', RELIC_PICKUP.rewardGems);
+  spawnFloatingText(sx, sy - UNIT * 0.85, \`+\${RELIC_PICKUP.rewardGems} GEMS\`, '#FFE08A', 0.88);
+  spawnFloatingText(sx + UNIT * 0.34, sy - UNIT * 0.22, \`+\${RELIC_PICKUP.rewardTime}S\`, '#8FE6FF', 0.76);
+  spawnFloatingText(sx - UNIT * 0.22, sy - UNIT * 1.48, 'RELIC CACHE', '#FFF4C6', 0.9);
+  showAnnouncement('RELIC CACHE', '#FFD65C');
+  spawnImpactBurst(sx, sy, '#FFD65C', {
+    count: 16,
+    speed: UNIT * 8,
+    size: 0.14,
+    ringColor: 'rgba(255,246,214,0.34)',
+    grav: 120
+  });
+  sfxGem();
+  checkGemUpgrades(false);
+}
+
 function checkCollisions(dt) {
   const p=G.player; if(!p||!p.alive)return;
   const phb=p.hitbox;
@@ -5506,6 +5673,17 @@ function checkCollisions(dt) {
         spawnImpactBurst(sx, sy, \`hsla(\${G.theme.gemH},100%,68%,0.9)\`, { count: _perfLevel === 0 ? 4 : 8, speed: UNIT * 5.4, size: 0.1, grav: 120, noRing: true });
         addTrauma(.06);
         checkGemUpgrades(false);
+      }
+    }
+    if (Array.isArray(chunk.relics)) {
+      for (const relic of chunk.relics) {
+        if (relic.collected) continue;
+        const sx = cx + relic.lx;
+        if (sx < -UNIT * 3 || sx > W + UNIT * 3) continue;
+        const sy = relic.ly + Math.sin(G.time * 2.6 + relic.lx * 0.008) * UNIT * 0.22;
+        if (aabb(phb, {x:sx-UNIT*0.7, y:sy-UNIT*0.8, w:UNIT*1.4, h:UNIT*1.6})) {
+          collectRelicPickup(p, relic, sx, sy);
+        }
       }
     }
   }
@@ -6269,6 +6447,21 @@ function drawGems(theme){
     }
   }
 }
+
+function drawRelics(theme) {
+  for (const chunk of chunks) {
+    const cx = chunk.worldX - worldOffset;
+    if (!Array.isArray(chunk.relics)) continue;
+    for (const relic of chunk.relics) {
+      if (relic.collected) continue;
+      const sx = cx + relic.lx;
+      if (sx < -UNIT * 3 || sx > W + UNIT * 3) continue;
+      const sy = relic.ly + Math.sin(G.time * 2.6 + relic.lx * 0.008) * UNIT * 0.22;
+      drawRelic(sx, sy, theme);
+    }
+  }
+}
+
 function drawGem(x,y,hue){
   const r=UNIT*.48, t=G.time||0;
   ctx.save();ctx.translate(x,y);ctx.rotate(t*1.8);
@@ -6288,6 +6481,50 @@ function drawGem(x,y,hue){
   const sr=r*.6;
   ctx.beginPath();ctx.moveTo(0,-sr);ctx.lineTo(0,sr);ctx.moveTo(-sr,0);ctx.lineTo(sr,0);ctx.stroke();
   ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+function drawRelic(x, y, theme) {
+  const u = UNIT;
+  const accent = theme && theme.gt ? theme.gt : '#FFC14D';
+  const pulse = 1 + Math.sin((G.time || 0) * 5 + x * 0.01) * 0.08;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(pulse, pulse);
+  ctx.rotate(Math.sin((G.time || 0) * 1.8 + x * 0.005) * 0.08);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.ellipse(0, u * 0.42, u * 0.5, u * 0.12, 0, 0, PI2);
+  ctx.fill();
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = '#FFD65C';
+  ctx.beginPath();
+  ctx.moveTo(0, -u * 0.76);
+  ctx.lineTo(u * 0.5, -u * 0.28);
+  ctx.lineTo(u * 0.42, u * 0.38);
+  ctx.lineTo(0, u * 0.76);
+  ctx.lineTo(-u * 0.42, u * 0.38);
+  ctx.lineTo(-u * 0.5, -u * 0.28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineWidth = Math.max(1.4, u * 0.08);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,247,204,0.86)';
+  ctx.beginPath();
+  ctx.moveTo(0, -u * 0.42);
+  ctx.lineTo(u * 0.16, -u * 0.08);
+  ctx.lineTo(0, u * 0.12);
+  ctx.lineTo(-u * 0.14, -u * 0.08);
+  ctx.closePath();
+  ctx.fill();
+  drawMiniChip(-u * 0.62, -u * 1.32, u * 1.24, u * 0.34, 'RELIC', {
+    accent: accent,
+    textColor: '#FFF7DC',
+    font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px monospace')
+  });
   ctx.restore();
 }
 
@@ -7323,31 +7560,41 @@ function drawMenu(){
 
   // Diagonal accent bar behind title
   ctx.save();
-  ctx.translate(W / 2, SAFE_TOP + u * 2.2);
-  ctx.rotate(-0.04);
+  ctx.translate(W / 2, SAFE_TOP + u * 2.66);
+  ctx.rotate(-0.035);
   ctx.fillStyle = INK_COLOR;
-  ctx.fillRect(-W, -u * 1.3, W * 2, u * 2.6);
+  ctx.fillRect(-W, -u * 1.02, W * 2, u * 2.04);
   // Accent under-slab
   ctx.fillStyle = '#FFC14D';
-  ctx.fillRect(-W, u * 1.32, W * 2, u * 0.34);
+  ctx.fillRect(-W, u * 0.82, W * 2, u * 0.22);
   ctx.restore();
 
   // Title on the inked slab
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const titleBounce = Math.sin(Date.now() * 0.003) * u * 0.04;
-  drawFitText("GRONK'S RUN", W / 2, SAFE_TOP + u * 2.1 + titleBounce, W - u * 2.4, {
-    basePx: u * 2.1, minPx: u * 1.1, weight: 'bold', color: BONE_COLOR
+  drawFitText("GRONK'S RUN", W / 2, SAFE_TOP + u * 2.6 + titleBounce, W - u * 3.8, {
+    basePx: u * 1.56, minPx: u * 1.0, weight: 'bold', color: BONE_COLOR
   });
 
-  // Tagline stamp
+  // Tagline chip
   const tagline = firstSession ? 'LANE RUNNER · DASH COMBAT · BOSS BREAKS' : 'PICK YOUR RUNNER · CASH GEMS · KEEP CLIMBING';
-  drawFitText(tagline, W / 2, SAFE_TOP + u * 3.85, W - u * 3, {
-    basePx: u * 0.32, minPx: u * 0.2, weight: 'bold', color: INK_COLOR
+  const menuTagline = firstSession ? 'SURVIVE - JUMP - DASH' : 'RUNNER - PATH - CLIMB';
+  const tagW = Math.min(W * 0.62, u * 10.2);
+  const tagH = u * 0.68;
+  const tagX = W / 2 - tagW / 2;
+  const tagY = SAFE_TOP + u * 3.88;
+  drawMiniChip(tagX, tagY, tagW, tagH, menuTagline, {
+    accent: '#A96A1A',
+    textColor: '#FFF6D8',
+    top: 'rgba(54,34,10,0.96)',
+    bottom: 'rgba(115,79,28,0.94)',
+    stroke: 'rgba(255,214,120,0.4)',
+    font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace')
   });
 
   // Hero display
-  const heroY = SAFE_TOP + u * 6.6;
+  const heroY = SAFE_TOP + u * 7.08;
   ctx.save();
   ctx.translate(W / 2, heroY);
   ctx.scale(2.4, 2.4);
@@ -9370,7 +9617,7 @@ function drawSpinWheel(dt) {
   const u=UNIT;
   drawBg(G.theme);
   ctx.save();ctx.translate(shX,shY);
-  drawObstacles(G.theme);drawGems(G.theme);
+  drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);
   if(G.player)drawChar(G.player,false);
   drawPteros(G.theme);ctx.restore();
   drawParticles();
@@ -11924,6 +12171,20 @@ function drawEnemies(){
     var drawX=en.screenX!==undefined?en.screenX:sx;
     var drawY=en.y!==undefined?en.y:sy;
     var enemyAlpha=en.dying?clamp(en.deathTimer/0.4,0,1):1;
+    if(en.isBounty){
+      var _bAccent=en.bountyAccent||'#FFD65C';
+      ctx.save();
+      ctx.globalAlpha=enemyAlpha;
+      var _bGlow=ctx.createRadialGradient(drawX,drawY-u*.9,u*.12,drawX,drawY-u*.9,u*1.9);
+      _bGlow.addColorStop(0,hexToRgba(_bAccent,0.34));
+      _bGlow.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=_bGlow;
+      ctx.beginPath();ctx.arc(drawX,drawY-u*.9,u*1.9,0,PI2);ctx.fill();
+      ctx.strokeStyle=hexToRgba(_bAccent,0.8);
+      ctx.lineWidth=u*.09;
+      ctx.beginPath();ctx.ellipse(drawX,drawY,u*1.46,u*.36,0,0,PI2);ctx.stroke();
+      ctx.restore();
+    }
     ctx.save();
     ctx.globalAlpha=enemyAlpha;
     ctx.fillStyle='rgba(0,0,0,0.28)';ctx.beginPath();ctx.ellipse(drawX,drawY,u*1.22,u*.28,0,0,PI2);ctx.fill();
@@ -12096,7 +12357,32 @@ function drawEnemies(){
     }
     ctx.restore();
     if(en.hpFlash>0){ctx.globalAlpha=en.hpFlash*2;ctx.fillStyle="#FFF";var hb=en.hitbox;ctx.fillRect(hb.x,hb.y,hb.w,hb.h);ctx.globalAlpha=1;}
-    if(en.hp<en.maxHP&&!en.dying){var barW=u*2,barH=u*0.2;var barX=drawX-barW/2,barY=drawY-u*3.2;ctx.fillStyle="rgba(0,0,0,0.5)";ctx.fillRect(barX-1,barY-1,barW+2,barH+2);ctx.fillStyle="#444";ctx.fillRect(barX,barY,barW,barH);var hpFrac=clamp(en.hp/en.maxHP,0,1);ctx.fillStyle=hpFrac>0.5?"#4CAF50":hpFrac>0.25?"#FF9800":"#F44336";ctx.fillRect(barX,barY,barW*hpFrac,barH);}
+    if((en.hp<en.maxHP||en.isBounty)&&!en.dying){
+      var _hpAccent=en.bountyAccent||'#FFD65C';
+      var barW=en.isBounty?u*2.28:u*2,barH=en.isBounty?u*0.24:u*0.2;
+      var barX=drawX-barW/2,barY=drawY-(en.isBounty?u*3.42:u*3.2);
+      ctx.fillStyle="rgba(0,0,0,0.5)";ctx.fillRect(barX-1,barY-1,barW+2,barH+2);
+      ctx.fillStyle=en.isBounty?hexToRgba(_hpAccent,0.24):"#444";ctx.fillRect(barX,barY,barW,barH);
+      var hpFrac=clamp(en.hp/en.maxHP,0,1);
+      ctx.fillStyle=en.isBounty?_hpAccent:(hpFrac>0.5?"#4CAF50":hpFrac>0.25?"#FF9800":"#F44336");
+      ctx.fillRect(barX,barY,barW*hpFrac,barH);
+      if(en.isBounty){
+        ctx.strokeStyle='rgba(255,244,214,0.66)';
+        ctx.lineWidth=Math.max(1,u*.04);
+        ctx.strokeRect(barX,barY,barW,barH);
+      }
+    }
+    if(en.isBounty&&!en.dying){
+      var chipW=u*1.96,chipH=u*0.42,chipX=drawX-chipW/2,chipY=drawY-u*4.72;
+      drawMiniChip(chipX,chipY,chipW,chipH,en.bountyLabel||'BOUNTY',{
+        accent:hexToRgba(en.bountyAccent||'#FFD65C',0.34),
+        textColor:'#FFF7DC',
+        top:'rgba(44,28,8,0.95)',
+        bottom:'rgba(18,12,4,0.92)',
+        stroke:'rgba(255,224,156,0.48)',
+        font:FONTS['b0.22']||('bold '+Math.round(u*0.22)+'px monospace')
+      });
+    }
     if(en.telegraphing){
       var tPulse=Math.sin(G.time*16)*0.5+0.5;
       var tw=u*0.8, th=u*1.4, ty=drawY-u*4;
@@ -12278,6 +12564,25 @@ function getCharPassiveLabel(ch) {
   return 'Balanced runner';
 }
 
+function getRunPathPitch(pathId) {
+  const path = getRunPathDef(pathId);
+  if (path.id === 'assault') return 'Push pace, combo score, and burst gain.';
+  if (path.id === 'vault') return 'Chase relics, gems, and extra clock.';
+  if (path.id === 'guardian') return 'Tank mistakes with shielded sustain.';
+  return path.desc;
+}
+
+function getRunnerSpotlightCopy(charIdx, pathId, firstSession) {
+  const idx = clamp(Number.isFinite(charIdx) ? charIdx : 0, 0, CHARS.length - 1);
+  if (firstSession) return 'Level 1 opens on clean reads: learn jump timing, then dash through pressure.';
+  return getCharSignatureProfile(idx).name + ': ' + getRunPathPitch(pathId);
+}
+
+function getRunnerSummaryCopy(ch, pathId, firstSession) {
+  if (firstSession) return 'Balanced opener. Level 1 teaches jump first, then dash.';
+  return getCharPassiveLabel(ch) + '. ' + getRunPathPitch(pathId);
+}
+
 function drawCharSelect() {
   const u = UNIT;
   const cols = 3, rows = 2, totalChars = CHARS.length;
@@ -12337,8 +12642,8 @@ function drawCharSelect() {
     weight: 'bold',
     color: '#F5D76C'
   });
-  drawFitText(firstSession ? 'Pick a runner, lock a run path, then learn the lane on Level 1.' : 'Each runner now pairs with a run path and signature burst for a more distinct build.', W / 2, headerY + headerH * 0.78, headerW - u * 1.4, {
-    basePx: u * 0.36,
+  drawFitText(firstSession ? 'Pick a runner. Lock a path. Learn the lane.' : 'Pair each runner with a path and burst style.', W / 2, headerY + headerH * 0.78, headerW - u * 1.4, {
+    basePx: u * 0.34,
     minPx: u * 0.22,
     color: 'rgba(220,235,255,0.82)'
   });
@@ -12350,7 +12655,7 @@ function drawCharSelect() {
     accent: lightenColor(selChar.col, 18),
     blur: 22
   });
-  drawMiniChip(spotlightX + u * 0.3, spotlightY + u * 0.22, u * 3.8, u * 0.6, firstSession ? 'RECOMMENDED START' : 'SELECTED RUNNER', {
+  drawMiniChip(spotlightX + u * 0.3, spotlightY + u * 0.22, u * 3.8, u * 0.6, firstSession && selIdx === 0 ? 'RECOMMENDED START' : 'SELECTED RUNNER', {
     accent: lightenColor(selChar.col, 14),
     textColor: '#F7FBFF',
     font: FONTS['b0.3'] || ('bold ' + Math.round(u * 0.3) + 'px monospace')
@@ -12383,8 +12688,8 @@ function drawCharSelect() {
     weight: 'bold',
     color: selSignature.accent
   });
-  drawFitText(firstSession && starterGuide ? 'Clean first-session pick with the clearest opening lesson.' : (selSignature.desc + ' ' + selPath.desc), spotlightX + spotlightW * 0.58, spotlightY + u * 1.9, spotlightW * 0.42, {
-    basePx: u * 0.26,
+  drawFitText(getRunnerSpotlightCopy(selIdx, selPath.id, firstSession && !!starterGuide), spotlightX + spotlightW * 0.58, spotlightY + u * 1.9, spotlightW * 0.42, {
+    basePx: u * 0.22,
     minPx: u * 0.18,
     color: 'rgba(220,228,245,0.78)'
   });
@@ -12437,8 +12742,8 @@ function drawCharSelect() {
       weight: 'bold',
       color: selected ? lightenColor(path.accent, 18) : '#E8F2FF'
     });
-    drawFitText(path.desc, x + pathCardW / 2, pathY + u * 1.08, pathCardW - u * 0.36, {
-      basePx: u * 0.24,
+    drawFitText(getRunPathPitch(pathId), x + pathCardW / 2, pathY + u * 1.05, pathCardW - u * 0.36, {
+      basePx: u * 0.2,
       minPx: u * 0.16,
       color: 'rgba(215,227,247,0.78)'
     });
@@ -12570,7 +12875,7 @@ function drawCharSelect() {
     weight: 'bold',
     color: '#F6FAFF'
   });
-  drawFitText(firstSession && starterGuide ? 'Balanced opener plus a clear build choice. Level 1 teaches jump, then dash.' : (getCharPassiveLabel(selChar) + '. ' + selPath.desc), W / 2, stripY + u * 0.86, u * 11.6, {
+  drawFitText(getRunnerSummaryCopy(selChar, selPath.id, firstSession && !!starterGuide), W / 2, stripY + u * 0.86, u * 11.6, {
     basePx: u * 0.28,
     minPx: u * 0.18,
     color: 'rgba(224,233,248,0.78)'
@@ -13434,6 +13739,7 @@ function loop(ts){
           G.endlessBossTimer=180;
           const bossLvl = 5*(1+Math.floor(G.endlessTime/180)%BOSS_TYPES.length);
           scheduleNextSurvivalSurge(false);
+          scheduleNextBountyEnemy(false);
           boss=new Boss(bossLvl);
           G.phase='BOSS_FIGHT';
           G.announce={text:\`BOSS: \${boss.name}!\`,life:2.5};
@@ -13445,6 +13751,7 @@ function loop(ts){
         G.diff=getDiff(prog,levelDiffMult(G.levelNum));
       }
       updateSurvivalSurge(DT);
+      if (G.bountyCooldown > 0) G.bountyCooldown -= DT;
       // Only update speed if alive — freeze world on death
       if(p.alive) {
         let spdM=getPlayerSpeedScale(p);
@@ -13463,6 +13770,7 @@ function loop(ts){
         // Boss fight on every 5th level
         if(G.levelNum % 5 === 0 && !boss) {
           scheduleNextSurvivalSurge(false);
+          scheduleNextBountyEnemy(false);
           boss = new Boss(G.levelNum);
           G.phase = 'BOSS_FIGHT';
           G.announce = {text: \`BOSS: \${boss.name}!\`, life: 2.5};
@@ -13562,7 +13870,7 @@ function loop(ts){
       drawBg(G.theme);
       drawAmbient(G.theme.amb);
       ctx.save();ctx.translate(shX,shY);
-      drawObstacles(G.theme);drawGems(G.theme);
+      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);
       if(p)drawChar(p,false);
       drawPteros(G.theme);drawEnemies();
       if(_perfLevel>=1){drawEnvDecoLayer(G.theme,getThemeName(G.theme),3);}
@@ -13588,7 +13896,7 @@ function loop(ts){
       drawBg(G.theme);
       drawAmbient(G.theme.amb);
       ctx.save();ctx.translate(shX,shY);
-      drawObstacles(G.theme);drawGems(G.theme);
+      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);
       if(G.player)drawChar(G.player,false);
       drawPteros(G.theme);drawEnemies();
       if(_perfLevel>=1){drawEnvDecoLayer(G.theme,getThemeName(G.theme),3);}
@@ -13714,7 +14022,7 @@ function loop(ts){
       // Keep rendering world in bg
       drawBg(G.theme);
       ctx.save();ctx.translate(shX,shY);
-      drawObstacles(G.theme);drawGems(G.theme);
+      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);
       if(G.player)drawChar(G.player,false);
       drawPteros(G.theme);ctx.restore();
       drawParticles();
@@ -13855,6 +14163,7 @@ function snapshotEntity(entity) {
     vy: roundSnapshotValue(entity.vy),
     hp: Number.isFinite(entity.hp) ? entity.hp : null,
     kind: entity.kind || entity.type || entity.name || null,
+    bounty: !!entity.isBounty,
   };
 }
 
@@ -13862,6 +14171,7 @@ window.render_game_to_text = function renderGameToText() {
   const pendingGuideStep = getGuidedPendingStep();
   const continuePrompt = G.phase === 'CONTINUE_PROMPT' ? getContinuePromptViewModel() : null;
   const rewardReadyCount = getUnclaimedMissionCount();
+  const activeBounty = activeEnemies.some(function(enemy) { return enemy && enemy.alive && enemy.isBounty; });
   const levelPlan = shouldUseGuidedChunkPlan()
     ? 'guided'
     : (shouldUseScriptedChunkPlan() ? 'scripted' : 'procedural');
@@ -13889,6 +14199,23 @@ window.render_game_to_text = function renderGameToText() {
     for (let j = 0; j < Math.min(chunk.obstacles.length, 4); j++) {
       const hazard = snapshotEntity(chunk.obstacles[j]);
       if (hazard) hazards.push(hazard);
+    }
+  }
+
+  const relics = [];
+  for (let i = 0; i < Math.min(chunks.length, 3); i++) {
+    const chunk = chunks[i];
+    if (!chunk || !Array.isArray(chunk.relics)) continue;
+    for (let j = 0; j < Math.min(chunk.relics.length, 3); j++) {
+      const relic = chunk.relics[j];
+      if (!relic || relic.collected) continue;
+      relics.push({
+        x: roundSnapshotValue(chunk.worldX + relic.lx),
+        y: roundSnapshotValue(relic.ly),
+        kind: 'relic',
+        gems: RELIC_PICKUP.rewardGems,
+        time: RELIC_PICKUP.rewardTime,
+      });
     }
   }
 
@@ -13929,6 +14256,10 @@ window.render_game_to_text = function renderGameToText() {
       next_in: roundSnapshotValue(G.surgeTimer > 0 ? 0 : G.surgeCooldown),
       flawless: !!G.surgeFlawless,
     } : null,
+    bounty_hunt: canRunBountyEnemies() ? {
+      active: activeBounty,
+      next_in: roundSnapshotValue(activeBounty ? 0 : G.bountyCooldown),
+    } : null,
     level_plan: levelPlan,
     continue_prompt: continuePrompt ? {
       title: continuePrompt.title,
@@ -13945,6 +14276,7 @@ window.render_game_to_text = function renderGameToText() {
     }) : null,
     enemies: activeEnemies.slice(0, 8).map(snapshotEntity).filter(Boolean),
     hazards,
+    relics,
     chunk_types: chunks.slice(0, 4).map(function(chunk) { return chunk.type; }),
     particles: particles.length,
     tooltip: tooltipState.active ? tooltipState.text : null,

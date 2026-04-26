@@ -10,7 +10,7 @@ const OUTPUT_PATH = path.join(ROOT, 'assets.js');
 
 const FRAME_SIZE = 128;
 const FRAME_COLS = 8;
-const FRAME_ROWS = 2;
+const FRAME_ROWS = 3;
 const SHEET_WIDTH = FRAME_SIZE * FRAME_COLS;
 const SHEET_HEIGHT = FRAME_SIZE * FRAME_ROWS;
 const PI2 = Math.PI * 2;
@@ -40,7 +40,9 @@ const FRAMES = [
   { kind: 'dash' },
   { kind: 'hit' },
   { kind: 'idleStand' },
-  { kind: 'idleBlink' }
+  { kind: 'idleBlink' },
+  { kind: 'landing' },
+  { kind: 'dashWindup' }
 ];
 
 function hexToRgb(hex) {
@@ -127,19 +129,25 @@ function facePanelPath(ctx, u) {
 
 function getPose(def) {
   if (def.kind === 'run') {
-    const swings = [-0.82, -0.46, 0.06, 0.58, 0.82, 0.34];
-    const bobs = [0.02, -0.02, -0.06, -0.04, 0.02, 0.05];
+    // Stronger leg/arm swing, deeper bob, varied per-frame body stretch so the
+    // run cycle reads as a clear silhouette change between frames instead of a
+    // gentle sway.
+    const swings = [-1.05, -0.55, 0.1, 0.7, 1.0, 0.45];
+    const armBoost = [0.92, 0.7, -0.4, -0.85, -0.95, -0.55];
+    const bobs = [0.05, -0.04, -0.12, -0.08, 0.04, 0.08];
+    const stretches = [1.04, 1.0, 0.96, 0.98, 1.04, 1.02];
     const step = swings[def.step];
     return {
       legSwing: step,
-      armSwing: -step * 0.78,
-      bodyTilt: step * 0.1,
+      armSwing: armBoost[def.step],
+      bodyTilt: step * 0.14 + 0.04,
       bodyY: bobs[def.step],
-      stretchX: 1 - Math.abs(step) * 0.05,
-      stretchY: 1 + Math.abs(step) * 0.06,
+      stretchX: 1 - Math.abs(step) * 0.04,
+      stretchY: stretches[def.step],
       eye: 'open',
       mouth: 'smile',
-      pupilShift: step * 0.08
+      pupilShift: step * 0.08,
+      runStep: def.step
     };
   }
   switch (def.kind) {
@@ -148,15 +156,22 @@ function getPose(def) {
     case 'worried':
       return { legSwing: 0.04, armSwing: 0.14, bodyTilt: 0.06, bodyY: 0.04, stretchX: 1.04, stretchY: 0.96, eye: 'wide', mouth: 'o' };
     case 'slide':
-      return { legSwing: 0.08, armSwing: 0.26, bodyTilt: 0.56, bodyY: 0.12, stretchX: 1.08, stretchY: 0.78, slide: true, eye: 'focus', mouth: 'line' };
+      return { legSwing: 0.08, armSwing: 0.26, bodyTilt: 0.56, bodyY: 0.12, stretchX: 1.12, stretchY: 0.74, slide: true, eye: 'focus', mouth: 'line' };
     case 'crouch':
       return { legSwing: 0.06, armSwing: 0.06, bodyTilt: 0.08, bodyY: 0.18, stretchX: 1.08, stretchY: 0.82, crouch: true, eye: 'focus', mouth: 'line' };
     case 'jump':
-      return { legSwing: 0, armSwing: -0.18, bodyTilt: -0.05, bodyY: -0.22, stretchX: 0.98, stretchY: 1.08, jump: true, eye: 'open', mouth: 'smile' };
+      return { legSwing: 0, armSwing: -0.42, bodyTilt: -0.08, bodyY: -0.28, stretchX: 0.92, stretchY: 1.18, jump: true, eye: 'open', mouth: 'smile' };
     case 'idle':
       return { legSwing: 0.05, armSwing: -0.03, bodyTilt: -0.01, bodyY: 0.02, stretchY: 1.01, eye: 'open', mouth: 'smile' };
     case 'dash':
-      return { legSwing: 0.52, armSwing: -0.8, bodyTilt: -0.3, bodyY: -0.04, stretchX: 1.12, stretchY: 0.9, dash: true, eye: 'focus', mouth: 'line' };
+      return { legSwing: 0.62, armSwing: -1.0, bodyTilt: -0.38, bodyY: -0.06, stretchX: 1.2, stretchY: 0.84, dash: true, eye: 'focus', mouth: 'line' };
+    case 'dashWindup':
+      // Anticipation: weight back on heel, arms drawn back, body tilted forward
+      // ready to spring. Brief render window before the dash blur fires.
+      return { legSwing: -0.5, armSwing: 0.78, bodyTilt: -0.14, bodyY: 0.16, stretchX: 0.94, stretchY: 0.92, dashWindup: true, eye: 'focus', mouth: 'line' };
+    case 'landing':
+      // Heavy compression with arms thrown wide for balance — sells the impact.
+      return { legSwing: 0.42, armSwing: -0.55, bodyTilt: 0.04, bodyY: 0.32, stretchX: 1.18, stretchY: 0.66, landing: true, eye: 'focus', mouth: 'line' };
     case 'hit':
       return { legSwing: -0.16, armSwing: 0.22, bodyTilt: 0.16, bodyY: 0.04, stretchX: 1.02, stretchY: 0.94, hit: true, eye: 'x', mouth: 'o' };
     case 'idleStand':
@@ -268,9 +283,35 @@ function drawCharacterFrame(ctx, char, frameSpec) {
   ctx.rotate(pose.bodyTilt || 0);
 
   if (pose.dash) {
-    for (let i = 0; i < 3; i++) {
-      ellipse(ctx, -u * (1.2 + i * 0.45), -u * (0.42 - i * 0.06), u * (0.46 - i * 0.06), u * (0.88 - i * 0.08), rgba(char.accent, 0.16 - i * 0.04), null, 0, -0.25);
+    for (let i = 0; i < 4; i++) {
+      ellipse(ctx, -u * (1.2 + i * 0.5), -u * (0.42 - i * 0.06), u * (0.5 - i * 0.06), u * (1.0 - i * 0.1), rgba(char.accent, 0.22 - i * 0.04), null, 0, -0.25);
     }
+    // Sharp speed lines emanating backward.
+    for (let i = 0; i < 3; i++) {
+      strokeLine(ctx, [[-u * (1.4 + i * 0.45), -u * (0.95 - i * 0.34)], [-u * (0.45 + i * 0.2), -u * (0.6 - i * 0.18)]], rgba('#FFFFFF', 0.32 - i * 0.06), u * 0.06);
+    }
+  }
+  if (pose.dashWindup) {
+    // Charge particles wreath behind the heel.
+    for (let i = 0; i < 5; i++) {
+      const angle = -2.4 + i * 0.18;
+      ellipse(ctx, Math.cos(angle) * u * 1.05, Math.sin(angle) * u * 0.55 - u * 0.2, u * 0.08, u * 0.08, rgba(char.accent, 0.36 - i * 0.04), null, 0);
+    }
+    strokeLine(ctx, [[-u * 1.0, -u * 0.4], [-u * 0.6, -u * 0.7]], rgba('#FFFFFF', 0.36), u * 0.08);
+  }
+  if (pose.landing) {
+    // Dust splash on either side of the boots.
+    for (const side of [-1, 1]) {
+      ellipse(ctx, side * u * 0.95, u * 0.18, u * 0.42, u * 0.18, rgba('#FFFFFF', 0.24), null, 0);
+      ellipse(ctx, side * u * 0.7, u * 0.04, u * 0.22, u * 0.1, rgba('#FFFFFF', 0.32), null, 0);
+    }
+    // Impact arc curving up from the contact point.
+    ctx.beginPath();
+    ctx.arc(0, u * 0.22, u * 1.05, Math.PI + 0.4, PI2 - 0.4);
+    ctx.strokeStyle = rgba('#FFFFFF', 0.32);
+    ctx.lineWidth = u * 0.08;
+    ctx.lineCap = 'round';
+    ctx.stroke();
   }
 
   ellipse(ctx, 0, u * 0.26, u * 1.0, u * 0.18, rgba('#08111F', 0.22), null, 0);

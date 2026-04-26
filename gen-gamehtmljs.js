@@ -12,6 +12,7 @@ const outputs = [
   path.join(rootDir, 'gameHtml.js'),
   path.join(rootDir, 'assets', 'gameHtml.js'),
 ];
+const standaloneHtmlOutput = path.join(rootDir, 'assets', 'game.html');
 
 function read(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -66,7 +67,9 @@ const moduleSource = `const html = \`${escapeForTemplateLiteral(webViewHtml)}\`;
 for (const outputPath of outputs) {
   fs.writeFileSync(outputPath, moduleSource);
 }
+fs.writeFileSync(standaloneHtmlOutput, webViewHtml);
 
 console.log('Kept index.html as the external-script template and regenerated self-contained gameHtml.js outputs.');
 console.log('index.html size:', fs.statSync(indexPath).size, 'bytes');
 console.log('gameHtml.js size:', fs.statSync(outputs[0]).size, 'bytes');
+console.log('assets/game.html size:', fs.statSync(standaloneHtmlOutput).size, 'bytes');

@@ -252,10 +252,14 @@ function drawButton(x,y,w,h,label,opts){
   if(pressed){ctx.save();ctx.translate(cx,cy);ctx.scale(0.95,0.95);ctx.translate(-cx,-cy);}
   fillRR(x,y,w,h,r,opts.fill||'rgba(30,60,90,0.8)',opts.stroke||'rgba(255,255,255,0.4)',opts.lw||2);
   if(pressed){fillRR(x,y,w,h,r,'rgba(0,0,0,0.2)',null,0);}
-  ctx.font=opts.font||FONTS['b1']||('bold '+UNIT+'px monospace');
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=opts.textColor||'#FFF';
-  ctx.fillText(label,cx,cy);
+  const buttonFont = opts.font || FONTS['b1'] || ('bold ' + UNIT + 'px monospace');
+  const match = /(\d+(?:\.\d+)?)px/.exec(buttonFont);
+  drawFitText(label, cx, cy, w - (opts.padX || UNIT * 0.55), {
+    basePx: opts.basePx || (match ? Number(match[1]) : UNIT),
+    minPx: opts.minPx || Math.max(10, UNIT * 0.26),
+    weight: opts.weight || 'bold',
+    color: opts.textColor || '#FFF'
+  });
   if(pressed)ctx.restore();
   return{x,y,w,h,pressed};
 }
@@ -389,21 +393,33 @@ function drawMiniChip(x, y, w, h, label, opts) {
     accentAlpha: opts.accentAlpha == null ? 0.18 : opts.accentAlpha,
     glossAlpha: opts.glossAlpha == null ? 0.12 : opts.glossAlpha
   });
-  ctx.font = opts.font || FONTS['b0.4'] || ('700 ' + Math.round(UNIT * 0.4) + 'px ' + UI_FONT_DISPLAY);
+  const baseFont = opts.font || FONTS['b0.4'] || ('700 ' + Math.round(UNIT * 0.4) + 'px ' + UI_FONT_DISPLAY);
+  const fontMatch = String(baseFont).match(/([0-9]+(?:\.[0-9]+)?)px/);
+  const requestedPx = fontMatch ? parseFloat(fontMatch[1]) : Math.round(UNIT * 0.4);
+  const weightMatch = String(baseFont).match(/^(\d{3}|bold|normal|italic)\s+/);
+  const fontFamily = String(baseFont).replace(/^[^p]*?[0-9.]+px\s+/, '');
+  const weightPrefix = weightMatch ? weightMatch[1] + ' ' : '';
+  // Never honor a chip font below the readable floor — bump it up. Chips may
+  // overflow horizontally and fall back to ellipsis, but they should never
+  // render unreadable glyphs.
+  const basePx = Math.max(requestedPx, TEXT_READABLE_FLOOR_PX);
+  ctx.font = weightPrefix + basePx + 'px ' + fontFamily;
+  const chipPad = UNIT * 0.32;
+  const maxTW = w - chipPad * 2;
+  const minPx = TEXT_READABLE_FLOOR_PX;
+  let px = basePx;
+  let label2 = String(label || '');
+  while (px > minPx && ctx.measureText(label2).width > maxTW) {
+    px -= 1;
+    ctx.font = weightPrefix + px + 'px ' + fontFamily;
+  }
+  if (ctx.measureText(label2).width > maxTW) {
+    label2 = ellipsizeToWidth(label2, maxTW);
+  }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = opts.textColor || '#F5F7FF';
-  // Auto-shrink text to fit chip width with padding
-  const _chipPad = UNIT * 0.35;
-  const _maxTW = w - _chipPad * 2;
-  if (ctx.measureText(label).width > _maxTW && _maxTW > 10) {
-    const _m = ctx.measureText(label).width;
-    const _scale = _maxTW / _m;
-    ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(_scale, 1);
-    ctx.fillText(label, 0, 0); ctx.restore();
-  } else {
-    ctx.fillText(label, x + w / 2, y + h / 2);
-  }
+  ctx.fillText(label2, x + w / 2, y + h / 2);
 }
 
 function drawProgressBar(x, y, w, h, frac, colors) {
@@ -441,15 +457,39 @@ function drawTextBlock(text, x, y, maxWidth, lineHeight, opts) {
   const lines = [];
   let line = '';
   for (let i = 0; i < words.length; i++) {
-    const test = line ? (line + ' ' + words[i]) : words[i];
+    let word = words[i];
+    if (ctx.measureText(word).width > maxWidth && maxWidth > 12) {
+      const chunks = [];
+      let chunk = '';
+      for (let c = 0; c < word.length; c++) {
+        const testChunk = chunk + word[c];
+        if (chunk && ctx.measureText(testChunk + '-').width > maxWidth) {
+          chunks.push(chunk + '-');
+          chunk = word[c];
+        } else {
+          chunk = testChunk;
+        }
+      }
+      if (chunk) chunks.push(chunk);
+      words.splice(i, 1, ...chunks);
+      word = words[i];
+    }
+    const test = line ? (line + ' ' + word) : word;
     if (line && ctx.measureText(test).width > maxWidth) {
       lines.push(line);
-      line = words[i];
+      line = word;
     } else {
       line = test;
     }
   }
   if (line) lines.push(line);
+  const maxLines = opts.maxLines || 0;
+  if (maxLines > 0 && lines.length > maxLines) {
+    lines.length = maxLines;
+    let last = lines[maxLines - 1];
+    while (last.length > 1 && ctx.measureText(last + '...').width > maxWidth) last = last.slice(0, -1);
+    lines[maxLines - 1] = last + '...';
+  }
   const align = opts.align || 'center';
   ctx.textAlign = align;
   ctx.textBaseline = 'top';
@@ -464,22 +504,50 @@ function setMonoFont(px, weight) {
   ctx.font = prefix + Math.round(px) + 'px ' + UI_FONT_NUMERIC;
 }
 
+// Absolute readable floor for any UI text. Below this, glyphs in our chunky
+// display font become illegible. Callers may pass a higher floorPx but never
+// lower than this constant.
+var TEXT_READABLE_FLOOR_PX = 10;
+
 function measureFitPx(text, maxWidth, basePx, minPx, weight) {
-  let px = Math.max(minPx || 10, basePx || 12);
+  let px = Math.max(minPx || TEXT_READABLE_FLOOR_PX, basePx || 12);
   setMonoFont(px, weight);
-  while (px > (minPx || 10) && ctx.measureText(String(text || '')).width > maxWidth) {
+  const floor = Math.max(minPx || TEXT_READABLE_FLOOR_PX, TEXT_READABLE_FLOOR_PX);
+  while (px > floor && ctx.measureText(String(text || '')).width > maxWidth) {
     px -= 1;
     setMonoFont(px, weight);
   }
   return px;
 }
 
+// Truncate `text` at the current ctx.font so its rendered width fits maxWidth.
+// Adds an ellipsis when truncation is needed.
+function ellipsizeToWidth(text, maxWidth) {
+  const s = String(text || '');
+  if (!s) return s;
+  if (ctx.measureText(s).width <= maxWidth) return s;
+  const ell = '…';
+  if (ctx.measureText(ell).width >= maxWidth) return '';
+  let lo = 0, hi = s.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (ctx.measureText(s.slice(0, mid) + ell).width <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return s.slice(0, lo) + ell;
+}
+
 function drawFitText(text, x, y, maxWidth, opts) {
   opts = opts || {};
   const weight = opts.weight || '';
   const basePx = opts.basePx || Math.round(UNIT * 0.5);
-  const minPx = opts.minPx || Math.round(basePx * 0.62);
-  const px = measureFitPx(text, maxWidth, basePx, minPx, weight);
+  const floorPx = Math.max(opts.floorPx || TEXT_READABLE_FLOOR_PX, TEXT_READABLE_FLOOR_PX);
+  const requestedMin = opts.minPx ? Math.max(opts.minPx, floorPx) : Math.max(Math.round(basePx * 0.62), floorPx);
+  const px = measureFitPx(text, maxWidth, basePx, requestedMin, weight);
+  let rendered = String(text || '');
+  if (ctx.measureText(rendered).width > maxWidth) {
+    rendered = ellipsizeToWidth(rendered, maxWidth);
+  }
   ctx.save();
   ctx.textAlign = opts.align || 'center';
   ctx.textBaseline = opts.baseline || 'middle';
@@ -488,7 +556,7 @@ function drawFitText(text, x, y, maxWidth, opts) {
     ctx.shadowColor = opts.shadowColor;
     ctx.shadowBlur = opts.shadowBlur || 8;
   }
-  ctx.fillText(String(text || ''), x, y);
+  ctx.fillText(rendered, x, y);
   ctx.restore();
   return px;
 }
@@ -1075,7 +1143,7 @@ const TUTORIAL_TIPS = [
   { level: 3, delay: 1, text: 'Enemies have HP - attack them!', duration: 4, icon: 'right' },
   { level: 3, delay: 7, text: 'Dash INTO enemies to deal damage!', duration: 4, icon: 'right' },
   { level: 4, delay: 1, text: 'Watch for red \"!\" - enemy attacking!', duration: 4, icon: 'warn' },
-  { level: 4, delay: 7, text: 'Dash into projectiles to parry them!', duration: 4, icon: 'right' },
+  { level: 4, delay: 7, text: 'Dash through projectiles to shred them!', duration: 4, icon: 'right' },
   { level: 5, delay: 1, text: 'BOSS FIGHT! Attack it to win!', duration: 4, icon: 'warn' },
   { level: 1, delay: 18, text: 'Near-misses give bonus combo points!', duration: 3.5 },
   { level: 6, delay: 1, text: 'Try different characters in the menu!', duration: 4 },
@@ -1615,16 +1683,17 @@ function grantSignatureCharge(amount, source) {
 // ============================================================
 // SPRITE SYSTEM (unified for all characters)
 // ============================================================
-const SPRITE_COLS = 8, SPRITE_ROWS = 2;
+const SPRITE_COLS = 8, SPRITE_ROWS = 3;
 const SPRITE_FRAMES = {
   run: [0,1,2,3,4,5],
   wave: 6, worried: 7,
   slide: 8, crouch: 9, jump: 10, idle: 11,
-  dash: 12, hit: 13, idleStand: 14, idleBlink: 15
+  dash: 12, hit: 13, idleStand: 14, idleBlink: 15,
+  landing: 16, dashWindup: 17
 };
-const SPRITE_RUN_FPS = 5;
-const CHAR_SPRITES_ENABLED = false;
-const ENEMY_SPRITES_ENABLED = false;
+const SPRITE_RUN_FPS = 12;
+const CHAR_SPRITES_ENABLED = true;
+const ENEMY_SPRITES_ENABLED = true;
 
 var SPRITE_B64 = typeof window.SPRITE_B64 === 'object' ? window.SPRITE_B64 : {};
 
@@ -1740,9 +1809,11 @@ function initCharSprite(charId) {
 function getSpriteFrame(player, mini) {
   if (mini) return SPRITE_FRAMES.idleStand;
   if (player.hpFlash > 0 && Math.sin(player.hpFlash * 30) > 0) return SPRITE_FRAMES.hit;
+  if ((player.dashWindupTimer || 0) > 0) return SPRITE_FRAMES.dashWindup;
   if (player.dashTimer > 0) return SPRITE_FRAMES.dash;
   if (player.slideTimer > 0) return SPRITE_FRAMES.slide;
   if (player.pounding) return SPRITE_FRAMES.crouch;
+  if ((player.landFXTimer || 0) > 0 && player.onGround) return SPRITE_FRAMES.landing;
   if (!player.onGround && player.vy < 0) return SPRITE_FRAMES.jump;
   if (!player.onGround && player.vy >= 0) return SPRITE_FRAMES.crouch;
 
@@ -1957,9 +2028,9 @@ function updateSlowMo(dt) {
 // LEVEL DATA  (5 unique themes, then repeat harder)
 // ============================================================
 const LEVEL_DEFS = [
-  { name:'Jungle Ruins',   theme:'JUNGLE',  targetTime:30, enemies:[], paceScale:0.92, enemyDelay:999, focus:'Read the lane and commit' },
-  { name:'Volcanic Caves', theme:'VOLCANO', targetTime:36, enemies:[], paceScale:1.0, enemyDelay:999, focus:'Stay low, then strike down' },
-  { name:'Glacier Peaks',  theme:'GLACIER', targetTime:42, enemies:['SERPENT'], paceScale:1.08, enemyDelay:6.2, focus:'Dash through danger' },
+  { name:'Jungle Ruins',   theme:'JUNGLE',  targetTime:32, enemies:[], paceScale:0.94, enemyDelay:999, focus:'Read the lane and commit' },
+  { name:'Volcanic Caves', theme:'VOLCANO', targetTime:38, enemies:['SERPENT'], paceScale:1.02, enemyDelay:8.4, focus:'Stay low, then strike down' },
+  { name:'Glacier Peaks',  theme:'GLACIER', targetTime:44, enemies:['SERPENT','DIVER'], paceScale:1.09, enemyDelay:6.8, focus:'Dash through danger' },
   { name:'Murky Swamp',    theme:'SWAMP',   targetTime:52, enemies:['TROLL','WITCH','SERPENT','GOLEM'], focus:'Pressure and route reading' },
   { name:'Sky Sanctuary',  theme:'SKY',     targetTime:58, enemies:['DIVER','WITCH','CHARGER','BOMBER'], focus:'Fast reactions and air space' },
 ];
@@ -2011,6 +2082,37 @@ function getLevelOpeningMultiplier(levelDef) {
 function getLevelEnemyDelay(levelDef) {
   if (levelDef && Number.isFinite(levelDef.enemyDelay)) return levelDef.enemyDelay;
   return 6;
+}
+
+function chooseEnemyTypeForDirector(levelDef) {
+  const pool = (levelDef && levelDef.enemies && levelDef.enemies.length) ? levelDef.enemies : [];
+  if (!pool.length) return null;
+  G.encounterDirector = G.encounterDirector || { lastType: null, repeat: 0, wave: 0 };
+  const activeCounts = {};
+  for (let i = 0; i < activeEnemies.length; i++) {
+    const t = activeEnemies[i] && activeEnemies[i].type;
+    if (t) activeCounts[t] = (activeCounts[t] || 0) + 1;
+  }
+  const progress = clamp(G.time / Math.max(1, levelDef.targetTime || 1), 0, 1);
+  const airbornePressure = (activeCounts.DIVER || 0) + (activeCounts.BOMBER || 0) + (activeCounts.WITCH || 0);
+  const groundPressure = (activeCounts.TROLL || 0) + (activeCounts.GOLEM || 0) + (activeCounts.SERPENT || 0) + (activeCounts.CHARGER || 0);
+  let best = pool[Math.floor(Math.random() * pool.length)];
+  let bestScore = -999;
+  for (let i = 0; i < pool.length; i++) {
+    const t = pool[i];
+    let score = Math.random() * 2.2;
+    if (t === G.encounterDirector.lastType) score -= G.encounterDirector.repeat >= 1 ? 3.2 : 1.0;
+    if ((activeCounts[t] || 0) > 0) score -= 1.3 + activeCounts[t] * 0.8;
+    if ((t === 'DIVER' || t === 'BOMBER' || t === 'WITCH') && airbornePressure >= 2) score -= 2.4;
+    if ((t === 'TROLL' || t === 'GOLEM' || t === 'SERPENT' || t === 'CHARGER') && groundPressure >= 3) score -= 1.6;
+    if (progress > 0.55 && (t === 'CHARGER' || t === 'BOMBER')) score += 0.8;
+    if (G.surgeTimer > 0 && (t === 'SERPENT' || t === 'CHARGER')) score += 0.7;
+    if (score > bestScore) { bestScore = score; best = t; }
+  }
+  if (best === G.encounterDirector.lastType) G.encounterDirector.repeat++;
+  else { G.encounterDirector.lastType = best; G.encounterDirector.repeat = 0; }
+  G.encounterDirector.wave++;
+  return best;
 }
 
 function levelDiffMult(n) {
@@ -2129,11 +2231,11 @@ const DMG = {
 // DIFFICULTY
 // ============================================================
 function getDiff(prog, mult) {
-  // Speed ceiling softened. Obstacle chance ramp tamer so high levels don't become walls.
-  const spd = lerp(220, 440, prog) * mult;
-  const oC = lerp(0.22, 0.55, prog);
-  const gC = lerp(0.42, 0.16, prog);
-  const gapC = lerp(0.06, 0.28, prog);
+  // More side-scroller pressure without turning the lane into a raw speed wall.
+  const spd = lerp(230, 468, prog) * mult;
+  const oC = lerp(0.20, 0.58, prog);
+  const gC = lerp(0.46, 0.18, prog);
+  const gapC = lerp(0.05, 0.26, prog);
   return { speed: spd, oChance: oC, gChance: gC, gapChance: gapC, boulder: prog > 0.3, ptero: prog > 0.45 };
 }
 
@@ -3046,12 +3148,12 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px monospace');
-  ctx.fillStyle = 'rgba(214,226,244,0.68)';
-  ctx.fillText(Math.min(mission.progress || 0, mission.target) + '/' + mission.target, barX, barY - u * 0.14);
+  ctx.font = Math.max(11, Math.round(u * 0.28)) + 'px ' + UI_FONT_DISPLAY;
+  ctx.fillStyle = 'rgba(214,226,244,0.78)';
+  ctx.fillText(Math.min(mission.progress || 0, mission.target) + '/' + mission.target, barX, barY - u * 0.18);
   ctx.textAlign = 'right';
-  ctx.fillStyle = done ? '#9CF0AF' : ready ? '#FFD86A' : 'rgba(214,226,244,0.6)';
-  ctx.fillText(Math.round(prog * 100) + '%', barX + barW, barY - u * 0.14);
+  ctx.fillStyle = done ? '#9CF0AF' : ready ? '#FFD86A' : 'rgba(214,226,244,0.7)';
+  ctx.fillText(Math.round(prog * 100) + '%', barX + barW, barY - u * 0.18);
 
   if (done) {
     drawMiniChip(actionX, y + h * 0.22, actionW, u * 0.62, 'DONE', {
@@ -3061,8 +3163,8 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
     });
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = FONTS['n0.24'] || (Math.round(u * 0.24) + 'px monospace');
-    ctx.fillStyle = 'rgba(158,222,172,0.68)';
+    ctx.font = Math.max(10, Math.round(u * 0.26)) + 'px ' + UI_FONT_DISPLAY;
+    ctx.fillStyle = 'rgba(158,222,172,0.78)';
     ctx.fillText('Reward sent', actionX + actionW / 2, y + h * 0.72);
     return null;
   } else if (ready) {
@@ -3098,8 +3200,8 @@ function drawMissionCard(x, y, w, h, mission, u, dt, opts) {
     });
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = FONTS['n0.22'] || (Math.round(u * 0.22) + 'px monospace');
-    ctx.fillStyle = 'rgba(188,198,214,0.6)';
+    ctx.font = Math.max(10, Math.round(u * 0.26)) + 'px ' + UI_FONT_DISPLAY;
+    ctx.fillStyle = 'rgba(198,210,228,0.72)';
     ctx.fillText('Keep pushing', actionX + actionW / 2, y + h * 0.72);
     return null;
   }
@@ -3147,18 +3249,18 @@ const BOSS_TYPES = [
   { name:'Jungle Troll King', theme:'JUNGLE', color:'#3a7a3a', hp:110, attacks:['ROCK_CLUSTER','GROUND_POUND'], phase3atk:'VINE_ERUPTION', hint:'Bait the pound, then punish from above.' },
   { name:'Volcano Golem', theme:'VOLCANO', color:'#cc4400', hp:155, attacks:['BOULDER_RAIN','FIRE_BEAM'], phase3atk:'MAGMA_POOL', hint:'Read the floor marks and never stand still after the beam.' },
   { name:'Ice Dragon', theme:'GLACIER', color:'#88ccff', hp:130, attacks:['ICE_SHARD','ICE_PILLAR'], phase3atk:'FROST_CONE', hint:'Follow the safe lane and leave pillar markers early.' },
-  { name:'Swamp Witch Queen', theme:'SWAMP', color:'#aa44cc', hp:115, attacks:['HOMING_SKULLS','POISON_CLOUD'], phase3atk:'SHADOW_BURST', hint:'Parry what you can and vacate the poison before it blooms.' },
+  { name:'Swamp Witch Queen', theme:'SWAMP', color:'#aa44cc', hp:115, attacks:['HOMING_SKULLS','POISON_CLOUD'], phase3atk:'SHADOW_BURST', hint:'Dash through the skulls and vacate the poison before it blooms.' },
   { name:'Sky Phoenix', theme:'SKY', color:'#ffaa22', hp:140, attacks:['SWOOP','FEATHER_STORM'], phase3atk:'DIVE_BOMB', hint:'Keep the center lane clean so the dives stay readable.' },
 ];
 
 const BOSS_ATTACK_SPECS = {
-  ROCK_CLUSTER: { label: 'ROCK CLUSTER', cue: 'Jump the spread or parry the return.', color: '#C9A56A', windup: 0.62, sfx: 'ui_tap', rate: 0.84 },
+  ROCK_CLUSTER: { label: 'ROCK CLUSTER', cue: 'Jump the spread, then dash to clear the rebound.', color: '#C9A56A', windup: 0.62, sfx: 'ui_tap', rate: 0.84 },
   GROUND_POUND: { label: 'GROUND POUND', cue: 'Stay airborne through the sweep.', color: '#FF9E54', windup: 0.74, sfx: 'shield', rate: 0.82 },
   BOULDER_RAIN: { label: 'BOULDER RAIN', cue: 'Move between the marked lanes.', color: '#FF8A42', windup: 0.76, sfx: 'ui_tap', rate: 0.8 },
   FIRE_BEAM: { label: 'FIRE BEAM', cue: 'Drop or jump late through the line.', color: '#FF6548', windup: 0.68, sfx: 'dash', rate: 0.78 },
   ICE_SHARD: { label: 'ICE SHARD FAN', cue: 'Read the spread before committing.', color: '#8EDAFF', windup: 0.64, sfx: 'ui_tap', rate: 0.92 },
   ICE_PILLAR: { label: 'ICE PILLAR', cue: 'Leave the marker before it spikes up.', color: '#C7F2FF', windup: 0.78, sfx: 'shield', rate: 0.9 },
-  HOMING_SKULLS: { label: 'HOMING SKULLS', cue: 'Parry close or kite them wide.', color: '#C48CFF', windup: 0.72, sfx: 'ui_tap', rate: 0.82 },
+  HOMING_SKULLS: { label: 'HOMING SKULLS', cue: 'Dash through them or kite them wide.', color: '#C48CFF', windup: 0.72, sfx: 'ui_tap', rate: 0.82 },
   POISON_CLOUD: { label: 'POISON CLOUD', cue: 'Vacate the pool and reset the lane.', color: '#9ED96D', windup: 0.7, sfx: 'shield', rate: 0.88 },
   SWOOP: { label: 'SWOOP', cue: 'Hold your line and react late.', color: '#FFC05E', windup: 0.66, sfx: 'dash', rate: 0.86 },
   FEATHER_STORM: { label: 'FEATHER STORM', cue: 'Read the gaps, not the noise.', color: '#F0C277', windup: 0.78, sfx: 'ui_tap', rate: 0.88 },
@@ -3810,6 +3912,9 @@ class Enemy {
     } else if (type==='DIVER') {
       this.screenX = W+UNIT*4; this.y = H*.06;
       this.state = 'FLY'; this.vy = 0;
+      this.fireInterval = 1.05 + Math.random() * 0.45;
+      this.diveCD = 1.1 + Math.random() * 0.8;
+      this.diveTargetY = 0;
     } else if (type==='WITCH') {
       this.worldX = worldOffset + W*1.4 + Math.random()*W*.5;
       this.y = H*.32; this.fireInterval = 2+Math.random()*1.5;
@@ -3819,7 +3924,7 @@ class Enemy {
       this.fireInterval = 3+Math.random()*1.5; // shockwave interval
     } else if (type==='BOMBER') {
       this.screenX = W+UNIT*5; this.y = H*.12+Math.random()*H*.08;
-      this.fireInterval = 1.5+Math.random()*1;
+      this.fireInterval = 1.45+Math.random()*0.8;
     } else if (type==='SERPENT') {
       this.screenX = W+UNIT*3; this.y = GROUND_BASE;
       this.state = 'SLITHER'; this.slitherPhase = 0; this._lastGoodY = GROUND_BASE;
@@ -3892,18 +3997,39 @@ class Enemy {
         break;
       }
       case 'DIVER': {
-        // Flies across the top, never dives — only shoots aimed feather darts
-        this.screenX -= (speed*.5+90)*dt;
-        // Bob gently up and down
-        this.y = H*.1 + Math.sin(this.phase)*UNIT*1.2;
+        // Starts high, then occasionally dives to force a jump or dash decision.
+        this.screenX -= (speed*.5+105)*dt;
+        this.diveCD -= dt;
+        if (this.state === 'FLY' && this.diveCD <= 0 && this.screenX < W * 0.86 && this.screenX > W * 0.36) {
+          this.state = 'DIVE';
+          this.timer = 0;
+          this.diveTargetY = clamp(py - UNIT * 1.35, H * 0.18, GROUND_BASE - UNIT * 2.2);
+          this.telegraphing = true;
+          this.telegraphTimer = 0.28;
+        }
+        // Bob gently between dives.
+        if (this.state === 'DIVE') {
+          this.timer += dt;
+          this.telegraphTimer -= dt;
+          if (this.telegraphTimer <= 0) this.telegraphing = false;
+          const desiredY = this.timer < 0.62 ? this.diveTargetY : H * 0.1;
+          this.y = lerp(this.y, desiredY, dt * (this.timer < 0.62 ? 7.2 : 4.8));
+          if (this.timer > 1.2) {
+            this.state = 'FLY';
+            this.diveCD = 1.4 + Math.random() * 1.1;
+          }
+        } else {
+          this.y = H*.1 + Math.sin(this.phase)*UNIT*1.2;
+        }
         if (this.screenX < -UNIT*6) { this.alive=false; break; }
         // Shoot aimed feather darts toward player
         this.fireCD = (this.fireCD||0) + dt;
-        if (this.fireCD >= 0.9 && this.screenX < W*.9 && this.screenX > UNIT*2) {
+        if (this.fireCD >= this.fireInterval && this.screenX < W*.9 && this.screenX > UNIT*2) {
           this.fireCD = 0;
+          this.fireInterval = this.state === 'DIVE' ? 0.72 : 1.05 + Math.random() * 0.45;
           const dx = psx - this.screenX, dy = (py-UNIT) - this.y;
           const d = Math.sqrt(dx*dx+dy*dy);
-          const spd = 280;
+          const spd = this.state === 'DIVE' ? 340 : 290;
           this.projectiles.push({ x:this.screenX, y:this.y+UNIT*.3,
             vx: d>1 ? (dx/d)*spd : -200, vy: d>1 ? (dy/d)*spd : 100,
             life:4, type:'FEATHER', grav:80 });
@@ -3935,7 +4061,11 @@ class Enemy {
         if (sx < W+UNIT*2) {
           this.fireCD += dt;
           if (this.fireCD >= this.fireInterval && sx < W*.9) {
-            this.fireCD = 0; this.fireInterval = 2.5+Math.random()*1.5;
+            if(!this.telegraphing){this.telegraphing=true;this.telegraphTimer=0.62;break;}
+            this.telegraphTimer-=dt;
+            if(this.telegraphTimer>0) break;
+            this.telegraphing=false;
+            this.fireCD = 0; this.fireInterval = 2.35+Math.random()*1.25;
             var _atkR=Math.random();
             if (_atkR < 0.35) {
               this.projectiles.push({ x:sx-UNIT*1.5, y:this.y-UNIT*.3,
@@ -3956,10 +4086,14 @@ class Enemy {
         if (this.screenX < -UNIT*6) { this.alive=false; break; }
         this.fireCD += dt;
         if (this.fireCD >= this.fireInterval && this.screenX < W*.9 && this.screenX > UNIT*2) {
+          if(!this.telegraphing){this.telegraphing=true;this.telegraphTimer=0.32;break;}
+          this.telegraphTimer-=dt;
+          if(this.telegraphTimer>0) break;
+          this.telegraphing=false;
           this.fireCD = 0; this.fireInterval = 1.2+Math.random()*1;
           // Drop bomb downward
           this.projectiles.push({ x:this.screenX, y:this.y+UNIT*.5,
-            vx:-30, vy:60, life:4, type:'BOMB', grav:500 });
+            vx:-70, vy:80, life:4, type:'BOMB', grav:560 });
         }
         break;
       }
@@ -4050,7 +4184,8 @@ class Enemy {
 }
 
 function spawnEnemy(levelDef) {
-  const t = levelDef.enemies[Math.floor(Math.random()*levelDef.enemies.length)];
+  const t = chooseEnemyTypeForDirector(levelDef);
+  if (!t) return null;
   const enemy = new Enemy(t);
   if (
     canRunBountyEnemies() &&
@@ -4079,6 +4214,11 @@ class Player {
     this.onGround = false; this.jumpsLeft = 2;
     this.coyote = 0; this.jumpBuf = 0; this.downBuf = 0;
     this.squash = 1; this.stretch = 1; this.legAnim = 0;
+    // Transient animation timers — short windows where the player renders a
+    // dedicated anticipation/recovery pose instead of the run/jump default.
+    this.preJumpTimer = 0;
+    this.landFXTimer = 0;
+    this.dashWindupTimer = 0;
     this.alive = true; this.deathTimer = 0;
     // Powerups
     this.shield = ch.startShield; this.magnetTimer = ch.startMagnet ? 999 : 0;
@@ -4090,8 +4230,6 @@ class Player {
     this.pounding = false; this.poundLanded = false;
     // Dash
     this.dashTimer = 0; this.dashCD = 0;
-    // Parry
-    this.parryTimer = 0; this.parryCD = 0;
     // Wheel powerups
     this.tinyTimer = 0; this.speedBoost = false; this.doubleScore = false;
     // Signature system
@@ -4332,8 +4470,9 @@ class Player {
           spawnFloatingText(this.screenX, this.y - UNIT*2, 'FAST!', '#44FF88', 0.8);
           sfxJump(); // extra boost sound
         }
-        // Landing Juice
-        this.squash=1.65; this.stretch=0.55; 
+        // Landing Juice — boosted squash + 180ms hold timer for landing pose.
+        this.squash=1.85; this.stretch=0.5;
+        this.landFXTimer = 0.18;
         addTrauma(0.12, 0, 1);
         spawnDustFX(this.screenX, this.y);
         // Landing impact rings/shockwave
@@ -4382,6 +4521,9 @@ class Player {
     }
     if (this.onGround) this.legAnim+=dt*10;
     if (this.iframes>0) this.iframes-=dt;
+    if (this.preJumpTimer > 0) this.preJumpTimer = Math.max(0, this.preJumpTimer - dt);
+    if (this.landFXTimer > 0) this.landFXTimer = Math.max(0, this.landFXTimer - dt);
+    if (this.dashWindupTimer > 0) this.dashWindupTimer = Math.max(0, this.dashWindupTimer - dt);
     if (this.magnetTimer>0)this.magnetTimer-=dt;
     if (this.starTimer>0){this.starTimer-=dt;this.starHue=(this.starHue+720*dt)%360;}
     if (inp.signature) this.activateSignature();
@@ -4487,6 +4629,7 @@ class Player {
       this.dashTimer=dashDur; this.dashCD=baseDashCD;
       this.iframes=Math.max(this.iframes,dashDur+0.05);
       this.squash=0.55; this.stretch=1.85;
+      this.dashWindupTimer = 0.12;
       this.addSignature(this._quakeRush ? 16 : 12, 'dash');
       addTrauma(this._quakeRush ? 0.35 : 0.2);
       _hitStop(this._quakeRush ? 0.05 : 0.03);
@@ -4533,16 +4676,9 @@ class Player {
       inp.dash=false;
     }
 
-    // Parry input
-    if(this.parryTimer>0) this.parryTimer-=dt;
-    if(this.parryCD>0) this.parryCD-=dt;
-    if(inp.parry && this.parryTimer<=0 && this.parryCD<=0){
-      this.parryTimer=0.3; this.parryCD=1.5;
-      this.squash=1.3; this.stretch=0.8;
-      this.addSignature(5, 'parry_windup');
-      G.announce={text:'PARRY!',life:0.5};
-    }
-    inp.down=false; inp.dash=false; inp.parry=false; inp.signature=false;
+    // Parry mechanic removed — dash already destroys nearby projectiles, so the
+    // separate input is redundant on a 4-button mobile layout.
+    inp.down=false; inp.dash=false; inp.signature=false;
   }
 
   _poundSmash() {
@@ -4660,7 +4796,7 @@ class Player {
 // ============================================================
 // INPUT
 // ============================================================
-const inp = { jp:false, jh:false, tapX:0, tapY:0, tapped:false, down:false, dash:false, parry:false, signature:false, pressing:false };
+const inp = { jp:false, jh:false, tapX:0, tapY:0, tapped:false, down:false, dash:false, signature:false, pressing:false };
 function jDown(){ inp.jp=true; inp.jh=true; }
 function jUp(){ inp.jh=false; }
 function dDown(){ inp.down=true; }
@@ -4684,7 +4820,6 @@ document.addEventListener('keydown',e=>{
   if(['Space','ArrowUp','KeyW'].includes(e.code)){if(!e.repeat)jDown();else inp.jh=true;e.preventDefault();}
   if(['ArrowDown','KeyS'].includes(e.code)){if(!e.repeat)dDown();e.preventDefault();}
   if(e.code==='ShiftLeft'||e.code==='ShiftRight'){if(!e.repeat)inp.dash=true;e.preventDefault();}
-  if(e.code==='KeyQ'||e.code==='KeyA'){if(!e.repeat)inp.parry=true;e.preventDefault();}
   if(e.code==='KeyE'||e.code==='KeyR'){if(!e.repeat)inp.signature=true;e.preventDefault();}
   if(!e.repeat) inp.tapped=true;
 });
@@ -4758,13 +4893,11 @@ canvas.addEventListener('touchmove',e=>{
   else if(dy > st && Math.abs(dy)>Math.abs(dx)){
     dDown(); touchActive=false;
   }
-  // Flick right = dash
-  else if(dx > st && Math.abs(dx)>Math.abs(dy)){
+  // Flick right or left = dash. Left flick used to fire parry; the parry
+  // mechanic was removed and the gesture now also dashes so the input feels
+  // forgiving on either hand orientation.
+  else if(Math.abs(dx) > st && Math.abs(dx) > Math.abs(dy)){
     inp.dash=true; touchActive=false;
-  }
-  // Flick left = parry
-  else if(dx < -st && Math.abs(dx)>Math.abs(dy)){
-    inp.parry=true; touchActive=false;
   }
 },{passive:false});
 
@@ -4848,6 +4981,7 @@ const G = {
   // Guided onboarding for the first three levels
   onboarding:null,
   guidedChunkCursor:0,
+  encounterDirector:{ lastType:null, repeat:0, wave:0 },
 };
 
 function canRunSurvivalSurges() {
@@ -5056,6 +5190,7 @@ function startLevel(levelNum) {
   G.announce=null; G.flashColor=null; G.flashLife=0;
   G.guidedChunkCursor = 0;
   G.scriptedChunkCursor = 0;
+  G.encounterDirector = { lastType: null, repeat: 0, wave: 0 };
   G.surgeCount = 0;
   G.bountyCooldown = 999;
   inp.jp=inp.jh=false; inp.tapped=false;
@@ -5370,35 +5505,11 @@ function checkCollisions(dt) {
     if(en.type==='BOMBER') { /* body doesn't hit, only bombs */ }
     else if(en.type==='CHARGER'&&en.state!=='CHARGE') { /* skip body during WARN, still check projectiles below */ }
     else if(aabb(phb,en.hitbox)){p.hit(en.type);return;}
-    // Projectile collision (with parry deflection)
+    // Projectile collision
     for(let i=en.projectiles.length-1;i>=0;i--){
       const pr=en.projectiles[i];
       const prSz=pr.type==='BOULDER_P'?1.2:pr.type==='BOMB'?1.0:pr.type==='ROCK_P'?0.9:pr.type==='SKULL'?0.7:pr.type==='VENOM'?0.6:pr.type==='FEATHER'?0.5:0.8;
       const prHB={x:pr.x-UNIT*prSz*.5,y:pr.y-UNIT*prSz*.5,w:UNIT*prSz,h:UNIT*prSz};
-      // Parry: deflect nearby projectiles
-      if(p.parryTimer>0){
-        const dx=pr.x-p.screenX, dy=pr.y-(p.y-UNIT);
-        if(Math.sqrt(dx*dx+dy*dy)<UNIT*2.2){
-          const isPerfect = p.parryTimer > 0.22; // very early in the window
-          en.projectiles.splice(i,1);
-          p.addSignature(isPerfect ? 22 : 14, isPerfect ? 'perfect_parry' : 'parry');
-          comboAction(isPerfect ? 200 : 100, 'parry');
-          G.announce={text:isPerfect ? 'PERFECT PARRY!' : 'DEFLECT!', life:0.8};
-          addTrauma(isPerfect ? 0.3 : 0.15);
-          _hitStop(isPerfect ? 0.12 : 0.04);
-          // Damage the enemy
-          if(en.alive&&!en.dying){
-            en.takeDamage(isPerfect ? Math.ceil(en.maxHP * 0.5) : Math.ceil(en.maxHP * 0.25));
-            comboAction(isPerfect ? 100 : 50, 'parry_kill');
-            if (isPerfect) {
-               // Perfect parry shockwave (visual)
-               for(let k=0;k<12;k++){const a=(k/12)*PI2;spawnParticle(pr.x,pr.y,{vx:Math.cos(a)*400,vy:Math.sin(a)*400,color:'#FFFF88',r:UNIT*.25,decay:1.5,grav:0});}
-            }
-          }
-          spawnParts(pr.x,pr.y,8,{color:'#FFFF44',r:UNIT*.2,decay:2,grav:300});
-          continue;
-        }
-      }
       if(aabb(phb,prHB)){en.projectiles.splice(i,1);p.hit(pr.type);return;}
     }
   }
@@ -5437,10 +5548,19 @@ function getEnvDecos(themeName) {
   for (var i = 0; i < 8; i++) {
     decos.push({ layer: 2, x: rng.next() * 2000, fn: defs.trees[i % defs.trees.length], scale: 0.7 + rng.next() * 0.4, parallax: 0.3 });
   }
-  // Foreground layer (in front of player)
+  // Foreground layer (in front of player) — denser so the lane reads as a
+  // populated environment instead of a treadmill on bare hills. Slight phase
+  // offset gives gentle sway when rendered.
   if (defs.fg) {
-    for (var i = 0; i < 6; i++) {
-      decos.push({ layer: 3, x: rng.next() * 1500, fn: defs.fg[i % defs.fg.length], scale: 0.9 + rng.next() * 0.5, parallax: 0.55 });
+    for (var i = 0; i < 18; i++) {
+      decos.push({
+        layer: 3,
+        x: rng.next() * 1800,
+        fn: defs.fg[i % defs.fg.length],
+        scale: 0.95 + rng.next() * 0.55,
+        parallax: 0.55,
+        phase: rng.next() * Math.PI * 2
+      });
     }
   }
   _envDecoCache[themeName] = decos;
@@ -5450,20 +5570,29 @@ function getEnvDecos(themeName) {
 function drawEnvDecoLayer(theme, themeName, layerIdx) {
   var decos = getEnvDecos(themeName);
   var u = UNIT;
+  var t = G.time || 0;
   ctx.save();
   for (var i = 0; i < decos.length; i++) {
     var d = decos[i];
     if (d.layer !== layerIdx) continue;
-    var tw = layerIdx === 0 ? 3000 : layerIdx === 1 ? 2500 : layerIdx === 2 ? 2000 : 1500;
+    var tw = layerIdx === 0 ? 3000 : layerIdx === 1 ? 2500 : layerIdx === 2 ? 2000 : 1800;
     var off = (worldOffset * d.parallax) % tw;
     var sx = d.x - off;
-    // Wrap around
     while (sx < -u * 4) sx += tw;
     while (sx > W + u * 4) sx -= tw;
     if (sx < -u * 5 || sx > W + u * 5) continue;
     var baseY = GROUND_BASE - u * (layerIdx === 0 ? 4 : layerIdx === 1 ? 2 : layerIdx === 2 ? 0.5 : -0.5);
-    ctx.globalAlpha = layerIdx === 0 ? 0.2 : layerIdx === 1 ? 0.45 : layerIdx === 2 ? 0.7 : 0.25;
-    d.fn(ctx, sx, baseY, u, d.scale);
+    ctx.globalAlpha = layerIdx === 0 ? 0.22 : layerIdx === 1 ? 0.5 : layerIdx === 2 ? 0.78 : 0.78;
+    if (layerIdx === 3) {
+      // Foreground props get a small wind sway so the lane feels alive.
+      var sway = Math.sin(t * 1.4 + (d.phase || 0)) * (u * 0.06);
+      ctx.save();
+      ctx.translate(sway, 0);
+      d.fn(ctx, sx, baseY, u, d.scale);
+      ctx.restore();
+    } else {
+      d.fn(ctx, sx, baseY, u, d.scale);
+    }
   }
   ctx.globalAlpha = 1;
   ctx.restore();
@@ -6195,10 +6324,10 @@ function drawRelic(x, y, theme) {
   ctx.lineTo(-u * 0.14, -u * 0.08);
   ctx.closePath();
   ctx.fill();
-  drawMiniChip(-u * 0.62, -u * 1.32, u * 1.24, u * 0.34, 'RELIC', {
+  drawMiniChip(-u * 0.85, -u * 1.42, u * 1.7, u * 0.42, 'RELIC', {
     accent: accent,
     textColor: '#FFF7DC',
-    font: FONTS['b0.2'] || ('bold ' + Math.round(u * 0.2) + 'px monospace')
+    font: FONTS['b0.26'] || ('bold ' + Math.round(u * 0.26) + 'px monospace')
   });
   ctx.restore();
 }
@@ -6752,6 +6881,13 @@ function drawChar(p, mini) {
     // Tilt forward during slide for a dynamic pose
     ctx.rotate(0.35);
     ctx.translate(0, UNIT*.2);
+  } else if (!mini && p.dashTimer > 0) {
+    ctx.rotate(-0.18);
+    ctx.translate(UNIT * 0.12, -UNIT * 0.05);
+  } else if (!mini && !p.onGround) {
+    ctx.rotate(clamp(p.vy / 2200, -0.28, 0.2));
+  } else if (!mini && p.onGround) {
+    ctx.rotate(Math.sin(p.legAnim * 0.9) * 0.025);
   }
   if (!mini) ctx.scale(p.stretch, p.squash);
   ctx.scale(sc * (mini ? 1 : 1.1), sc * (mini ? 1 : 1.1));
@@ -6772,10 +6908,15 @@ function drawChar(p, mini) {
     const frameIdx = getSpriteFrame(p, mini);
     const frameCvs = _sprFrames[frameIdx];
     if (frameCvs) {
-      const drawH = u * (mini ? 2.9 : 3.18);
+      // Subtle idle breathing — modulates Y when the player is stationary on ground.
+      let breathY = 0;
+      if (!mini && p.onGround && p.dashTimer <= 0 && p.slideTimer <= 0 && Math.abs(p.vy || 0) < 1) {
+        breathY = Math.sin(G.time * 2.6) * u * 0.04;
+      }
+      const drawH = u * (mini ? 2.9 : 3.85);
       const drawW = drawH * (_sprFW / _sprFH);
       const drawX = -drawW / 2;
-      const drawY = -drawH + u * 0.16;
+      const drawY = -drawH + u * 0.16 + breathY;
       // Star power: hue-rotate
       if (!mini && p.starTimer > 0) {
         ctx.filter = 'hue-rotate(' + Math.round(p.starHue) + 'deg) saturate(1.5)';
@@ -7145,7 +7286,6 @@ function DEPRECATED_drawHUD(dt){
   ctx.font=`${u*.45}px monospace`;ctx.textBaseline='bottom';
   if(p.slideTimer>0){ctx.fillStyle='#88CCFF';ctx.fillText('SLIDE',ix,iy);ix+=u*2;}
   if(p.dashTimer>0){ctx.fillStyle='#88FFCC';ctx.fillText('DASH',ix,iy);ix+=u*2;}
-  if(p.parryTimer>0){ctx.fillStyle='#FFFF44';ctx.fillText('PARRY',ix,iy);ix+=u*2.5;}
   if(p.pounding){ctx.fillStyle='#FFAA44';ctx.fillText('POUND',ix,iy);}
 }
 
@@ -7219,6 +7359,7 @@ function LEGACY_drawMenu(){
 
 function drawMenu(){
   const u = UNIT;
+  const compact = W < 1180 || H < 640 || (W / H > 1.85);
   const hero = CHARS[safeSelectedChar()] || CHARS[0];
   const heroIdx = safeSelectedChar();
   const firstSession = save.highestLevel === 0;
@@ -7235,7 +7376,7 @@ function drawMenu(){
 
   // Diagonal accent bar behind title
   ctx.save();
-  ctx.translate(W / 2, SAFE_TOP + u * 2.66);
+  ctx.translate(W / 2, SAFE_TOP + u * (compact ? 2.22 : 2.66));
   ctx.rotate(-0.035);
   ctx.fillStyle = INK_COLOR;
   ctx.fillRect(-W, -u * 1.02, W * 2, u * 2.04);
@@ -7248,8 +7389,8 @@ function drawMenu(){
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const titleBounce = Math.sin(Date.now() * 0.003) * u * 0.04;
-  drawFitText("GRONK'S RUN", W / 2, SAFE_TOP + u * 2.6 + titleBounce, W - u * 3.8, {
-    basePx: u * 1.56, minPx: u * 1.0, weight: 'bold', color: BONE_COLOR
+  drawFitText("GRONK'S RUN", W / 2, SAFE_TOP + u * (compact ? 2.16 : 2.6) + titleBounce, W - u * 3.8, {
+    basePx: u * (compact ? 1.24 : 1.56), minPx: u * 0.82, weight: 'bold', color: BONE_COLOR
   });
 
   // Tagline chip
@@ -7258,7 +7399,7 @@ function drawMenu(){
   const tagW = Math.min(W * 0.62, u * 10.2);
   const tagH = u * 0.68;
   const tagX = W / 2 - tagW / 2;
-  const tagY = SAFE_TOP + u * 3.88;
+  const tagY = SAFE_TOP + u * (compact ? 3.18 : 3.88);
   drawMiniChip(tagX, tagY, tagW, tagH, menuTagline, {
     accent: '#A96A1A',
     textColor: '#FFF6D8',
@@ -7269,10 +7410,10 @@ function drawMenu(){
   });
 
   // Hero display
-  const heroY = SAFE_TOP + u * 7.08;
+  const heroY = SAFE_TOP + u * (compact ? 5.62 : 7.08);
   ctx.save();
   ctx.translate(W / 2, heroY);
-  ctx.scale(2.4, 2.4);
+  ctx.scale(compact ? 1.82 : 2.4, compact ? 1.82 : 2.4);
   drawChar({
     screenX: 0, y: 0, ch: hero, charIdx: heroIdx, onGround: true,
     legAnim: G.time * 4.5, squash: 1, stretch: 1, shield: hero.startShield,
@@ -7291,10 +7432,10 @@ function drawMenu(){
   });
 
   // Stats row: BEST · LEVEL · GEMS
-  const statsY = heroY + u * 3.2;
+  const statsY = heroY + u * (compact ? 2.34 : 3.2);
   const statGap = u * 0.2;
   const statW = Math.min((W - u * 3) / 3, u * 4.6);
-  const statH = u * 1.3;
+  const statH = u * (compact ? 1.04 : 1.3);
   const statsStartX = W / 2 - (statW * 3 + statGap * 2) / 2;
   const stats = [
     { label: 'BEST', val: String(save.bestScore || 0), col: '#FFC14D' },
@@ -7316,9 +7457,9 @@ function drawMenu(){
 
   // Primary CTA
   const ctaW = Math.min(W * 0.56, u * 9);
-  const ctaH = u * 1.6;
+  const ctaH = u * (compact ? 1.22 : 1.6);
   const ctaX = W / 2 - ctaW / 2;
-  const ctaY = statsY + statH + u * 0.9;
+  const ctaY = Math.min(statsY + statH + u * (compact ? 0.38 : 0.9), H - SAFE_BOTTOM - ctaH - u * 0.72);
   const ctaPulse = 1 + Math.sin(Date.now() * 0.005) * 0.02;
   ctx.save();
   ctx.translate(ctaX + ctaW / 2, ctaY + ctaH / 2);
@@ -7510,7 +7651,7 @@ function drawLevelIntro(dt){
   const panelH = u * (guide ? (compact ? 5.4 : 5.7) : (compact ? 4.1 : 4.4));
   const panelX = W / 2 - panelW / 2;
   const panelY = Math.max(SAFE_TOP + u * 0.7, H * (compact ? 0.14 : 0.16));
-  const titleScale=Math.min(1,G.introTimer*2.2);
+  const titleScale = Math.min(1, G.introTimer * 4.5);
 
   drawPanel(panelX, panelY, panelW, panelH, {
     radius: u * 0.46,
@@ -8362,30 +8503,30 @@ function drawBossHPBar(){
     color: 'rgba(232,238,248,0.72)'
   });
   if (G.player) {
+    // Two readable chips beat four cramped ones; player HP and score are the
+    // only stats that change meaningfully in a 30-second boss window.
+    const playerHP = Math.max(0, Math.round(G.player.hp));
+    const playerMaxHP = Math.round(G.player.maxHP);
     const labels = [
-      `HP ${Math.max(0, Math.round(G.player.hp))}/${Math.round(G.player.maxHP)}`,
-      `SCR ${Math.round(G.runScore)}`,
-      `GEM ${Math.round(G.runGems)}`,
-      `SAVE ${Math.max(0, G.continuesLeft | 0)}`
+      `HP ${playerHP}/${playerMaxHP}`,
+      `SCORE ${Math.round(G.runScore)}`
     ];
     const accents = [
-      'rgba(94,232,140,0.22)',
-      'rgba(120,188,255,0.2)',
-      'rgba(95,229,255,0.2)',
-      'rgba(255,178,90,0.22)'
+      'rgba(94,232,140,0.24)',
+      'rgba(120,188,255,0.22)'
     ];
-    const statGap = u * 0.12;
-    const statPad = u * 0.34;
-    const statW = (panelW - statPad * 2 - statGap * 3) / 4;
+    const statGap = u * 0.18;
+    const statPad = u * 0.4;
+    const statW = (panelW - statPad * 2 - statGap) / 2;
     for (let i = 0; i < labels.length; i++) {
       drawMiniChip(panelX + statPad + i * (statW + statGap), statY, statW, u * 0.4, labels[i], {
         radius: u * 0.2,
-        font: FONTS['b0.19'] || ('700 ' + Math.round(u * 0.19) + 'px ' + UI_FONT_DISPLAY),
+        font: FONTS['b0.26'] || ('700 ' + Math.round(u * 0.26) + 'px ' + UI_FONT_DISPLAY),
         accent: accents[i],
-        textColor: 'rgba(233,240,249,0.84)',
-        top: 'rgba(18,22,34,0.9)',
-        mid: 'rgba(12,16,28,0.88)',
-        bottom: 'rgba(9,12,22,0.86)',
+        textColor: 'rgba(244,248,255,0.92)',
+        top: 'rgba(20,24,38,0.92)',
+        mid: 'rgba(13,17,30,0.9)',
+        bottom: 'rgba(9,12,22,0.88)',
         blur: 10
       });
     }
@@ -8596,32 +8737,7 @@ function checkBossCollisions(dt){
         let da=tA-cA;while(da>Math.PI)da-=PI2;while(da<-Math.PI)da+=PI2;
         const nA=cA+clamp(da,-3*dt,3*dt),spd=210;pr.vx=Math.cos(nA)*spd;pr.vy=Math.sin(nA)*spd;}
     }
-    // Parry: deflect boss projectiles back at boss
-    if(p.parryTimer>0){
-      const dx=pr.x-p.screenX, dy=pr.y-(p.y-UNIT);
-      if(Math.sqrt(dx*dx+dy*dy)<UNIT*2.5){
-        boss.projectiles.splice(i,1);
-        if (boss.takeDamage(25, 'parry')) {
-          p.addSignature(18, 'boss_parry');
-          comboAction(100,'parry');
-          G.announce={text:'DEFLECT! -25 Boss HP',life:0.8};
-          addTrauma(0.24);
-          spawnParts(pr.x,pr.y,10,{color:'#FFFF44',r:UNIT*.2,decay:2,grav:300});
-        }
-        continue;
-      }
-    }
     if(aabb(phb,prHB)){boss.projectiles.splice(i,1);p.hit(pr.type==='FIRE_BEAM'?'FIRE_GEYSER':'ROCK_P');return;}
-  }
-  // Player damages boss via ground pound, dash, or parry
-  // Parry damages boss on direct contact
-  if(p.parryTimer>0 && aabb(phb,boss.hitbox)){
-    if (boss.takeDamage(15, 'parry')) {
-      p.addSignature(12, 'boss_parry');
-      addTrauma(.18);
-      G.announce={text:'PARRY BREAK!',life:0.7};
-      p.parryTimer=0;
-    }
   }
   // Player damages boss via ground pound or dash
   const bHB=boss.hitbox;
@@ -8989,12 +9105,20 @@ function drawSkinsScreen(dt) {
     ctx.fillText(CHARS[i].name, tx+tabW/2, ty+th/2);
   }
 
-  // Skins for selected character
+  // Skins for selected character. Auto-size cards so the grid always fits the
+  // visible viewport — vertical overflow used to hide names on third-row skins.
   const ch = CHARS[selCharIdx];
   const skins = getCharSkins(ch.id);
   const charLocked = !save.unlockedChars.includes(selCharIdx);
-  const cardW = W*.42, cardH = u*4.5, gapX = (W - cardW*2)/3, gapY = u*.5;
-  const startY = u*3.8;
+  const startY = u * 3.8;
+  const bottomSafe = (typeof SAFE_BOTTOM === 'number' ? SAFE_BOTTOM : 0) + u * 0.4;
+  const cols = 2;
+  const rows = Math.max(1, Math.ceil(skins.length / cols));
+  const gapX = u * 0.5;
+  const gapY = u * 0.4;
+  const cardW = (W - gapX * (cols + 1)) / cols;
+  const availableH = Math.max(u * 3, H - startY - bottomSafe - gapY * (rows - 1));
+  const cardH = Math.min(u * 4.5, availableH / rows);
 
   for(let i=0;i<skins.length;i++){
     const sk = skins[i];
@@ -9751,9 +9875,9 @@ function drawDailyReward(dt) {
       ctx.fillText(cal.icon, cx + cw / 2, cy + ch * 0.48);
     }
 
-    ctx.font = Math.round(u * 0.22) + 'px monospace';
-    ctx.fillStyle = isClaimed ? 'rgba(100,200,100,0.5)' : isToday ? cal.color : isFuture ? 'rgba(150,150,170,0.4)' : 'rgba(200,200,220,0.5)';
-    drawTextBlock(cal.label, cx + cw / 2, cy + ch - u * 0.36, cw - u * 0.18, u * 0.2, { align: 'center' });
+    ctx.font = Math.max(10, Math.round(u * 0.32)) + 'px ' + UI_FONT_DISPLAY;
+    ctx.fillStyle = isClaimed ? 'rgba(100,200,100,0.85)' : isToday ? cal.color : isFuture ? 'rgba(150,160,180,0.55)' : 'rgba(210,218,232,0.7)';
+    drawTextBlock(cal.label, cx + cw / 2, cy + ch - u * 0.4, cw - u * 0.18, u * 0.34, { align: 'center', maxLines: 1 });
   }
 
   if (!reward) return;
@@ -10379,7 +10503,6 @@ function LEGACY_drawHUD(dt){
   if (p.doubleScore) powerups.push({ label: 'x2', accent: '#FF6644' });
   if (p.slideTimer > 0) powerups.push({ label: 'SLIDE', accent: '#88CCFF' });
   if (p.dashTimer > 0) powerups.push({ label: 'DASH', accent: '#88FFCC' });
-  if (p.parryTimer > 0) powerups.push({ label: 'PARRY', accent: '#FFFF66' });
   if (p.pounding) powerups.push({ label: 'POUND', accent: '#FFAA44' });
 
   let chipX = left;
@@ -10628,7 +10751,6 @@ function drawHUD(dt){
   if (p.doubleScore) powerups.push({ label: 'x2', accent: '#FF6644' });
   if (p.slideTimer > 0) powerups.push({ label: 'SLIDE', accent: '#88CCFF' });
   if (p.dashTimer > 0) powerups.push({ label: 'DASH', accent: '#88FFCC' });
-  if (p.parryTimer > 0) powerups.push({ label: 'PARRY', accent: '#FFFF66' });
   if (p.pounding) powerups.push({ label: 'POUND', accent: '#FFAA44' });
 
   let chipX = left;
@@ -10912,7 +11034,6 @@ function drawHUD(dt) {
   if (p.doubleScore) powerups.push({ label: 'x2', accent: '#FF6644' });
   if (p.slideTimer > 0) powerups.push({ label: 'SLIDE', accent: '#88CCFF' });
   if (p.dashTimer > 0) powerups.push({ label: 'DASH', accent: '#88FFCC' });
-  if (p.parryTimer > 0) powerups.push({ label: 'PARRY', accent: '#FFFF66' });
   if (p.pounding) powerups.push({ label: 'POUND', accent: '#FFAA44' });
   if (p.redlineTimer > 0) powerups.push({ label: 'REDLINE', accent: '#FF6A4D' });
   if (p.guardAuraTimer > 0) powerups.push({ label: 'AURA', accent: '#C08A62' });
@@ -12182,13 +12303,16 @@ function drawMetaScreenScaffold(opts) {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = opts.titleFont || FONTS['b1.08'] || ('bold ' + Math.round(u * 1.08) + 'px monospace');
-  ctx.fillStyle = opts.titleColor || '#F5D76C';
-  ctx.fillText(title, W / 2, headerY + headerH * 0.34);
+  drawFitText(title, W / 2, headerY + headerH * 0.34, headerW - u * 1.2, {
+    basePx: opts.titlePx || u * 1.08,
+    minPx: opts.titleMinPx || u * 0.48,
+    weight: 'bold',
+    color: opts.titleColor || '#F5D76C'
+  });
   if (subtitle) {
     ctx.font = opts.subtitleFont || FONTS['n0.38'] || (Math.round(u * 0.38) + 'px monospace');
     ctx.fillStyle = opts.subtitleColor || 'rgba(220,235,255,0.78)';
-    drawTextBlock(subtitle, W / 2, headerY + headerH * 0.5, headerW - u * 1.5, u * 0.4, { align: 'center' });
+    drawTextBlock(subtitle, W / 2, headerY + headerH * 0.5, headerW - u * 1.5, u * 0.4, { align: 'center', maxLines: 2 });
   }
   if (opts.leftChip) {
     drawMiniChip(headerX + u * 0.34, headerY + u * 0.36, opts.leftChip.w || u * 3.6, u * 0.72, opts.leftChip.label, {
@@ -12261,9 +12385,10 @@ function getRunnerSummaryCopy(ch, pathId, firstSession) {
 function drawCharSelect() {
   const u = UNIT;
   const cols = 3, rows = 2, totalChars = CHARS.length;
+  const compact = W < 1180 || H < 640 || (W / H > 1.85);
   const pathIds = ['assault', 'vault', 'guardian'];
-  const headerX = SAFE_LEFT + u * 0.55, headerY = SAFE_TOP + u * 0.35;
-  const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, headerH = u * 2.4;
+  const headerX = SAFE_LEFT + u * 0.55, headerY = SAFE_TOP + u * 0.28;
+  const headerW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.1, headerH = u * (compact ? 1.86 : 2.28);
   const selIdx = clamp(G.selectedChar || 0, 0, CHARS.length - 1);
   const selChar = CHARS[selIdx];
   const selPath = getSelectedRunPath();
@@ -12271,19 +12396,19 @@ function drawCharSelect() {
   const firstSession = save.highestLevel === 0;
   const starterGuide = firstSession ? getGuidedLevel(1) : null;
   const spotlightX = SAFE_LEFT + u * 0.72;
-  const spotlightY = headerY + headerH + u * 0.28;
+  const spotlightY = headerY + headerH + u * 0.18;
   const spotlightW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.44;
-  const spotlightH = u * 3.4;
+  const spotlightH = u * (compact ? 2.86 : 3.28);
   const pathGap = u * 0.16;
   const pathCardW = (spotlightW - pathGap * 2) / 3;
-  const pathCardH = u * 1.3;
-  const pathY = spotlightY + spotlightH + u * 0.42;
-  const gridTop = pathY + pathCardH + u * 0.24;
-  const cardW = Math.min(u * 4.3, (W - SAFE_LEFT - SAFE_RIGHT - u * 1.8) / cols);
-  const cardH = u * 2.04;
+  const pathCardH = u * (compact ? 1.02 : 1.22);
+  const pathY = spotlightY + spotlightH + u * 0.24;
+  const gridTop = pathY + pathCardH + u * 0.16;
+  const cardW = Math.min(u * (compact ? 3.8 : 4.3), (W - SAFE_LEFT - SAFE_RIGHT - u * 1.8) / cols);
+  const cardH = u * (compact ? 1.62 : 1.96);
   const gapX = (W - SAFE_LEFT - SAFE_RIGHT - cardW * cols) / (cols + 1);
-  const gapY = u * 0.1;
-  const btnY = H - SAFE_BOTTOM - u * 1.4;
+  const gapY = u * (compact ? 0.06 : 0.1);
+  const btnY = H - SAFE_BOTTOM - u * (compact ? 1.14 : 1.34);
   const bankedGems = Number.isFinite(save.totalGems) ? save.totalGems : (save.gems || 0);
   G._charSelectLayout = { cards: [], pathCards: [] };
 
@@ -12800,12 +12925,15 @@ function drawTutorial() {
   });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = FONTS['b1.3'] || ('bold ' + Math.round(u * 1.3) + 'px monospace');
-  ctx.fillStyle = '#F5D76C';
-  ctx.fillText('HOW TO PLAY', W / 2, SAFE_TOP + u * 1.1);
+  drawFitText('HOW TO PLAY', W / 2, SAFE_TOP + u * 1.1, W - SAFE_LEFT - SAFE_RIGHT - u * 2, {
+    basePx: u * 1.3,
+    minPx: u * 0.7,
+    weight: 'bold',
+    color: '#F5D76C'
+  });
   ctx.font = FONTS['n0.5'] || (Math.round(u * 0.5) + 'px monospace');
   ctx.fillStyle = 'rgba(222,233,250,0.78)';
-  ctx.fillText('Read the verbs once, then let the first three levels teach jump, slide, stomp, and dash timing in motion.', W / 2, SAFE_TOP + u * 1.68);
+  drawTextBlock('Read the verbs once, then let the first three levels teach jump, slide, stomp, and dash timing in motion.', W / 2, SAFE_TOP + u * 1.55, W - SAFE_LEFT - SAFE_RIGHT - u * 2.2, u * 0.42, { align: 'center', maxLines: 2 });
 
   const cardX = SAFE_LEFT + u * 0.85, cardW = W - SAFE_LEFT - SAFE_RIGHT - u * 1.7;
   const startY = SAFE_TOP + u * 3, cardH = u * 1.05, gap = u * 0.18;
@@ -13707,10 +13835,19 @@ function loop(ts){
       drawLevelComplete(DT);
       if(inp.tapped&&G.levelCompleteTimer>2){
         inp.tapped=false;
-        // Go to spin wheel first, then level map
-        G.phase='SPIN_WHEEL';
-        G.wheelAngle=0; G.wheelSpinning=false; G.wheelSpeed=0; G.wheelResult=null; G.wheelTimer=0;
-        G._postWheelDest='LEVEL_MAP'; // after wheel, go to map instead of next level
+        // Spin wheel phase removed — RNG slot machine added friction without
+        // agency. Grant a deterministic powerup based on star rating instead.
+        const stars = G._levelStarsEarned || 1;
+        const reward = stars >= 3 ? 'STAR_POWER'
+                     : stars >= 2 ? 'SHIELD'
+                     : 'TIME_BONUS';
+        if (Array.isArray(save.nextRunPowerups) && !save.nextRunPowerups.includes(reward)) {
+          save.nextRunPowerups.push(reward);
+          persistSave();
+        }
+        const segLabel = (typeof WHEEL_SEGMENTS !== 'undefined' && WHEEL_SEGMENTS.find(s => s.type === reward));
+        showAnnouncement(`REWARD: ${segLabel ? segLabel.label.toUpperCase() : reward}`, '#FFD86A');
+        G.phase = 'LEVEL_MAP';
       }
       break;
 
@@ -13719,10 +13856,8 @@ function loop(ts){
       if(inp.tapped){inp.tapped=false;handleContinueTap();}
       break;
 
-    case 'SPIN_WHEEL':
-      drawSpinWheel(DT);
-      if(inp.tapped){inp.tapped=false;handleSpinWheelTap();}
-      break;
+    // SPIN_WHEEL phase removed — see LEVEL_COMPLETE handler for the
+    // deterministic reward path that replaced it.
 
     case 'DEAD':
       if(AudioManager.currentMusicTheme) stopMusic();

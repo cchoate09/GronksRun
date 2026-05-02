@@ -1061,6 +1061,81 @@ const RUN_PATHS = {
 };
 const DEFAULT_RUN_PATH = 'assault';
 
+const BUILD_ITEMS = {
+  relic_lens: {
+    id: 'relic_lens',
+    slot: 'charm',
+    name: 'Relic Lens',
+    short: 'RELIC',
+    desc: 'More relic routes and stronger cache payouts.',
+    accent: '#62D8FF'
+  },
+  bounty_totem: {
+    id: 'bounty_totem',
+    slot: 'totem',
+    name: 'Bounty Totem',
+    short: 'HUNT',
+    desc: 'Bounties pay extra clock and signature charge.',
+    accent: '#FFB347'
+  },
+  dash_cache: {
+    id: 'dash_cache',
+    slot: 'trick',
+    name: 'Dash Cache',
+    short: 'DASH',
+    desc: 'Dash and combat rewards feed extra gems.',
+    accent: '#86FFB8'
+  },
+};
+const DEFAULT_BUILD_LOADOUT = { charm: 'relic_lens', totem: 'bounty_totem', trick: 'dash_cache' };
+
+const PERK_LIBRARY = [
+  { id: 'dash_gem_arc', name: 'Gem Wake', desc: 'Bounty wins and dash hits spill extra gems.', accent: '#86FFB8' },
+  { id: 'relic_clock', name: 'Old Clock', desc: 'Relics give more time and signature charge.', accent: '#62D8FF' },
+  { id: 'shield_charge', name: 'Guard Spark', desc: 'Shield breaks restore signature and combo.', accent: '#9FD8FF' },
+  { id: 'surge_bonus', name: 'Clean Rush', desc: 'Flawless Hunt clears pay more score and gems.', accent: '#FFC14D' },
+  { id: 'pound_cache', name: 'Breaker Cache', desc: 'Ground-pound smashes mint extra score.', accent: '#C08A62' },
+];
+
+function normalizeBuildLoadout(loadout) {
+  const next = Object.assign({}, DEFAULT_BUILD_LOADOUT, loadout || {});
+  Object.keys(DEFAULT_BUILD_LOADOUT).forEach(function(slot) {
+    const id = next[slot];
+    if (!BUILD_ITEMS[id] || BUILD_ITEMS[id].slot !== slot) next[slot] = DEFAULT_BUILD_LOADOUT[slot];
+  });
+  return next;
+}
+
+function getBuildLoadout() {
+  save.equippedBuild = normalizeBuildLoadout(save.equippedBuild);
+  return save.equippedBuild;
+}
+
+function hasBuildItem(itemId) {
+  const loadout = getBuildLoadout();
+  return Object.keys(loadout).some(function(slot) { return loadout[slot] === itemId; });
+}
+
+function getBuildSnapshot() {
+  const loadout = getBuildLoadout();
+  const snap = {};
+  Object.keys(DEFAULT_BUILD_LOADOUT).forEach(function(slot) {
+    const item = BUILD_ITEMS[loadout[slot]];
+    snap[slot] = item ? {
+      id: item.id,
+      name: item.name,
+      short: item.short,
+      desc: item.desc,
+      accent: item.accent,
+    } : null;
+  });
+  return snap;
+}
+
+function hasRunPerk(perkId) {
+  return Array.isArray(G.activePerks) && G.activePerks.some(function(perk) { return perk.id === perkId; });
+}
+
 const save = {
   highestLevel: 0, bestScore: 0, totalGems: 0, selectedChar: 0, selectedPath: DEFAULT_RUN_PATH,
   savedLevel: 1, savedScore: 0, savedGems: 0, savedChar: 0, savedPath: DEFAULT_RUN_PATH,
@@ -1073,6 +1148,7 @@ const save = {
   unlockedChars: [0], // Gronk starts unlocked; others unlocked via milestones or shop
   shopUpgrades: {},    // permanent upgrades bought from shop
   nextRunPowerups: [], // per-run powerups consumed on next level start
+  equippedBuild: DEFAULT_BUILD_LOADOUT,
   levelStars: {},      // level# → 0-3 star rating
   endlessBest: 0,      // endless mode high score
   challengeBest: 0,    // daily challenge best score
@@ -1104,6 +1180,7 @@ function loadSave() {
     // Shop migration
     if (!save.shopUpgrades || typeof save.shopUpgrades !== 'object') save.shopUpgrades = {};
     if (!Array.isArray(save.nextRunPowerups)) save.nextRunPowerups = [];
+    save.equippedBuild = normalizeBuildLoadout(save.equippedBuild);
     // Star rating migration
     if (!save.levelStars || typeof save.levelStars !== 'object') save.levelStars = {};
     // Endless mode migration
@@ -3949,6 +4026,65 @@ function canRunRelics() {
   return G.levelNum >= RELIC_PICKUP.levelGate;
 }
 
+function canRunRouteChoices() {
+  if (typeof G === 'undefined') return false;
+  if (G.dailyChallenge) return false;
+  if (shouldUseGuidedChunkPlan()) return false;
+  if (G.endless) return true;
+  return G.levelNum >= 4;
+}
+
+function routeChoiceTitleForTheme(themeKey) {
+  if (themeKey === 'VOLCANO') return 'Heat Split';
+  if (themeKey === 'GLACIER') return 'Frost Split';
+  if (themeKey === 'SWAMP') return 'Mire Split';
+  if (themeKey === 'SKY') return 'Sky Split';
+  return 'Route Split';
+}
+
+function decorateRouteChoiceSpec(spec, rng) {
+  if (!canRunRouteChoices() || !spec || spec.routeChoice) return spec;
+  G.routeChoiceCursor = (G.routeChoiceCursor || 0) + 1;
+  if (G.routeChoiceCursor % 2 === 0) return spec;
+  const out = Object.assign({}, spec);
+  const themeKey = G.levelDef ? G.levelDef.theme : 'JUNGLE';
+  const accent = (G.theme && G.theme.gt) || '#FFC14D';
+  out.routeChoice = {
+    id: 'route_' + G.levelNum + '_' + G.routeChoiceCursor,
+    title: routeChoiceTitleForTheme(themeKey),
+    choices: ['safe', 'gem', 'combat'],
+    safeLabel: 'SAFE',
+    gemLabel: 'RELIC',
+    combatLabel: 'BOUNTY',
+    accent: accent,
+  };
+  const gems = Array.isArray(out.gems) ? out.gems.slice() : [];
+  gems.push({ at: 0.22, lift: 0.95 }, { at: 0.5, lift: 2.4, arc: 1.2 }, { at: 0.78, lift: 1.0 });
+  out.gems = gems;
+  const relics = Array.isArray(out.relics) ? out.relics.slice() : [];
+  relics.push({ at: 0.52, lift: 2.7 });
+  out.relics = relics;
+  if (!Array.isArray(out.obstacles) && out.type !== 'GEM_RUN') {
+    out.obstacles = [{ type: 'SPIKE', at: 0.32 }, { type: 'ROCK', at: 0.68 }];
+  }
+  out.forceBountyCue = true;
+  return out;
+}
+
+function getVisibleRouteChoice() {
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    if (!chunk || !chunk.routeChoice) continue;
+    const sx = chunk.worldX - worldOffset;
+    if (sx < W + UNIT * 2 && sx + chunk.w > -UNIT * 2) {
+      return Object.assign({
+        chunk_x: roundSnapshotValue ? roundSnapshotValue(sx) : Math.round(sx),
+      }, chunk.routeChoice);
+    }
+  }
+  return G.lastRouteChoice || null;
+}
+
 function canChunkSpawnRelic(type) {
   return type === 'GEM_RUN' || type === 'RIDGE' || type === 'VALLEY' || type === 'GAUNTLET' || type === 'HILLS';
 }
@@ -3958,11 +4094,13 @@ function getChunkRelicSpec(chunk, rng, script) {
   if (!chunk || !canChunkSpawnRelic(chunk.type)) return null;
   if (shouldUseGuidedChunkPlan()) return null;
   if (script && script.allowRelics === false) return null;
-  const chance = chunk.type === 'GAUNTLET'
+  let chance = chunk.type === 'GAUNTLET'
     ? RELIC_PICKUP.baseChance + 0.08
     : chunk.type === 'GEM_RUN'
       ? RELIC_PICKUP.baseChance * 0.7
       : RELIC_PICKUP.baseChance;
+  if (hasBuildItem('relic_lens')) chance += 0.08;
+  if (hasRunPerk('relic_clock')) chance += 0.04;
   if (!rng.bool(chance)) return null;
   const at = chunk.type === 'GAUNTLET'
     ? rng.range(0.58, 0.82)
@@ -3987,6 +4125,7 @@ class Chunk {
     this.sampleCount = Math.ceil(this.w / SAMPLE_D) + 2;
     this.heights = []; this.obstacles = []; this.gems = []; this.relics = []; this.powerup = null;
     this.script = script || null;
+    this.routeChoice = script && script.routeChoice ? Object.assign({}, script.routeChoice) : null;
     this._gen(rng, diff, theme);
   }
   _gen(rng, diff, themeKey) {
@@ -4141,6 +4280,7 @@ function pickChunkType(rng, diff, last) {
   return'FLAT';
 }
 function getNextChunkSpec(rng, diff, lastType) {
+  let spec = null;
   if (shouldUseGuidedChunkPlan()) {
     const idx = G.guidedChunkCursor || 0;
     const guidedSpec = getGuidedChunkSpec(G.onboarding.level, idx);
@@ -4154,10 +4294,11 @@ function getNextChunkSpec(rng, diff, lastType) {
     const scriptedSpec = getScriptedChunkSpec(G.levelNum, idx);
     if (scriptedSpec) {
       G.scriptedChunkCursor = idx + 1;
-      return scriptedSpec;
+      spec = scriptedSpec;
     }
   }
-  return { type: pickChunkType(rng, diff, lastType) };
+  if (!spec) spec = { type: pickChunkType(rng, diff, lastType) };
+  return decorateRouteChoiceSpec(spec, rng);
 }
 function appendChunk(worldX, spec, rng, diff, theme) {
   const chunk = new Chunk(worldX, spec.type, rng, diff, theme, spec);
@@ -4172,6 +4313,8 @@ function initWorld(rng,diff,theme){
   chunks=[]; worldOffset=0;
   G.guidedChunkCursor = 0;
   G.scriptedChunkCursor = 0;
+  G.routeChoiceCursor = 0;
+  G.lastRouteChoice = null;
   let x=0;
   if (shouldUseGuidedChunkPlan() || shouldUseScriptedChunkPlan()) {
     while (chunks.length < 5) {
@@ -5026,6 +5169,11 @@ class Player {
             color:'#8a7a5a',r:UNIT*(.12+Math.random()*.15),decay:1.5,grav:600});
           chunk.obstacles.splice(i,1);
           comboAction(25, 'pound_smash');
+          if (hasRunPerk('pound_cache')) {
+            G.score += 45;
+            G.runScore += 45;
+            spawnFloatingText(sx, obs.ly - UNIT, '+45', '#C08A62', 0.6);
+          }
           if(save.stats) save.stats.obstaclesSmashed++;
           updateMissionProgress('obstaclesSmashed', 1);
         }
@@ -5053,7 +5201,8 @@ class Player {
     if (this.shield) {
       registerSurvivalSurgeDamage();
       this.shield=false; this.iframes=1.5; addTrauma(.5, 0, 0);
-      this.addSignature(8, 'shield_break');
+      this.addSignature(hasRunPerk('shield_charge') ? 24 : 8, 'shield_break');
+      if (hasRunPerk('shield_charge')) comboAction(50, 'shield_break');
       _hitStop(0.06);
       sfxShield();
       G.flashColor='rgba(100,180,255,0.3)'; G.flashLife=0.25;
@@ -5295,6 +5444,11 @@ const G = {
   // Survival surge loop
   surgeTimer:0, surgeCooldown:999, surgeFlawless:true, surgeCount:0,
   bountyCooldown:999,
+  activePerks:[],
+  perkDraft:null,
+  perkDraftCount:0,
+  routeChoiceCursor:0,
+  lastRouteChoice:null,
   // Move chaining
   lastAction:{type:null, time:0},
   // Stats scroll
@@ -5377,8 +5531,8 @@ function finishSurvivalSurge() {
     return;
   }
   const rewardTime = SURVIVAL_SURGE.rewardTime + (flawless ? SURVIVAL_SURGE.flawlessTimeBonus : 0);
-  const rewardGems = SURVIVAL_SURGE.rewardGems + (flawless ? SURVIVAL_SURGE.flawlessGemBonus : 0);
-  const rewardScore = SURVIVAL_SURGE.rewardScore + (flawless ? SURVIVAL_SURGE.flawlessScoreBonus : 0);
+  const rewardGems = SURVIVAL_SURGE.rewardGems + (flawless ? SURVIVAL_SURGE.flawlessGemBonus : 0) + (flawless && hasRunPerk('surge_bonus') ? 1 : 0);
+  const rewardScore = SURVIVAL_SURGE.rewardScore + (flawless ? SURVIVAL_SURGE.flawlessScoreBonus : 0) + (flawless && hasRunPerk('surge_bonus') ? 120 : 0);
   G.timeLeft = Math.min(99, G.timeLeft + rewardTime);
   G.runGems += rewardGems;
   G.gems = G.runGems;
@@ -5399,6 +5553,7 @@ function finishSurvivalSurge() {
   sfxGem();
   checkGemUpgrades(false);
   scheduleNextSurvivalSurge(false);
+  maybeOpenPerkDraft('surge');
 }
 
 function updateSurvivalSurge(dt) {
@@ -5437,19 +5592,80 @@ function promoteEnemyToBounty(enemy) {
 
 function resolveBountyEnemyDefeat(enemy, sx, sy) {
   const accent = enemy && enemy.bountyAccent ? enemy.bountyAccent : getSurvivalSurgeAccent();
-  G.timeLeft = Math.min(99, G.timeLeft + BOUNTY_ENEMY.rewardTime);
-  G.runGems += BOUNTY_ENEMY.rewardGems;
+  const bonusTime = hasBuildItem('bounty_totem') ? 1 : 0;
+  const bonusGems = hasBuildItem('dash_cache') || hasRunPerk('dash_gem_arc') ? 2 : 0;
+  G.timeLeft = Math.min(99, G.timeLeft + BOUNTY_ENEMY.rewardTime + bonusTime);
+  G.runGems += BOUNTY_ENEMY.rewardGems + bonusGems;
   G.gems = G.runGems;
   G.score += BOUNTY_ENEMY.rewardScore;
   G.runScore += BOUNTY_ENEMY.rewardScore;
-  grantSignatureCharge(BOUNTY_ENEMY.rewardSignature, 'bounty_enemy');
+  grantSignatureCharge(BOUNTY_ENEMY.rewardSignature + (hasBuildItem('bounty_totem') ? 8 : 0), 'bounty_enemy');
   spawnFloatingText(sx, sy - UNIT * 2.8, enemy && enemy.bountyLabel ? enemy.bountyLabel : 'BOUNTY', accent, 0.92);
-  spawnFloatingText(sx + UNIT * 0.45, sy - UNIT * 2.1, `+${BOUNTY_ENEMY.rewardGems} GEMS`, '#FFE08A', 0.82);
-  spawnFloatingText(sx - UNIT * 0.35, sy - UNIT * 1.55, `+${BOUNTY_ENEMY.rewardTime}S`, '#8FE6FF', 0.76);
+  spawnFloatingText(sx + UNIT * 0.45, sy - UNIT * 2.1, `+${BOUNTY_ENEMY.rewardGems + bonusGems} GEMS`, '#FFE08A', 0.82);
+  spawnFloatingText(sx - UNIT * 0.35, sy - UNIT * 1.55, `+${BOUNTY_ENEMY.rewardTime + bonusTime}S`, '#8FE6FF', 0.76);
   showAnnouncement((enemy && enemy.bountyLabel ? enemy.bountyLabel : 'BOUNTY') + ' DOWN', accent);
   checkGemUpgrades(false);
   scheduleNextBountyEnemy(false);
+  maybeOpenPerkDraft('bounty');
 }
+
+function getPerkById(id) {
+  for (let i = 0; i < PERK_LIBRARY.length; i++) if (PERK_LIBRARY[i].id === id) return PERK_LIBRARY[i];
+  return null;
+}
+
+function getPerkOffers(source) {
+  const owned = {};
+  (G.activePerks || []).forEach(function(perk) { owned[perk.id] = true; });
+  const pool = PERK_LIBRARY.filter(function(perk) { return !owned[perk.id]; });
+  const seed = (G.levelNum * 31 + (G.perkDraftCount || 0) * 17 + String(source || '').length * 13) % Math.max(1, pool.length);
+  const offers = [];
+  for (let i = 0; i < pool.length && offers.length < 3; i++) {
+    offers.push(pool[(seed + i) % pool.length]);
+  }
+  while (offers.length < 3) offers.push(PERK_LIBRARY[offers.length % PERK_LIBRARY.length]);
+  return offers.map(function(perk) {
+    return { id: perk.id, name: perk.name, desc: perk.desc, accent: perk.accent };
+  });
+}
+
+function maybeOpenPerkDraft(source) {
+  if (G.dailyChallenge || !G.player || !G.player.alive) return false;
+  if (G.phase !== 'PLAYING' && G.phase !== 'BOSS_FIGHT') return false;
+  if ((G.activePerks || []).length >= 3) return false;
+  if (G.perkDraft) return false;
+  return openPerkDraft(source);
+}
+
+function openPerkDraft(source) {
+  G.perkDraftCount = (G.perkDraftCount || 0) + 1;
+  G.perkDraft = {
+    source: source || 'hunt',
+    offers: getPerkOffers(source || 'hunt'),
+  };
+  G._perkResumePhase = (G.phase === 'BOSS_FIGHT') ? 'BOSS_FIGHT' : 'PLAYING';
+  G.phase = 'PERK_DRAFT';
+  sfxSpin();
+  return true;
+}
+
+function choosePerk(perkId) {
+  if (!G.perkDraft || !Array.isArray(G.perkDraft.offers)) return false;
+  const offer = G.perkDraft.offers.find(function(perk) { return perk.id === perkId; }) || G.perkDraft.offers[0];
+  const perk = getPerkById(offer.id) || offer;
+  if (!hasRunPerk(perk.id)) {
+    G.activePerks = G.activePerks || [];
+    G.activePerks.push({ id: perk.id, name: perk.name, desc: perk.desc, accent: perk.accent });
+  }
+  G.perkDraft = null;
+  G.phase = G._perkResumePhase || 'PLAYING';
+  G._perkResumePhase = null;
+  showAnnouncement((perk.name || 'PERK').toUpperCase(), perk.accent || '#FFC14D');
+  return true;
+}
+
+window.openPerkDraft = openPerkDraft;
+window.choosePerk = choosePerk;
 
 // Smooth phase transition: fade out → change phase → fade in
 function transitionTo(newPhase, callback) {
@@ -5515,6 +5731,8 @@ function startLevel(levelNum) {
   G.announce=null; G.flashColor=null; G.flashLife=0;
   G.guidedChunkCursor = 0;
   G.scriptedChunkCursor = 0;
+  G.routeChoiceCursor = 0;
+  G.lastRouteChoice = null;
   G.encounterDirector = { lastType: null, repeat: 0, wave: 0 };
   G.surgeCount = 0;
   G.bountyCooldown = 999;
@@ -5568,6 +5786,7 @@ function startNewRun() {
   G.wheelResult=null;
   G._nextLevelNum=0; G._pendingWheelResult=null;
   G.combo=0; G.comboTimer=0; G.comboMult=1; G.comboPulse=0;
+  G.activePerks=[]; G.perkDraft=null; G.perkDraftCount=0;
   boss=null;
   startLevel(1);
 }
@@ -5586,6 +5805,7 @@ function startDailyChallenge() {
   G.continuesLeft=0; // no continues in daily
   G.wheelResult=null; G._nextLevelNum=0; G._pendingWheelResult=null;
   G.combo=0; G.comboTimer=0; G.comboMult=1; G.comboPulse=0;
+  G.activePerks=[]; G.perkDraft=null; G.perkDraftCount=0;
   boss=null;
 
   // Fixed character rotates daily
@@ -5635,6 +5855,7 @@ function startEndlessMode() {
   G.continuesLeft=0; // no continues in endless
   G.wheelResult=null; G._nextLevelNum=0; G._pendingWheelResult=null;
   G.combo=0; G.comboTimer=0; G.comboMult=1; G.comboPulse=0;
+  G.activePerks=[]; G.perkDraft=null; G.perkDraftCount=0;
   boss=null;
   G.selectedChar = safeSelectedChar();
   G.runPath = normalizeRunPathId(save.selectedPath);
@@ -5707,16 +5928,18 @@ let nearMissCD = 0; // cooldown to avoid spamming
 function collectRelicPickup(p, relic, sx, sy) {
   if (!p || !relic || relic.collected) return;
   relic.collected = true;
+  const bonusTime = (hasBuildItem('relic_lens') ? 1 : 0) + (hasRunPerk('relic_clock') ? 2 : 0);
+  const bonusSignature = hasRunPerk('relic_clock') ? 8 : 0;
   G.runGems += RELIC_PICKUP.rewardGems;
   G.gems = G.runGems;
   G.score += RELIC_PICKUP.rewardScore;
   G.runScore += RELIC_PICKUP.rewardScore;
-  G.timeLeft = Math.min(99, G.timeLeft + RELIC_PICKUP.rewardTime);
+  G.timeLeft = Math.min(99, G.timeLeft + RELIC_PICKUP.rewardTime + bonusTime);
   comboAction(120, 'relic');
-  grantSignatureCharge(RELIC_PICKUP.rewardSignature, 'relic_pickup');
+  grantSignatureCharge(RELIC_PICKUP.rewardSignature + bonusSignature, 'relic_pickup');
   updateMissionProgress('gemsCollected', RELIC_PICKUP.rewardGems);
   spawnFloatingText(sx, sy - UNIT * 0.85, `+${RELIC_PICKUP.rewardGems} GEMS`, '#FFE08A', 0.88);
-  spawnFloatingText(sx + UNIT * 0.34, sy - UNIT * 0.22, `+${RELIC_PICKUP.rewardTime}S`, '#8FE6FF', 0.76);
+  spawnFloatingText(sx + UNIT * 0.34, sy - UNIT * 0.22, `+${RELIC_PICKUP.rewardTime + bonusTime}S`, '#8FE6FF', 0.76);
   spawnFloatingText(sx - UNIT * 0.22, sy - UNIT * 1.48, 'RELIC CACHE', '#FFF4C6', 0.9);
   showAnnouncement('RELIC CACHE', '#FFD65C');
   spawnImpactBurst(sx, sy, '#FFD65C', {
@@ -5728,6 +5951,7 @@ function collectRelicPickup(p, relic, sx, sy) {
   });
   sfxGem();
   checkGemUpgrades(false);
+  maybeOpenPerkDraft('relic');
 }
 
 function checkCollisions(dt) {
@@ -6587,6 +6811,42 @@ function drawRelics(theme) {
       if (sx < -UNIT * 3 || sx > W + UNIT * 3) continue;
       const sy = relic.ly + Math.sin(G.time * 2.6 + relic.lx * 0.008) * UNIT * 0.22;
       drawRelic(sx, sy, theme);
+    }
+  }
+}
+
+function drawRouteChoices() {
+  const u = UNIT;
+  for (const chunk of chunks) {
+    if (!chunk || !chunk.routeChoice) continue;
+    const cx = chunk.worldX - worldOffset;
+    if (cx > W + UNIT * 2 || cx + chunk.w < -UNIT * 2) continue;
+    G.lastRouteChoice = Object.assign({}, chunk.routeChoice);
+    const y = Math.max(SAFE_TOP + u * 2.25, GROUND_BASE - u * 5.3);
+    const cardW = u * 2.25;
+    const cardH = u * 0.54;
+    const gap = u * 0.2;
+    const startX = cx + chunk.w * 0.28;
+    const labels = [
+      { text: chunk.routeChoice.safeLabel || 'SAFE', x: startX, color: '#8BD8FF' },
+      { text: chunk.routeChoice.gemLabel || 'RELIC', x: startX + cardW + gap, color: '#FFD65C' },
+      { text: chunk.routeChoice.combatLabel || 'BOUNTY', x: startX + (cardW + gap) * 2, color: '#FF8B72' },
+    ];
+    drawMiniChip(startX - u * 0.1, y - u * 0.72, u * 4.1, u * 0.44, chunk.routeChoice.title || 'ROUTE SPLIT', {
+      accent: chunk.routeChoice.accent || '#FFC14D',
+      textColor: '#FFF7DC',
+      font: FONTS['b0.24'] || ('bold ' + Math.round(u * 0.24) + 'px monospace')
+    });
+    for (let i = 0; i < labels.length; i++) {
+      const item = labels[i];
+      if (item.x < -cardW || item.x > W + cardW) continue;
+      drawMiniChip(item.x, y, cardW, cardH, item.text, {
+        accent: item.color,
+        textColor: INK_COLOR,
+        top: item.color,
+        bottom: item.color,
+        font: FONTS['b0.28'] || ('bold ' + Math.round(u * 0.28) + 'px monospace')
+      });
     }
   }
 }
@@ -12994,7 +13254,11 @@ function drawCharSelect() {
     stroke: 'rgba(255,255,255,0.1)',
     accent: selPath.accent
   });
-  drawFitText(selChar.name.toUpperCase() + ' - ' + selPath.name.toUpperCase() + ' - ' + selSignature.name.toUpperCase(), W / 2, stripY + u * 0.4, u * 11.6, {
+  const buildShorts = Object.keys(getBuildLoadout()).map(function(slot) {
+    const item = BUILD_ITEMS[getBuildLoadout()[slot]];
+    return item ? item.short : slot.toUpperCase();
+  }).join(' / ');
+  drawFitText(selChar.name.toUpperCase() + ' - ' + selPath.name.toUpperCase() + ' - ' + buildShorts, W / 2, stripY + u * 0.4, u * 11.6, {
     basePx: u * 0.42,
     minPx: u * 0.26,
     weight: 'bold',
@@ -13621,6 +13885,87 @@ function spawnDustFX(x, y) {
   }
 }
 
+function drawPerkDraftScreen() {
+  const u = UNIT;
+  const draft = G.perkDraft || { offers: [] };
+  drawBg(G.theme || THEMES.JUNGLE);
+  drawAmbient(G.theme && G.theme.amb);
+  ctx.fillStyle = 'rgba(5,8,16,0.72)';
+  ctx.fillRect(0, 0, W, H);
+  const panelW = Math.min(W * 0.78, u * 12.8);
+  const panelH = u * 5.4;
+  const panelX = W / 2 - panelW / 2;
+  const panelY = H / 2 - panelH / 2;
+  drawPanel(panelX, panelY, panelW, panelH, {
+    top: 'rgba(22,34,54,0.97)',
+    bottom: 'rgba(8,14,26,0.95)',
+    stroke: 'rgba(255,255,255,0.16)',
+    accent: '#FFC14D',
+    blur: 26
+  });
+  drawMiniChip(panelX + u * 0.46, panelY + u * 0.38, u * 3.2, u * 0.58, 'HUNT REWARD', {
+    accent: '#FFC14D',
+    textColor: INK_COLOR
+  });
+  drawFitText('CHOOSE A RUN PERK', W / 2, panelY + u * 1.1, panelW - u * 1.2, {
+    basePx: u * 0.82,
+    minPx: u * 0.46,
+    weight: 'bold',
+    color: '#FFE27A'
+  });
+  drawFitText('One temporary rule joins this run. Pick the route you want to lean into.', W / 2, panelY + u * 1.66, panelW - u * 1.2, {
+    basePx: u * 0.3,
+    minPx: u * 0.2,
+    color: 'rgba(228,238,252,0.78)'
+  });
+  const offers = draft.offers || [];
+  const gap = u * 0.22;
+  const cardW = (panelW - u * 1.1 - gap * 2) / 3;
+  const cardH = u * 2.35;
+  const cardY = panelY + u * 2.28;
+  G._perkDraftLayout = [];
+  for (let i = 0; i < offers.length; i++) {
+    const offer = offers[i];
+    const x = panelX + u * 0.55 + i * (cardW + gap);
+    G._perkDraftLayout.push({ x: x, y: cardY, w: cardW, h: cardH, id: offer.id });
+    drawPanel(x, cardY, cardW, cardH, {
+      top: 'rgba(18,30,50,0.96)',
+      bottom: 'rgba(8,14,26,0.92)',
+      stroke: offer.accent || 'rgba(255,255,255,0.14)',
+      accent: offer.accent || '#FFC14D',
+      blur: 18
+    });
+    drawMiniChip(x + u * 0.18, cardY + u * 0.18, u * 1.65, u * 0.42, 'PERK', {
+      accent: offer.accent || '#FFC14D',
+      textColor: INK_COLOR,
+      font: FONTS['b0.22'] || ('bold ' + Math.round(u * 0.22) + 'px monospace')
+    });
+    drawFitText((offer.name || 'Perk').toUpperCase(), x + cardW / 2, cardY + u * 0.92, cardW - u * 0.45, {
+      basePx: u * 0.42,
+      minPx: u * 0.26,
+      weight: 'bold',
+      color: offer.accent || '#FFE27A'
+    });
+    ctx.fillStyle = 'rgba(226,236,252,0.78)';
+    drawTextBlock(offer.desc || '', x + cardW / 2, cardY + u * 1.48, cardW - u * 0.45, u * 0.34, {
+      align: 'center',
+      maxLines: 2
+    });
+  }
+}
+
+function handlePerkDraftTap() {
+  const tx = inp.tapX, ty = inp.tapY;
+  const cards = G._perkDraftLayout || [];
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    if (tx > card.x && tx < card.x + card.w && ty > card.y && ty < card.y + card.h) {
+      choosePerk(card.id);
+      return;
+    }
+  }
+}
+
 // ============================================================
 // MAIN LOOP
 // ============================================================
@@ -13998,7 +14343,7 @@ function loop(ts){
       drawBg(G.theme);
       drawAmbient(G.theme.amb);
       ctx.save();ctx.translate(shX,shY);
-      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);
+      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);drawRouteChoices();
       if(p)drawChar(p,false);
       drawPteros(G.theme);drawEnemies();
       if(_perfLevel>=1){drawEnvDecoLayer(G.theme,getThemeName(G.theme),3);}
@@ -14024,7 +14369,7 @@ function loop(ts){
       drawBg(G.theme);
       drawAmbient(G.theme.amb);
       ctx.save();ctx.translate(shX,shY);
-      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);
+      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);drawRouteChoices();
       if(G.player)drawChar(G.player,false);
       drawPteros(G.theme);drawEnemies();
       if(_perfLevel>=1){drawEnvDecoLayer(G.theme,getThemeName(G.theme),3);}
@@ -14035,6 +14380,11 @@ function loop(ts){
       if(G.player&&G.player.alive) drawHUD(DT);
       drawPausedScreen();
       if(inp.tapped){inp.tapped=false;handlePausedTap();}
+      break;
+
+    case 'PERK_DRAFT':
+      drawPerkDraftScreen();
+      if(inp.tapped){inp.tapped=false;handlePerkDraftTap();}
       break;
 
     case 'TUTORIAL':
@@ -14150,7 +14500,7 @@ function loop(ts){
       // Keep rendering world in bg
       drawBg(G.theme);
       ctx.save();ctx.translate(shX,shY);
-      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);
+      drawObstacles(G.theme);drawGems(G.theme);drawRelics(G.theme);drawRouteChoices();
       if(G.player)drawChar(G.player,false);
       drawPteros(G.theme);ctx.restore();
       drawParticles();
@@ -14302,6 +14652,34 @@ function snapshotEntity(entity) {
   };
 }
 
+function getHuntSnapshot() {
+  const activeBounty = activeEnemies.some(function(enemy) { return enemy && enemy.alive && enemy.isBounty; });
+  if (G.surgeTimer > 0) {
+    return {
+      kind: 'surge',
+      label: 'Survival Surge',
+      active: true,
+      timer: roundSnapshotValue(G.surgeTimer),
+      reward: { gems: SURVIVAL_SURGE.rewardGems, time: SURVIVAL_SURGE.rewardTime },
+    };
+  }
+  if (activeBounty) {
+    return {
+      kind: 'bounty',
+      label: 'Bounty Hunt',
+      active: true,
+      timer: null,
+      reward: { gems: BOUNTY_ENEMY.rewardGems, time: BOUNTY_ENEMY.rewardTime },
+    };
+  }
+  return {
+    kind: 'next_hunt',
+    label: canRunBountyEnemies() ? 'Next Hunt' : 'Hunts Locked',
+    active: false,
+    next_in: roundSnapshotValue(Math.min(G.surgeCooldown || 999, G.bountyCooldown || 999)),
+  };
+}
+
 window.render_game_to_text = function renderGameToText() {
   const pendingGuideStep = getGuidedPendingStep();
   const continuePrompt = G.phase === 'CONTINUE_PROMPT' ? getContinuePromptViewModel() : null;
@@ -14369,6 +14747,16 @@ window.render_game_to_text = function renderGameToText() {
       signature_charge: G.player ? roundSnapshotValue(G.player.signatureMeter) : null,
       time_left: roundSnapshotValue(G.timeLeft),
     },
+    build_loadout: getBuildSnapshot(),
+    active_perks: (G.activePerks || []).map(function(perk) {
+      return { id: perk.id, name: perk.name, desc: perk.desc, accent: perk.accent };
+    }),
+    perk_draft: G.perkDraft ? {
+      source: G.perkDraft.source,
+      offers: G.perkDraft.offers,
+    } : null,
+    route_choice: getVisibleRouteChoice(),
+    hunt: getHuntSnapshot(),
     level: G.levelNum,
     level_name: G.levelDef ? G.levelDef.name : null,
     phase: G.phase,

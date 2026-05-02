@@ -158,3 +158,12 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - `npm run smoke:mobile-webview`
 - `android\\gradlew.bat bundleRelease --no-daemon`
 - Captured fresh UI review frames at `output/ui-check-2026-04-22/menu-after.png` and `output/ui-check-2026-04-22/char-select-after.png`, plus a targeted bounty / relic runtime capture at `output/engagement-check-2026-04-22/bounty-relic.png`.
+2026-05-02
+- Android load-path fix:
+- Traced the current phone/GitHub build failure to `App.js` requiring `./dist/index.html` even though `dist/` is ignored by git. Local exports only worked when an ignored `dist/index.html` happened to exist.
+- Switched the native WebView back to committed inline HTML via `assets/gameHtml.js`, added `scripts/sync_dist_html_asset.js`, and added `npm run build:webview` so the committed WebView payload is regenerated from the Pixi webpack bundle.
+- Added `scripts/verify_webview_bundle.js` to prevent future regressions back to ignored `dist/` assets.
+- Exposed `window.render_game_to_text()`, `window.advanceTime(ms)`, and a `gameReady` bridge message from the new Pixi runtime so automated WebView smoke tests can verify real boot and input behavior.
+- Reworked the mobile WebView and systemic-loop smoke scripts to load the same committed inline HTML module used by Android, then validate boot, movement, attack/jump input, bridge readiness, and screenshots.
+- Verification for this fix: `npm run build:webview`, `npm run verify:webview-bundle`, `npx tsc --noEmit`, syntax checks for app/scripts, `npm run smoke:mobile-webview`, `npm run smoke:systemic-loop`, `npx expo export --platform android --output-dir .expo-export-check\\phone-load-fix-final`, and `android\\gradlew.bat assembleDebug --no-daemon`.
+- No Android device was attached in this workspace (`adb devices -l` returned an empty device list), so verification used automated Chromium WebView-style smoke tests plus Android export/debug build packaging checks.

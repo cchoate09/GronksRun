@@ -50,6 +50,7 @@ export class GameEngine {
             this.input.update();
             this.physics.step(this.fixedTimeStep / 1000); // Pass delta in seconds
             this.scenes.updateLogic(this.fixedTimeStep / 1000);
+            this.input.endFrame();
             this.accumulator -= this.fixedTimeStep;
         }
 
@@ -66,6 +67,7 @@ export class GameEngine {
             this.input.update();
             this.physics.step(this.fixedTimeStep / 1000);
             this.scenes.updateLogic(this.fixedTimeStep / 1000);
+            this.input.endFrame();
             this.accumulator -= this.fixedTimeStep;
         }
 

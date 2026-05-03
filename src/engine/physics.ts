@@ -27,6 +27,7 @@ export class Body implements AABB {
 export class PhysicsEngine {
     private bodies: Body[] = [];
     private gravity: number = 2000; // Strong base gravity for snappy jumping
+    private groundY: number = 600;
 
     public addBody(body: Body): void {
         this.bodies.push(body);
@@ -37,6 +38,10 @@ export class PhysicsEngine {
         if (index > -1) {
             this.bodies.splice(index, 1);
         }
+    }
+
+    public setGroundY(y: number): void {
+        this.groundY = y;
     }
 
     public step(dt: number): void {
@@ -64,16 +69,13 @@ export class PhysicsEngine {
     }
 
     private resolveCollisions(): void {
-        // Basic ground plane collision for the prototype
-        const groundY = 600; // Arbitrary ground height for testing
-
         for (const body of this.bodies) {
             if (body.isStatic) continue;
 
             body.onGround = false;
 
-            if (body.y + body.h >= groundY) {
-                body.y = groundY - body.h;
+            if (body.y + body.h >= this.groundY) {
+                body.y = this.groundY - body.h;
                 body.vy = 0;
                 body.onGround = true;
             }

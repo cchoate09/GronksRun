@@ -9,40 +9,41 @@ export class InputManager {
     constructor() {
         window.addEventListener('keydown', this.onKeyDown.bind(this));
         window.addEventListener('keyup', this.onKeyUp.bind(this));
+        
+        // Listen for messages from React Native WebView
         window.addEventListener('message', this.onMessage.bind(this));
+        document.addEventListener('message', this.onMessage.bind(this) as any);
     }
 
     private onKeyDown(e: KeyboardEvent): void {
         this.keys[e.code] = true;
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) {
+            e.preventDefault();
+        }
     }
 
     private onKeyUp(e: KeyboardEvent): void {
         this.keys[e.code] = false;
     }
 
-    private onMessage(e: MessageEvent): void {
+    private onMessage(e: any): void {
         try {
-            const data = JSON.parse(e.data);
+            // Support both direct data and event.data (for window.postMessage vs document.message)
+            const rawData = e.data || e;
+            const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+            
             if (data.type === 'joystickMove') {
                 this.joystick.x = data.x;
                 this.joystick.y = data.y;
             } else if (data.type === 'action') {
                 this.actions.add(data.name);
             }
-        } catch (err) {}
+        } catch (err) {
+            console.error('Failed to parse message:', err);
+        }
     }
 
     public update(): void {
-        // Copy current state to previous state for 'just pressed' logic
-        for (const key in this.keys) {
-            this.previousKeys[key] = this.keys[key];
-        }
-        
-        // Sync joystick to keys for hybrid support
-        this.keys['ArrowLeft'] = this.joystick.x < -0.3;
-        this.keys['ArrowRight'] = this.joystick.x > 0.3;
-        
-        // Clear processed actions
         this.processedActions.clear();
         for (const action of this.actions) {
             this.processedActions.add(action);
@@ -50,7 +51,16 @@ export class InputManager {
         this.actions.clear();
     }
 
+    public endFrame(): void {
+        for (const key in this.keys) {
+            this.previousKeys[key] = this.keys[key];
+        }
+        this.processedActions.clear();
+    }
+
     public isDown(code: string): boolean {
+        if (code === 'ArrowLeft') return !!this.keys[code] || this.joystick.x < -0.3;
+        if (code === 'ArrowRight') return !!this.keys[code] || this.joystick.x > 0.3;
         return !!this.keys[code];
     }
 
@@ -60,5 +70,15 @@ export class InputManager {
 
     public actionJustPressed(name: string): boolean {
         return this.processedActions.has(name);
+    }
+
+    public suppressKey(code: string): void {
+        this.keys[code] = false;
+        this.previousKeys[code] = false;
+    }
+
+    public clearActions(): void {
+        this.actions.clear();
+        this.processedActions.clear();
     }
 }

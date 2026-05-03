@@ -1,5 +1,6 @@
 import { GameEngine } from './engine/GameEngine';
-import { GameScene } from './game/scenes/GameScene';
+import { MenuScene } from './game/scenes/MenuScene';
+import { preloadSpriteSheets } from './game/assets/spriteData';
 
 declare global {
     interface Window {
@@ -18,9 +19,10 @@ async function bootstrap() {
 
     const engine = new GameEngine();
     await engine.initialize(canvas);
+    await preloadSpriteSheets();
     
-    // Load the main game scene
-    await engine.scenes.loadScene(GameScene);
+    // Load the main menu scene first for MVP
+    await engine.scenes.loadScene(MenuScene);
 
     window.render_game_to_text = () => JSON.stringify({
         coordinate_system: 'origin top-left, x right, y down',

@@ -167,3 +167,28 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Reworked the mobile WebView and systemic-loop smoke scripts to load the same committed inline HTML module used by Android, then validate boot, movement, attack/jump input, bridge readiness, and screenshots.
 - Verification for this fix: `npm run build:webview`, `npm run verify:webview-bundle`, `npx tsc --noEmit`, syntax checks for app/scripts, `npm run smoke:mobile-webview`, `npm run smoke:systemic-loop`, `npx expo export --platform android --output-dir .expo-export-check\\phone-load-fix-final`, and `android\\gradlew.bat assembleDebug --no-daemon`.
 - No Android device was attached in this workspace (`adb devices -l` returned an empty device list), so verification used automated Chromium WebView-style smoke tests plus Android export/debug build packaging checks.
+- First-world phone viewport fix:
+- Reproduced the reported fall-through symptom at compact landscape sizes: physics and the floor renderer were using a hardcoded `groundY=600`, which puts the landing plane below common phone landscape viewports such as `844x390`.
+- Added compact and portrait-to-landscape resize cases to `scripts/mobile_webview_smoke.js` so the smoke test now fails if the player lands offscreen after boot or orientation resize.
+- Made `GameScene` compute the visible floor from `window.innerHeight`, set the physics ground to match, redraw the floor on resize, and clamp existing actors back onto the visible floor after orientation changes.
+- Regenerated `assets/gameHtml.js` via `npm run build:webview`.
+- Verification for this fix: `npm run smoke:mobile-webview`, `npm run smoke:systemic-loop`, `npx tsc --noEmit`, `npm run verify:webview-bundle`, dedicated web-game Playwright client against `dist/`, visual review of standard/compact/orientation screenshots, and `android\\gradlew.bat assembleDebug --no-daemon`.
+
+2026-05-03
+- Gameplay revival pass for the current Pixi/TypeScript runtime:
+- Fixed key edge detection in `InputManager` so keyboard `justPressed` state survives until scene logic consumes it, and added transient clearing so starting from the menu does not leak Enter/Space into gameplay as an attack.
+- Reworked combat spacing: melee enemies now stop at a readable attack distance, player attacks reach farther, dash/attack hits resolve before contact damage, and basic attacks can reliably kill early chasers.
+- Added a 10-level playable campaign through `LEVELS` in `GameScene`, with named levels, biomes, target kill counts, enemy mixes, rewards, level-complete flow, retry flow, and level progression/unlock persistence when storage is available.
+- Rebuilt `MenuScene` into a real main menu plus level-select UI exposing all 10 levels, with keyboard/touch/native-action entry points.
+- Switched player and enemy presentation from procedural rectangle skeletons to the available normalized hero and generated enemy spritesheets, inlined through webpack for the committed WebView bundle, with asset preloading before scene creation.
+- Hardened storage access through `src/game/storage.ts` so browser/WebView smoke contexts with opaque origins still boot cleanly when `localStorage` is unavailable.
+- Updated smoke scripts for the new menu-first flow and level list assertions.
+- Verification: `npx tsc --noEmit`, `node --check scripts/mobile_webview_smoke.js`, `node --check scripts/systemic_loop_smoke.js`, `npm run build:webview`, `npm run smoke:mobile-webview`, `npm run smoke:systemic-loop`, targeted Puppeteer combat clear script through Level 1, and screenshot review of menu, level select, gameplay, and combat-clear output.
+- Note: the `develop-web-game` Playwright client produced valid JSON state but black canvas screenshots in this WebGL/Pixi headless path; standard Puppeteer page screenshots rendered correctly and were used for visual inspection.
+- Follow-up control/release pass:
+- Fixed a keyboard regression where joystick sync overwrote physical `ArrowLeft` / `ArrowRight` state each frame, which made local preview horizontal keyboard controls fail while jump/attack still worked.
+- Aligned local preview keyboard controls to `ArrowLeft` / `ArrowRight` for movement, `ArrowUp` / `W` for jump, `Space` / `F` / `J` / `Enter` for attack, and `Shift` / `E` for dash.
+- Added a dash clamp path so dashing at screen edges cannot carry the player offscreen before normal movement clamping runs.
+- Rebuilt the committed WebView bundle after the input fixes and bumped release metadata to `1.8.9` / Android `versionCode 51`.
+- Verification for this pass: `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run smoke:mobile-webview`, `npm run smoke:systemic-loop`, an explicit Puppeteer control harness covering keyboard left/right/jump/space attack and mobile WebView joystick left/right plus JUMP/DASH/ATTACK messages, and `android\\gradlew.bat bundleRelease --no-daemon` from the `android/` directory.
+- Release artifact copied to `dist/gronks-run-1.8.9-51-release.aab` for Play Console upload. No Android device was attached (`adb devices -l` returned empty), so device testing was not run in this workspace.

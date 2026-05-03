@@ -14,20 +14,35 @@ export class BackgroundManager {
     }
 
     private initLayers(): void {
-        const colors = [0x1a1a24, 0x242435, 0x34344a]; // Dark to light
-        const parallaxScales = [0.1, 0.3, 0.6];
+        const colors = [0x0a0a12, 0x1a1a2e, 0x2e2e4a]; // Deep space/city colors
+        const parallaxScales = [0.05, 0.15, 0.4];
 
         for (let i = 0; i < 3; i++) {
             const layer = new Container();
             const g = new Graphics();
             
-            // Draw abstract distant structures
             const color = colors[i];
-            for (let j = 0; j < 15; j++) {
-                const w = 100 + Math.random() * 200;
-                const h = 200 + Math.random() * 400;
-                const x = Math.random() * this.width * 2;
+            const layerWidth = this.width * 3; // Wider for scrolling
+            
+            for (let j = 0; j < 25; j++) {
+                const w = 80 + Math.random() * 150;
+                const h = 150 + Math.random() * 500;
+                const x = Math.random() * layerWidth;
+                
+                // Draw building
                 g.rect(x, this.height - h, w, h).fill(color);
+                
+                // Draw some 'windows' for detail if it's the closest layer
+                if (i === 2) {
+                    const winColor = 0x555577;
+                    for (let wy = this.height - h + 20; wy < this.height - 40; wy += 40) {
+                        for (let wx = x + 15; wx < x + w - 15; wx += 30) {
+                            if (Math.random() > 0.3) {
+                                g.rect(wx, wy, 10, 15).fill(winColor);
+                            }
+                        }
+                    }
+                }
             }
             
             layer.addChild(g);

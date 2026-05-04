@@ -61,6 +61,7 @@ export class GameScene extends Scene {
     private groundY: number;
     private ground: Graphics;
     private resizeHandler: () => void;
+    private messageHandler: (e: MessageEvent | any) => void;
     private spawnTimer: number = 0;
     private nextSpawnX: number = 0;
     private cameraX: number = 0;
@@ -93,6 +94,7 @@ export class GameScene extends Scene {
         this.particles = new ParticleSystem();
         
         this.resizeHandler = () => this.syncViewportLayout();
+        this.messageHandler = (e: MessageEvent | any) => this.handleMessage(e);
     }
 
     public init(): void {
@@ -107,6 +109,8 @@ export class GameScene extends Scene {
         this.engine.physics.addBody(this.player.body);
         window.addEventListener('resize', this.resizeHandler);
         window.addEventListener('keydown', this.handleKeyDown);
+        window.addEventListener('message', this.messageHandler);
+        document.addEventListener('message', this.messageHandler as EventListener);
 
         this.gems = readNumber('gronk_gems', 0);
         this.nextSpawnX = this.level.runUpDistance;
@@ -124,6 +128,21 @@ export class GameScene extends Scene {
             this.engine.scenes.loadScene(MenuScene);
         }
     };
+
+    private handleMessage(e: MessageEvent | any): void {
+        try {
+            const rawData = e.data || e;
+            const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+            if (data.type !== 'debugSetPlayer') return;
+            this.player.body.x = Number.isFinite(data.x) ? data.x : this.player.body.x;
+            this.player.body.y = Number.isFinite(data.y) ? data.y : this.player.body.y;
+            this.player.body.vx = Number.isFinite(data.vx) ? data.vx : this.player.body.vx;
+            this.player.body.vy = Number.isFinite(data.vy) ? data.vy : this.player.body.vy;
+            this.player.body.onGround = false;
+        } catch (error) {
+            console.error('Failed to parse game scene message:', error);
+        }
+    }
 
     private calculateGroundY(): number {
         return Math.min(600, Math.max(220, window.innerHeight - 90));
@@ -245,7 +264,7 @@ export class GameScene extends Scene {
                 continue;
             }
             
-            if (!this.player.isDashing && !this.player.isAttacking && !this.player.isHit && this.overlaps(this.player.body, p.body, 8)) {
+            if (!this.player.isHit && this.overlaps(this.player.body, p.body, 8)) {
                 this.player.takeDamage(10, Math.sign(this.player.body.x - p.body.x) || -1);
                 this.applyShake(15, 0.2);
                 p.isDead = true;
@@ -270,7 +289,7 @@ export class GameScene extends Scene {
             const playerCanHurt = this.player.canDealAttackDamage();
             if (playerCanHurt && this.attackOverlaps(enemy) && !this.hitThisAttack.has(enemy)) {
                 this.hitThisAttack.add(enemy);
-                enemy.takeDamage(this.player.isDashing ? 38 : 28, this.player.facingRight ? 1 : -1);
+                enemy.takeDamage(28, this.player.facingRight ? 1 : -1);
                 this.applyShake(10, 0.1);
                 this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + enemy.body.h / 2, 0xfff1a8, 12);
                 if (enemy.isDead) this.registerKill(enemy);
@@ -278,7 +297,19 @@ export class GameScene extends Scene {
                 continue;
             }
 
-            if (!this.player.isDashing && !this.player.isAttacking && !this.player.isHit && this.overlaps(this.player.body, enemy.body, 4)) {
+            if (this.player.canDealPoundDamage() && this.overlaps(this.player.body, enemy.body, 6) && !this.hitThisAttack.has(enemy)) {
+                this.hitThisAttack.add(enemy);
+                enemy.takeDamage(36, this.player.facingRight ? 1 : -1);
+                this.player.body.vy = -360;
+                this.player.isPounding = false;
+                this.applyShake(14, 0.12);
+                this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + 8, 0xffa05a, 14);
+                if (enemy.isDead) this.registerKill(enemy);
+                this.updateHUD();
+                continue;
+            }
+
+            if (!this.player.isHit && this.overlaps(this.player.body, enemy.body, 4)) {
                 this.player.takeDamage(10, this.player.body.x < enemy.body.x ? -1 : 1);
                 this.applyShake(15, 0.2);
                 this.updateHUD();
@@ -304,10 +335,10 @@ export class GameScene extends Scene {
     }
 
     private attackOverlaps(enemy: Enemy): boolean {
-        const range = this.player.isDashing ? 95 : this.player.attackRange;
+        const range = this.player.attackRange;
         const minX = this.player.facingRight ? this.player.body.x + this.player.body.w - 6 : this.player.body.x - range;
         const maxX = this.player.facingRight ? this.player.body.x + this.player.body.w + range : this.player.body.x + 6;
-        const verticalPad = this.player.isDashing ? 50 : 78;
+        const verticalPad = 78;
         return enemy.body.x < maxX
             && enemy.body.x + enemy.body.w > minX
             && enemy.body.y < this.player.body.y + this.player.body.h + verticalPad
@@ -406,6 +437,8 @@ export class GameScene extends Scene {
     public destroy(): void {
         window.removeEventListener('resize', this.resizeHandler);
         window.removeEventListener('keydown', this.handleKeyDown);
+        window.removeEventListener('message', this.messageHandler);
+        document.removeEventListener('message', this.messageHandler as EventListener);
         this.engine.app.stage.removeChild(this.stage);
         this.engine.app.stage.removeChild(this.uiLayer);
         this.engine.physics.removeBody(this.player.body);
@@ -434,6 +467,8 @@ export class GameScene extends Scene {
                 onGround: this.player.body.onGround,
                 attacking: this.player.isAttacking,
                 dashing: this.player.isDashing,
+                crouching: this.player.isCrouching,
+                pounding: this.player.isPounding,
                 facingRight: this.player.facingRight,
                 attackId: this.player.attackId,
                 attackPhase: this.player.attackPhase,

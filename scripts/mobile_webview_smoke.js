@@ -91,6 +91,20 @@ function readCommittedWebViewHtml() {
         window.advanceTime(250);
       });
       const afterInput = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      await page.evaluate(async () => {
+        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: -1 }), '*');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        window.advanceTime(120);
+        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 0 }), '*');
+      });
+      const afterJoystickJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      await page.evaluate(async () => {
+        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 1 }), '*');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        window.advanceTime(80);
+        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 0 }), '*');
+      });
+      const afterJoystickDown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       await page.evaluate(() => window.advanceTime(1500));
       const settled = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       nativeMessages.push(...await page.evaluate(() => window.__rnMessages || []));
@@ -105,6 +119,9 @@ function readCommittedWebViewHtml() {
       assert(Array.isArray(boot.enemies), `${viewport.label}: expected enemy snapshot`);
       assert(afterInput.player.x > boot.player.x, `${viewport.label}: expected joystick input to move player right`);
       assert(afterInput.player.attackId > boot.player.attackId, `${viewport.label}: expected attack action to increment attack id`);
+      assert(afterJoystickJump.player.vy < 0 || afterJoystickJump.player.y < afterInput.player.y, `${viewport.label}: expected joystick up to jump`);
+      assert(afterJoystickDown.player.pounding === true, `${viewport.label}: expected joystick down while airborne to start pound`);
+      assert(afterInput.player.dashing === false && afterJoystickJump.player.dashing === false, `${viewport.label}: expected dash to be removed from mobile controls`);
       assert(settled.player.onGround === true, `${viewport.label}: expected player to land on ground`);
       const visibleHeight = viewport.resizeTo ? viewport.resizeTo.height : viewport.height;
       assert(settled.player.y + 80 <= visibleHeight, `${viewport.label}: expected player to stay visible after landing`);

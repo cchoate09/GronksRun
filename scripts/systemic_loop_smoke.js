@@ -46,7 +46,7 @@ function readCommittedWebViewHtml() {
           window.advanceTime(1200);
           snapshots.push(JSON.parse(window.render_game_to_text()));
           window.postMessage(JSON.stringify({ type: 'joystickMove', x: 1, y: 0 }), '*');
-          window.postMessage(JSON.stringify({ type: 'action', name: 'jump' }), '*');
+          window.postMessage(JSON.stringify({ type: 'joystickMove', x: 1, y: -1 }), '*');
           setTimeout(() => {
             window.advanceTime(350);
             snapshots.push(JSON.parse(window.render_game_to_text()));
@@ -66,7 +66,7 @@ function readCommittedWebViewHtml() {
     assert(afterStart.player.y >= boot.player.y, 'expected gravity/physics to advance after stepping time');
     assert(stepped.player.onGround === true, 'expected player to be grounded before jump input');
     assert(afterInput.player.x > stepped.player.x, 'expected joystick movement after input');
-    assert(afterInput.player.vy < 0 || afterInput.player.y < stepped.player.y, 'expected jump input to affect vertical motion');
+    assert(afterInput.player.vy < 0 || afterInput.player.y < stepped.player.y, 'expected joystick up to affect vertical motion');
     assert(!pageErrors.length, `page errors: ${pageErrors.join('\n')}`);
 
     fs.writeFileSync(path.join(outputDir, 'systemic-loop-smoke.json'), JSON.stringify({ menu, boot, afterStart, stepped, afterInput }, null, 2));

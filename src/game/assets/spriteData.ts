@@ -30,10 +30,10 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
         fps: 10,
         scale: 0.98,
         animations: {
-            IDLE: [0, 1, 2, 3],
-            RUN: [8, 9, 10, 11, 12, 13],
-            ATTACK: [0, 1, 2, 3],
-            HIT: [4],
+            IDLE: [0, 1, 2, 3, 4, 5, 6, 7],
+            RUN: [1, 2, 3, 4, 5, 6],
+            ATTACK: [11, 12, 11],
+            HIT: [13],
         },
     },
     pip: {
@@ -45,10 +45,10 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
         fps: 11,
         scale: 0.92,
         animations: {
-            IDLE: [0, 1, 2, 3],
-            RUN: [8, 9, 10, 11, 12, 13],
-            ATTACK: [0, 1, 2, 3],
-            HIT: [4],
+            IDLE: [0, 1, 2, 3, 4, 5, 6, 7],
+            RUN: [1, 2, 3, 4, 5, 6],
+            ATTACK: [11, 12, 11],
+            HIT: [13],
         },
     },
     rex: {
@@ -60,10 +60,10 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
         fps: 9,
         scale: 1.02,
         animations: {
-            IDLE: [0, 1, 2, 3],
-            RUN: [8, 9, 10, 11, 12, 13],
-            ATTACK: [0, 1, 2, 3],
-            HIT: [4],
+            IDLE: [0, 1, 2, 3, 4, 5, 6, 7],
+            RUN: [1, 2, 3, 4, 5, 6],
+            ATTACK: [11, 12, 11],
+            HIT: [13],
         },
     },
 };

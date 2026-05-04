@@ -232,14 +232,6 @@ function GameApp() {
             </View>
 
             <View style={styles.actionButtonsContainer}>
-                <View style={styles.topActions}>
-                    <View onTouchStart={() => handleAction('dash')} style={[styles.actionButton, styles.dashButton]}>
-                        <Text style={styles.buttonText}>DASH</Text>
-                    </View>
-                    <View onTouchStart={() => handleAction('jump')} style={[styles.actionButton, styles.jumpButton]}>
-                        <Text style={styles.buttonText}>JUMP</Text>
-                    </View>
-                </View>
                 <View onTouchStart={() => handleAction('attack')} style={[styles.actionButton, styles.attackButton]}>
                     <Text style={styles.attackText}>ATTACK</Text>
                 </View>
@@ -266,15 +258,12 @@ const styles = StyleSheet.create({
   loadingText: { color: '#4488ff', fontSize: 18, fontWeight: 'bold', letterSpacing: 2 },
   loadingSubtext: { color: '#667788', fontSize: 12, marginTop: 8 },
   webview: { flex: 1, backgroundColor: 'transparent' },
-  controlsLayer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', padding: 30, alignItems: 'flex-end' },
-  joystickContainer: { width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
+  controlsLayer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
+  joystickContainer: { position: 'absolute', left: 28, bottom: 34, width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
   joystickBase: { width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   joystickStick: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.4)' },
-  actionButtonsContainer: { alignItems: 'flex-end', gap: 15 },
-  topActions: { flexDirection: 'row', gap: 15 },
+  actionButtonsContainer: { position: 'absolute', right: 46, bottom: 58, alignItems: 'flex-end' },
   actionButton: { borderRadius: 40, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
-  dashButton: { width: 70, height: 70, backgroundColor: 'rgba(68,136,255,0.3)', borderColor: '#4488ff' },
-  jumpButton: { width: 80, height: 80, backgroundColor: 'rgba(68,255,136,0.3)', borderColor: '#44ff88' },
   attackButton: { width: 100, height: 100, backgroundColor: 'rgba(255,85,85,0.4)', borderColor: '#ff5555' },
   buttonText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   attackText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },

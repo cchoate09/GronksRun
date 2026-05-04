@@ -54,26 +54,40 @@ async function post(page, payload, ms = 100) {
     const decelerated = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
 
     const beforeAttack = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    await page.keyboard.down('ArrowRight');
     await post(page, { type: 'action', name: 'attack' }, 35);
     const windup = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
     await page.evaluate(() => window.advanceTime(90));
     const active = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    await page.keyboard.up('ArrowRight');
     await page.evaluate(() => window.advanceTime(360));
     const recovered = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
 
+    await page.evaluate(() => {
+      const state = JSON.parse(window.render_game_to_text());
+      const enemy = state.enemies[0];
+      window.__contactStartHp = state.player.hp;
+      window.postMessage(JSON.stringify({ type: 'debugSetPlayer', x: enemy.x - 30, y: enemy.y - 10, vx: 0, vy: 0 }), '*');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await page.evaluate(() => window.advanceTime(120));
+    const afterContact = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+
     await page.screenshot({ path: path.join(outputDir, 'gameplay-feel.png') });
 
-    const report = { boot, earlyMove, sustainedMove, decelerated, beforeAttack, windup, active, recovered, errors };
+    const report = { boot, earlyMove, sustainedMove, decelerated, beforeAttack, windup, active, recovered, afterContact, errors };
     fs.writeFileSync(path.join(outputDir, 'gameplay-feel.json'), JSON.stringify(report, null, 2));
 
     assert(boot.enemies[0].x - boot.player.x >= 620, 'first enemy should start after a real run-up segment');
     assert(earlyMove.player.vx > 0 && earlyMove.player.vx < sustainedMove.player.vx, 'horizontal movement should accelerate instead of snapping to top speed');
     assert(Math.abs(decelerated.player.vx) < Math.abs(sustainedMove.player.vx), 'horizontal movement should decelerate after release');
     assert(windup.player.attackPhase === 'WINDUP', 'attack should expose a wind-up phase');
+    assert(windup.player.vx > 0, 'attack should not stop horizontal movement');
     assert(windup.enemies[0].hp === beforeAttack.enemies[0].hp, 'attack should not damage during wind-up');
     assert(active.player.attackPhase === 'ACTIVE', 'attack should expose an active strike phase');
     assert(active.player.slashVisible === true, 'active strike should show a slash indicator');
     assert(recovered.player.attackPhase === 'NONE', 'attack should return to neutral after recovery');
+    assert(afterContact.player.hp < 100, 'enemy contact should damage the player on level 1');
     assert(!errors.length, `page errors: ${errors.join('\n')}`);
 
     console.log('Gameplay feel check passed.');

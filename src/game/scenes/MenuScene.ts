@@ -63,7 +63,7 @@ export class MenuScene extends Scene {
         this.stage.addChild(title);
 
         const subtitle = new Text({
-            text: 'RUN  JUMP  DASH  STRIKE',
+            text: 'RUN  JUMP  POUND  STRIKE',
             style: new TextStyle({ fill: 0x91e5ff, fontSize: 20, fontWeight: 'bold' }),
         });
         subtitle.anchor.set(0.5);

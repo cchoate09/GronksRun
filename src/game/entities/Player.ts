@@ -17,9 +17,9 @@ export class Player {
     private deceleration: number = 2600;
     private airControl: number = 0.62;
     private jumpForce: number = -760;
-    private dashForce: number = 820;
     public isDashing: boolean = false;
-    private dashTimer: number = 0;
+    public isPounding: boolean = false;
+    public isCrouching: boolean = false;
     public hp: number = 100;
     public isHit: boolean = false;
     private hitTimer: number = 0;
@@ -79,18 +79,7 @@ export class Player {
             }
         }
 
-        if (this.isDashing) {
-            this.dashTimer -= dt;
-            if (this.dashTimer <= 0) {
-                this.isDashing = false;
-            } else {
-                this.body.vy = 0; // Freeze vertical movement during dash
-                this.clampToScreen();
-                this.updateAttackState(dt);
-                this.updateSlash();
-                return; // Skip normal input processing
-            }
-        }
+        this.isDashing = false;
 
         this.updateAttackState(dt);
 
@@ -106,21 +95,24 @@ export class Player {
         const smoothing = (targetVx === 0 ? this.deceleration : this.acceleration) * (this.body.onGround ? 1 : this.airControl);
         this.body.vx = this.moveToward(this.body.vx, targetVx, smoothing * dt);
 
-        // Jumping
         if ((input.justPressed('ArrowUp') || input.justPressed('KeyW') || input.actionJustPressed('jump')) && this.body.onGround) {
             this.body.vy = this.jumpForce;
             this.body.onGround = false;
+            this.isCrouching = false;
         }
 
-        // Dashing
-        if (input.justPressed('ShiftLeft') || input.justPressed('KeyE') || input.actionJustPressed('dash')) {
-            this.isDashing = true;
-            this.dashTimer = 0.16;
-            this.body.vx = this.facingRight ? this.dashForce : -this.dashForce;
-            this.attackId++;
+        const downHeld = input.isDown('ArrowDown') || input.isDown('KeyS');
+        if ((input.justPressed('ArrowDown') || input.justPressed('KeyS') || input.actionJustPressed('pound')) && !this.body.onGround) {
+            this.body.vy = Math.max(this.body.vy, 980);
+            this.isPounding = true;
+            this.isCrouching = false;
+        } else if (this.body.onGround) {
+            this.isPounding = false;
+            this.isCrouching = downHeld;
+        } else {
+            this.isCrouching = false;
         }
 
-        // Attacking
         if (input.justPressed('Space') || input.justPressed('KeyJ') || input.justPressed('KeyF') || input.justPressed('Enter') || input.actionJustPressed('attack')) {
              if (!this.isAttacking) {
                  this.isAttacking = true;
@@ -142,8 +134,9 @@ export class Player {
             this.sprite.setState('IDLE');
         }
 
-        this.sprite.update(dt, Math.abs(this.body.vx) / 200 || 1);
+        this.sprite.update(dt, Math.abs(this.body.vx) / 220 || 1);
         this.sprite.scale.x = this.facingRight ? 1 : -1;
+        this.sprite.scale.y = this.isCrouching ? 0.72 : this.isPounding ? 0.86 : 1;
         // Adjust pivot for flipping
         this.sprite.x = this.facingRight ? 0 : this.body.w;
         this.updateSlash();
@@ -157,7 +150,11 @@ export class Player {
     }
 
     public canDealAttackDamage(): boolean {
-        return this.attackPhase === 'ACTIVE' || this.isDashing;
+        return this.attackPhase === 'ACTIVE';
+    }
+
+    public canDealPoundDamage(): boolean {
+        return this.isPounding && this.body.vy > 300;
     }
 
     public isSlashVisible(): boolean {

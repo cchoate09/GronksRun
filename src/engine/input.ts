@@ -3,6 +3,7 @@ export class InputManager {
     public previousKeys: { [key: string]: boolean } = {};
     
     public joystick: { x: number, y: number } = { x: 0, y: 0 };
+    public previousJoystick: { x: number, y: number } = { x: 0, y: 0 };
     private actions: Set<string> = new Set();
     private processedActions: Set<string> = new Set();
 
@@ -55,16 +56,21 @@ export class InputManager {
         for (const key in this.keys) {
             this.previousKeys[key] = this.keys[key];
         }
+        this.previousJoystick = { ...this.joystick };
         this.processedActions.clear();
     }
 
     public isDown(code: string): boolean {
         if (code === 'ArrowLeft') return !!this.keys[code] || this.joystick.x < -0.3;
         if (code === 'ArrowRight') return !!this.keys[code] || this.joystick.x > 0.3;
+        if (code === 'ArrowUp') return !!this.keys[code] || this.joystick.y < -0.55;
+        if (code === 'ArrowDown') return !!this.keys[code] || this.joystick.y > 0.55;
         return !!this.keys[code];
     }
 
     public justPressed(code: string): boolean {
+        if (code === 'ArrowUp') return (!!this.keys[code] && !this.previousKeys[code]) || (this.joystick.y < -0.55 && this.previousJoystick.y >= -0.55);
+        if (code === 'ArrowDown') return (!!this.keys[code] && !this.previousKeys[code]) || (this.joystick.y > 0.55 && this.previousJoystick.y <= 0.55);
         return (!!this.keys[code] && !this.previousKeys[code]);
     }
 

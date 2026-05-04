@@ -1,10 +1,8 @@
-import gronk from '../../../assets/spritesheets/normalized/gronk.png';
-import pip from '../../../assets/spritesheets/normalized/pip.png';
-import rex from '../../../assets/spritesheets/normalized/rex.png';
-import charger from '../../../assets/spritesheets/enemies/generated/charger.png';
-import witch from '../../../assets/spritesheets/enemies/generated/witch.png';
-import golem from '../../../assets/spritesheets/enemies/generated/golem.png';
-import serpent from '../../../assets/spritesheets/enemies/generated/serpent.png';
+import openAiHero from '../../../assets/spritesheets/openai/hero-arcade.png';
+import openAiEnemiesCore from '../../../assets/spritesheets/openai/enemies-core.png';
+import openAiEnemiesExtra from '../../../assets/spritesheets/openai/enemies-extra.png';
+import openAiObstacles from '../../../assets/spritesheets/openai/obstacles.png';
+import biomePanorama from '../../../assets/backgrounds/biome-panorama.png';
 import { Assets } from 'pixi.js';
 
 export type SpriteState = 'IDLE' | 'RUN' | 'ATTACK' | 'HIT';
@@ -17,117 +15,220 @@ export interface SpriteSheetDefinition {
     height: number;
     fps: number;
     scale: number;
+    facesRight?: boolean;
+    anchorX?: number;
+    anchorY?: number;
+    spriteOffsetX?: number;
+    spriteOffsetY?: number;
     animations: Record<SpriteState, number[]>;
 }
 
 export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
     gronk: {
-        image: gronk,
-        cols: 8,
-        rows: 3,
+        image: openAiHero,
+        cols: 4,
+        rows: 4,
         width: 1024,
-        height: 384,
-        fps: 10,
-        scale: 0.98,
+        height: 1024,
+        fps: 9,
+        scale: 0.34,
+        facesRight: true,
+        spriteOffsetY: 84,
         animations: {
-            IDLE: [0, 1, 2, 3, 4, 5, 6, 7],
-            RUN: [1, 2, 3, 4, 5, 6],
-            ATTACK: [11, 12, 11],
-            HIT: [13],
+            IDLE: [0, 1, 2, 3],
+            RUN: [4, 5, 6, 7],
+            ATTACK: [8, 9, 10, 11],
+            HIT: [12, 13, 14, 15],
         },
     },
     pip: {
-        image: pip,
-        cols: 8,
-        rows: 3,
+        image: openAiHero,
+        cols: 4,
+        rows: 4,
         width: 1024,
-        height: 384,
-        fps: 11,
-        scale: 0.92,
+        height: 1024,
+        fps: 10,
+        scale: 0.32,
+        facesRight: true,
+        spriteOffsetY: 84,
         animations: {
-            IDLE: [0, 1, 2, 3, 4, 5, 6, 7],
-            RUN: [1, 2, 3, 4, 5, 6],
-            ATTACK: [11, 12, 11],
-            HIT: [13],
+            IDLE: [0, 1, 2, 3],
+            RUN: [4, 5, 6, 7],
+            ATTACK: [8, 9, 10, 11],
+            HIT: [12, 13, 14, 15],
         },
     },
     rex: {
-        image: rex,
-        cols: 8,
-        rows: 3,
+        image: openAiHero,
+        cols: 4,
+        rows: 4,
         width: 1024,
-        height: 384,
-        fps: 9,
-        scale: 1.02,
+        height: 1024,
+        fps: 8,
+        scale: 0.36,
+        facesRight: true,
+        spriteOffsetY: 84,
         animations: {
-            IDLE: [0, 1, 2, 3, 4, 5, 6, 7],
-            RUN: [1, 2, 3, 4, 5, 6],
-            ATTACK: [11, 12, 11],
-            HIT: [13],
+            IDLE: [0, 1, 2, 3],
+            RUN: [4, 5, 6, 7],
+            ATTACK: [8, 9, 10, 11],
+            HIT: [12, 13, 14, 15],
         },
     },
 };
 
 export const ENEMY_SHEETS: Record<string, SpriteSheetDefinition> = {
     CHASER: {
-        image: charger,
+        image: openAiEnemiesCore,
         cols: 4,
-        rows: 2,
-        width: 1024,
-        height: 512,
+        rows: 4,
+        width: 1536,
+        height: 1024,
         fps: 8,
-        scale: 0.56,
+        scale: 0.32,
+        facesRight: false,
+        spriteOffsetY: 61,
         animations: {
             IDLE: [0, 1, 2, 3],
             RUN: [0, 1, 2, 3],
-            ATTACK: [4, 5, 6],
-            HIT: [7],
+            ATTACK: [1, 2, 3],
+            HIT: [3],
         },
     },
     RANGED: {
-        image: witch,
+        image: openAiEnemiesCore,
         cols: 4,
-        rows: 2,
-        width: 1024,
-        height: 512,
+        rows: 4,
+        width: 1536,
+        height: 1024,
         fps: 5,
-        scale: 0.56,
+        scale: 0.32,
+        facesRight: false,
+        spriteOffsetY: 61,
         animations: {
-            IDLE: [0, 1, 2, 3],
-            RUN: [0, 1, 2, 3],
-            ATTACK: [4, 5, 6],
+            IDLE: [4, 5, 6, 7],
+            RUN: [4, 5, 6, 7],
+            ATTACK: [5, 6, 7],
             HIT: [7],
         },
     },
     HEAVY: {
-        image: golem,
+        image: openAiEnemiesCore,
         cols: 4,
-        rows: 2,
-        width: 1024,
-        height: 512,
+        rows: 4,
+        width: 1536,
+        height: 1024,
         fps: 4,
-        scale: 0.72,
+        scale: 0.44,
+        facesRight: false,
+        spriteOffsetY: 92,
         animations: {
-            IDLE: [0, 1, 2, 3],
-            RUN: [0, 1, 2, 3],
-            ATTACK: [4, 5, 6],
-            HIT: [7],
+            IDLE: [8, 9, 10, 11],
+            RUN: [8, 9, 10, 11],
+            ATTACK: [9, 10, 11],
+            HIT: [11],
         },
     },
     SERPENT: {
-        image: serpent,
+        image: openAiEnemiesCore,
         cols: 4,
-        rows: 2,
-        width: 1024,
-        height: 512,
+        rows: 4,
+        width: 1536,
+        height: 1024,
         fps: 6,
-        scale: 0.52,
+        scale: 0.34,
+        facesRight: false,
+        spriteOffsetY: 56,
+        animations: {
+            IDLE: [12, 13, 14, 15],
+            RUN: [12, 13, 14, 15],
+            ATTACK: [13, 14, 15],
+            HIT: [15],
+        },
+    },
+    BOMBER: {
+        image: openAiEnemiesExtra,
+        cols: 4,
+        rows: 4,
+        width: 1536,
+        height: 1024,
+        fps: 6,
+        scale: 0.34,
+        facesRight: false,
+        spriteOffsetY: 64,
         animations: {
             IDLE: [0, 1, 2, 3],
             RUN: [0, 1, 2, 3],
-            ATTACK: [4, 5, 6],
-            HIT: [7],
+            ATTACK: [0, 1, 3],
+            HIT: [2],
         },
+    },
+    DIVER: {
+        image: openAiEnemiesExtra,
+        cols: 4,
+        rows: 4,
+        width: 1536,
+        height: 1024,
+        fps: 8,
+        scale: 0.31,
+        facesRight: false,
+        spriteOffsetY: 47,
+        animations: {
+            IDLE: [4, 5],
+            RUN: [4, 5, 6, 7],
+            ATTACK: [6, 7],
+            HIT: [5],
+        },
+    },
+    PTERO: {
+        image: openAiEnemiesExtra,
+        cols: 4,
+        rows: 4,
+        width: 1536,
+        height: 1024,
+        fps: 8,
+        scale: 0.3,
+        facesRight: false,
+        spriteOffsetY: 47,
+        animations: {
+            IDLE: [8, 9],
+            RUN: [8, 9, 10, 11],
+            ATTACK: [10, 11],
+            HIT: [9],
+        },
+    },
+    GUARDIAN: {
+        image: openAiEnemiesExtra,
+        cols: 4,
+        rows: 4,
+        width: 1536,
+        height: 1024,
+        fps: 5,
+        scale: 0.36,
+        facesRight: false,
+        spriteOffsetY: 74,
+        animations: {
+            IDLE: [12, 13],
+            RUN: [12, 13, 14, 15],
+            ATTACK: [13, 14, 15],
+            HIT: [12],
+        },
+    },
+};
+
+export const OBSTACLE_SHEET: SpriteSheetDefinition = {
+    image: openAiObstacles,
+    cols: 4,
+    rows: 3,
+    width: 1536,
+    height: 768,
+    fps: 6,
+    scale: 1,
+    animations: {
+        IDLE: [0, 1, 2, 3],
+        RUN: [4, 5, 6, 7],
+        ATTACK: [8, 9, 10, 11],
+        HIT: [8],
     },
 };
 
@@ -135,6 +236,8 @@ export async function preloadSpriteSheets(): Promise<void> {
     const urls = Array.from(new Set([
         ...Object.values(HERO_SHEETS).map((sheet) => sheet.image),
         ...Object.values(ENEMY_SHEETS).map((sheet) => sheet.image),
+        OBSTACLE_SHEET.image,
+        biomePanorama,
     ]));
     await Promise.all(urls.map((url) => Assets.load(url)));
 }

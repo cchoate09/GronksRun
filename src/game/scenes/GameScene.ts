@@ -1,15 +1,26 @@
 import { Scene } from '../../engine/scenes/SceneManager';
 import { GameEngine } from '../../engine/GameEngine';
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle, Sprite, Texture, Rectangle } from 'pixi.js';
 import { Player } from '../entities/Player';
-import { Enemy, RangedEnemy, HeavyEnemy, Projectile } from '../entities/Enemy';
+import { Enemy, RangedEnemy, HeavyEnemy, SerpentEnemy, Projectile, EnemyTargetSnapshot, BomberEnemy, DiverEnemy, PteroEnemy, GuardianEnemy } from '../entities/Enemy';
 import { BackgroundManager } from '../levels/BackgroundManager';
 import { HUD } from '../entities/HUD';
 import { ParticleSystem } from '../entities/ParticleSystem';
 import { MenuScene } from './MenuScene';
 import { readNumber, writeNumber } from '../storage';
+import { SoundManager } from '../audio/SoundManager';
+import { OBSTACLE_SHEET } from '../assets/spriteData';
 
-export type EnemyKind = 'CHASER' | 'RANGED' | 'HEAVY' | 'SERPENT';
+export type EnemyKind = 'CHASER' | 'RANGED' | 'HEAVY' | 'SERPENT' | 'BOMBER' | 'DIVER' | 'PTERO' | 'GUARDIAN';
+export type TerrainProfile = 'shore-sprint' | 'broken-steps' | 'witchline-crossfire' | 'serpent-lanes' | 'stone-guard' | 'crossfire-ridge' | 'golem-bridge' | 'night-ambush' | 'iron-rush' | 'sky-gauntlet';
+export type RouteStyle = 'flat-pressure' | 'broken-climb' | 'crossfire-steps' | 'low-serpent' | 'guard-bridges' | 'hazard-ridge' | 'heavy-bridge' | 'ambush-switchbacks' | 'rush-lanes' | 'sky-chains';
+
+export interface LevelModifiers {
+    routeStyle: RouteStyle;
+    hazardDensity: number;
+    verticality: number;
+    pressureBias: 'steady' | 'ranged' | 'serpent' | 'heavy' | 'mixed';
+}
 
 export interface LevelDefinition {
     id: number;
@@ -23,26 +34,54 @@ export interface LevelDefinition {
     encounterSpacing: number;
     levelLength: number;
     reward: number;
+    terrainProfile: TerrainProfile;
+    spawnPattern: EnemyKind[];
+    levelModifiers: LevelModifiers;
+}
+
+interface TerrainPlatform {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+interface TerrainGap {
+    x: number;
+    w: number;
+    depth: number;
+}
+
+interface Hazard {
+    type: 'spikes' | 'fireVent';
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    damage: number;
+    active: boolean;
+    phase: number;
 }
 
 export const LEVELS: LevelDefinition[] = [
-    { id: 1, name: 'Blue Gate', biome: 'Ruined Coast', targetKills: 3, maxActive: 1, enemyKinds: ['CHASER'], spawnGap: 1.0, runUpDistance: 760, encounterSpacing: 580, levelLength: 2600, reward: 20 },
-    { id: 2, name: 'Broken Steps', biome: 'Ruined Coast', targetKills: 4, maxActive: 1, enemyKinds: ['CHASER'], spawnGap: 0.95, runUpDistance: 820, encounterSpacing: 540, levelLength: 3200, reward: 25 },
-    { id: 3, name: 'Witchline', biome: 'Moonlit Road', targetKills: 5, maxActive: 2, enemyKinds: ['CHASER', 'RANGED'], spawnGap: 0.9, runUpDistance: 880, encounterSpacing: 520, levelLength: 3800, reward: 30 },
-    { id: 4, name: 'Serpent Run', biome: 'Temple Jungle', targetKills: 6, maxActive: 2, enemyKinds: ['CHASER', 'SERPENT'], spawnGap: 0.85, runUpDistance: 900, encounterSpacing: 500, levelLength: 4300, reward: 35 },
-    { id: 5, name: 'Stone Guard', biome: 'Temple Jungle', targetKills: 7, maxActive: 2, enemyKinds: ['CHASER', 'HEAVY'], spawnGap: 0.8, runUpDistance: 920, encounterSpacing: 500, levelLength: 4800, reward: 40 },
-    { id: 6, name: 'Crossfire', biome: 'Ash Ravine', targetKills: 8, maxActive: 2, enemyKinds: ['CHASER', 'RANGED', 'SERPENT'], spawnGap: 0.76, runUpDistance: 940, encounterSpacing: 480, levelLength: 5300, reward: 45 },
-    { id: 7, name: 'Golem Bridge', biome: 'Ash Ravine', targetKills: 9, maxActive: 3, enemyKinds: ['CHASER', 'HEAVY', 'RANGED'], spawnGap: 0.72, runUpDistance: 960, encounterSpacing: 470, levelLength: 5800, reward: 50 },
-    { id: 8, name: 'Night Ambush', biome: 'Glass City', targetKills: 10, maxActive: 3, enemyKinds: ['CHASER', 'SERPENT', 'RANGED'], spawnGap: 0.68, runUpDistance: 980, encounterSpacing: 460, levelLength: 6300, reward: 60 },
-    { id: 9, name: 'Iron Rush', biome: 'Glass City', targetKills: 11, maxActive: 3, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT'], spawnGap: 0.64, runUpDistance: 1000, encounterSpacing: 450, levelLength: 6800, reward: 70 },
-    { id: 10, name: 'Gronk Gauntlet', biome: 'Sky Forge', targetKills: 12, maxActive: 3, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT'], spawnGap: 0.6, runUpDistance: 1040, encounterSpacing: 440, levelLength: 7400, reward: 100 },
+    { id: 1, name: 'Blue Gate', biome: 'Ruined Coast', targetKills: 18, maxActive: 2, enemyKinds: ['CHASER'], spawnGap: 1.0, runUpDistance: 760, encounterSpacing: 680, levelLength: 26000, reward: 20, terrainProfile: 'shore-sprint', spawnPattern: ['CHASER', 'CHASER', 'CHASER'], levelModifiers: { routeStyle: 'flat-pressure', hazardDensity: 0.08, verticality: 0.15, pressureBias: 'steady' } },
+    { id: 2, name: 'Broken Steps', biome: 'Ruined Coast', targetKills: 20, maxActive: 2, enemyKinds: ['CHASER'], spawnGap: 0.95, runUpDistance: 820, encounterSpacing: 650, levelLength: 30000, reward: 25, terrainProfile: 'broken-steps', spawnPattern: ['CHASER', 'CHASER', 'CHASER'], levelModifiers: { routeStyle: 'broken-climb', hazardDensity: 0.16, verticality: 0.34, pressureBias: 'steady' } },
+    { id: 3, name: 'Witchline', biome: 'Moonlit Road', targetKills: 23, maxActive: 3, enemyKinds: ['CHASER', 'RANGED', 'BOMBER'], spawnGap: 0.9, runUpDistance: 880, encounterSpacing: 620, levelLength: 34000, reward: 30, terrainProfile: 'witchline-crossfire', spawnPattern: ['CHASER', 'RANGED', 'BOMBER', 'RANGED'], levelModifiers: { routeStyle: 'crossfire-steps', hazardDensity: 0.22, verticality: 0.42, pressureBias: 'ranged' } },
+    { id: 4, name: 'Serpent Run', biome: 'Temple Jungle', targetKills: 26, maxActive: 3, enemyKinds: ['CHASER', 'SERPENT', 'DIVER'], spawnGap: 0.85, runUpDistance: 900, encounterSpacing: 600, levelLength: 39000, reward: 35, terrainProfile: 'serpent-lanes', spawnPattern: ['SERPENT', 'CHASER', 'DIVER', 'SERPENT'], levelModifiers: { routeStyle: 'low-serpent', hazardDensity: 0.28, verticality: 0.24, pressureBias: 'serpent' } },
+    { id: 5, name: 'Stone Guard', biome: 'Temple Jungle', targetKills: 30, maxActive: 3, enemyKinds: ['CHASER', 'HEAVY', 'GUARDIAN'], spawnGap: 0.8, runUpDistance: 920, encounterSpacing: 580, levelLength: 44000, reward: 40, terrainProfile: 'stone-guard', spawnPattern: ['GUARDIAN', 'CHASER', 'HEAVY', 'GUARDIAN'], levelModifiers: { routeStyle: 'guard-bridges', hazardDensity: 0.2, verticality: 0.5, pressureBias: 'heavy' } },
+    { id: 6, name: 'Crossfire', biome: 'Ash Ravine', targetKills: 34, maxActive: 4, enemyKinds: ['CHASER', 'RANGED', 'SERPENT', 'BOMBER'], spawnGap: 0.76, runUpDistance: 940, encounterSpacing: 560, levelLength: 50000, reward: 45, terrainProfile: 'crossfire-ridge', spawnPattern: ['RANGED', 'BOMBER', 'SERPENT', 'RANGED'], levelModifiers: { routeStyle: 'hazard-ridge', hazardDensity: 0.36, verticality: 0.46, pressureBias: 'ranged' } },
+    { id: 7, name: 'Golem Bridge', biome: 'Ash Ravine', targetKills: 38, maxActive: 4, enemyKinds: ['CHASER', 'HEAVY', 'RANGED', 'PTERO'], spawnGap: 0.72, runUpDistance: 960, encounterSpacing: 540, levelLength: 56000, reward: 50, terrainProfile: 'golem-bridge', spawnPattern: ['HEAVY', 'PTERO', 'RANGED', 'CHASER'], levelModifiers: { routeStyle: 'heavy-bridge', hazardDensity: 0.3, verticality: 0.58, pressureBias: 'heavy' } },
+    { id: 8, name: 'Night Ambush', biome: 'Glass City', targetKills: 42, maxActive: 4, enemyKinds: ['CHASER', 'SERPENT', 'RANGED', 'DIVER', 'BOMBER'], spawnGap: 0.68, runUpDistance: 980, encounterSpacing: 520, levelLength: 62000, reward: 60, terrainProfile: 'night-ambush', spawnPattern: ['DIVER', 'RANGED', 'BOMBER', 'SERPENT'], levelModifiers: { routeStyle: 'ambush-switchbacks', hazardDensity: 0.42, verticality: 0.54, pressureBias: 'mixed' } },
+    { id: 9, name: 'Iron Rush', biome: 'Glass City', targetKills: 46, maxActive: 5, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT', 'GUARDIAN', 'PTERO'], spawnGap: 0.64, runUpDistance: 1000, encounterSpacing: 500, levelLength: 69000, reward: 70, terrainProfile: 'iron-rush', spawnPattern: ['PTERO', 'GUARDIAN', 'SERPENT', 'CHASER', 'HEAVY'], levelModifiers: { routeStyle: 'rush-lanes', hazardDensity: 0.48, verticality: 0.38, pressureBias: 'mixed' } },
+    { id: 10, name: 'Gronk Gauntlet', biome: 'Sky Forge', targetKills: 50, maxActive: 5, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.6, runUpDistance: 1040, encounterSpacing: 480, levelLength: 76000, reward: 100, terrainProfile: 'sky-gauntlet', spawnPattern: ['RANGED', 'PTERO', 'GUARDIAN', 'BOMBER', 'DIVER', 'HEAVY'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.52, verticality: 0.72, pressureBias: 'mixed' } },
 ];
 
 export class GameScene extends Scene {
-    public static selectedLevel: number = 1;
+    public static selectedLevel: number = 0;
 
     public static selectLevel(level: number): void {
-        GameScene.selectedLevel = Math.min(LEVELS.length, Math.max(1, Math.floor(level)));
+        const nextLevel = Math.floor(level);
+        GameScene.selectedLevel = nextLevel <= 0 ? 0 : Math.min(LEVELS.length, Math.max(1, nextLevel));
     }
 
     private stage: Container;
@@ -51,6 +90,7 @@ export class GameScene extends Scene {
     private player: Player;
     private enemies: Enemy[] = [];
     private projectiles: Projectile[] = [];
+    private playerProjectiles: Projectile[] = [];
     private background: BackgroundManager;
     private hud: HUD;
     private particles: ParticleSystem;
@@ -60,14 +100,23 @@ export class GameScene extends Scene {
     private gems: number = 0;
     private groundY: number;
     private ground: Graphics;
+    private obstacleLayer: Container;
+    private obstacleFrames: Texture[] = [];
+    private terrainPlatforms: TerrainPlatform[] = [];
+    private terrainGaps: TerrainGap[] = [];
+    private hazards: Hazard[] = [];
     private resizeHandler: () => void;
     private messageHandler: (e: MessageEvent | any) => void;
     private spawnTimer: number = 0;
     private nextSpawnX: number = 0;
     private cameraX: number = 0;
+    private isEndless: boolean = false;
+    private endlessDepth: number = 1;
+    private difficultyMultiplier: number = 1;
     private lastResolvedAttackId: number = -1;
     private hitThisAttack: Set<Enemy> = new Set();
-    private state: 'PLAYING' | 'LEVEL_COMPLETE' | 'DEAD' = 'PLAYING';
+    private state: 'PLAYING' | 'PAUSED' | 'LEVEL_COMPLETE' | 'DEAD' = 'PLAYING';
+    private lastSafeX: number = 100;
     
     private shakeTimer: number = 0;
     private shakeIntensity: number = 0;
@@ -77,16 +126,28 @@ export class GameScene extends Scene {
         this.stage = new Container();
         this.uiLayer = new Container();
         this.overlayLayer = new Container();
-        this.level = LEVELS[GameScene.selectedLevel - 1] || LEVELS[0];
+        this.difficultyMultiplier = this.readDifficultyMultiplier();
+        this.isEndless = GameScene.selectedLevel === 0;
+        this.endlessDepth = Math.max(1, readNumber('gronk_endless_depth', 1));
+        this.level = this.isEndless ? this.generateEndlessLevel(this.endlessDepth) : (LEVELS[GameScene.selectedLevel - 1] || LEVELS[0]);
         
         this.groundY = this.calculateGroundY();
         this.engine.physics.setGroundY(this.groundY);
+        this.engine.physics.clearPlatforms();
+        this.engine.physics.clearGroundGaps();
+        this.terrainPlatforms = this.buildTerrainPlatforms();
+        this.terrainGaps = this.buildTerrainGaps();
+        this.hazards = this.buildHazards();
+        for (const platform of this.terrainPlatforms) this.engine.physics.addPlatform(platform);
+        this.engine.physics.setGroundGaps(this.terrainGaps);
         
-        this.background = new BackgroundManager(this.stage, this.level.levelLength + window.innerWidth, window.innerHeight);
+        this.background = new BackgroundManager(this.stage, this.level.levelLength + window.innerWidth, window.innerHeight, this.level.biome);
         
         this.ground = new Graphics();
+        this.obstacleLayer = new Container();
         this.drawGround();
         this.stage.addChild(this.ground);
+        this.stage.addChild(this.obstacleLayer);
 
         this.player = new Player();
         this.player.setWorldBounds(this.level.levelLength);
@@ -119,13 +180,57 @@ export class GameScene extends Scene {
         this.updateHUD();
     }
 
+    private readDifficultyMultiplier(): number {
+        const difficulty = readNumber('gronk_difficulty', 1);
+        if (difficulty <= 0) return 0.82;
+        if (difficulty >= 2) return 1.28;
+        return 1;
+    }
+
+    private generateEndlessLevel(depth: number): LevelDefinition {
+        const enemyPool: EnemyKind[] = ['CHASER'];
+        if (depth >= 2) enemyPool.push('RANGED');
+        if (depth >= 3) enemyPool.push('SERPENT', 'BOMBER');
+        if (depth >= 4) enemyPool.push('HEAVY', 'DIVER');
+        if (depth >= 5) enemyPool.push('PTERO');
+        if (depth >= 6) enemyPool.push('GUARDIAN');
+
+        const scaled = Math.max(1, depth * this.difficultyMultiplier);
+        const biomeNames = ['Ruined Coast', 'Moonlit Road', 'Temple Jungle', 'Ash Ravine', 'Glass City', 'Sky Forge'];
+        const biome = biomeNames[(depth - 1) % biomeNames.length];
+
+        return {
+            id: 0,
+            name: `Endless Rift ${depth}`,
+            biome,
+            targetKills: Math.min(36, 5 + Math.floor(scaled * 1.8)),
+            maxActive: Math.min(5, 2 + Math.floor(scaled / 4)),
+            enemyKinds: enemyPool,
+            spawnGap: Math.max(0.36, 0.82 - scaled * 0.025),
+            runUpDistance: 720,
+            encounterSpacing: Math.max(320, 520 - scaled * 8),
+            levelLength: Math.min(78000, 30000 + Math.floor(scaled * 2800)),
+            reward: 25 + depth * 8,
+            terrainProfile: (['shore-sprint', 'witchline-crossfire', 'serpent-lanes', 'crossfire-ridge', 'iron-rush', 'sky-gauntlet'] as TerrainProfile[])[(depth - 1) % 6],
+            spawnPattern: enemyPool.length === 1 ? ['CHASER', 'CHASER', 'CHASER'] : enemyPool,
+            levelModifiers: {
+                routeStyle: (['flat-pressure', 'crossfire-steps', 'low-serpent', 'hazard-ridge', 'rush-lanes', 'sky-chains'] as RouteStyle[])[(depth - 1) % 6],
+                hazardDensity: Math.min(0.56, 0.12 + depth * 0.025),
+                verticality: Math.min(0.72, 0.18 + depth * 0.035),
+                pressureBias: enemyPool.includes('HEAVY') ? 'mixed' : enemyPool.includes('SERPENT') ? 'serpent' : enemyPool.includes('RANGED') ? 'ranged' : 'steady',
+            },
+        };
+    }
+
     private handleKeyDown = (e: KeyboardEvent) => {
         if (this.state === 'LEVEL_COMPLETE' && (e.code === 'Enter' || e.code === 'Space')) {
             this.goToNextLevel();
         } else if (this.state === 'DEAD' && (e.code === 'Enter' || e.code === 'Space')) {
             this.restartLevel();
+        } else if (this.state === 'PAUSED' && (e.code === 'Escape' || e.code === 'Enter' || e.code === 'Space')) {
+            this.resumeGame();
         } else if (e.code === 'Escape') {
-            this.engine.scenes.loadScene(MenuScene);
+            this.showPause();
         }
     };
 
@@ -133,12 +238,29 @@ export class GameScene extends Scene {
         try {
             const rawData = e.data || e;
             const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+            if (data.type === 'backButton') {
+                if (this.state === 'PAUSED') this.resumeGame();
+                else if (this.state === 'PLAYING') this.showPause();
+                return;
+            }
+            if (data.type === 'action' && data.name === 'pause') {
+                if (this.state === 'PAUSED') this.resumeGame();
+                else if (this.state === 'PLAYING') this.showPause();
+                return;
+            }
+            if (data.type === 'debugSetKills') {
+                this.kills = Math.max(0, Math.floor(Number.isFinite(data.kills) ? data.kills : this.kills));
+                this.updateHUD();
+                this.checkLevelCompletion();
+                return;
+            }
             if (data.type !== 'debugSetPlayer') return;
             this.player.body.x = Number.isFinite(data.x) ? data.x : this.player.body.x;
             this.player.body.y = Number.isFinite(data.y) ? data.y : this.player.body.y;
             this.player.body.vx = Number.isFinite(data.vx) ? data.vx : this.player.body.vx;
             this.player.body.vy = Number.isFinite(data.vy) ? data.vy : this.player.body.vy;
-            this.player.body.onGround = false;
+            this.player.body.onGround = typeof data.onGround === 'boolean' ? data.onGround : false;
+            if (this.player.body.onGround) this.lastSafeX = this.player.body.x;
         } catch (error) {
             console.error('Failed to parse game scene message:', error);
         }
@@ -152,12 +274,234 @@ export class GameScene extends Scene {
         this.ground.clear();
         const topColor = this.level.id >= 8 ? 0x88e0ff : this.level.id >= 5 ? 0xffb347 : 0x50d6a8;
         const groundWidth = Math.max(this.level.levelLength + window.innerWidth, window.innerWidth * 2);
-        this.ground.rect(0, this.groundY, groundWidth, 18).fill(topColor);
-        this.ground.rect(0, this.groundY + 18, groundWidth, Math.max(160, window.innerHeight - this.groundY)).fill(0x12131a);
-        for (let i = 0; i < groundWidth; i += 96) {
-            this.ground.rect(i, this.groundY + 18, 4, window.innerHeight).fill(this.level.id >= 5 ? 0x33241e : 0x16262e);
-            this.ground.circle(i + 38, this.groundY + 38, 7).fill(0x263647);
+        const groundDepth = Math.max(160, window.innerHeight - this.groundY);
+        const sortedGaps = [...this.terrainGaps].sort((a, b) => a.x - b.x);
+
+        const drawSegment = (x: number, w: number) => {
+            if (w <= 0) return;
+            this.ground.rect(x, this.groundY, w, 18).fill(topColor);
+            this.ground.rect(x, this.groundY + 18, w, groundDepth).fill(0x12131a);
+            const firstMark = Math.ceil(x / 96) * 96;
+            for (let i = firstMark; i < x + w; i += 96) {
+                this.ground.rect(i, this.groundY + 18, 4, window.innerHeight).fill(this.level.id >= 5 ? 0x33241e : 0x16262e);
+                this.ground.circle(i + 38, this.groundY + 38, 7).fill(0x263647);
+            }
+        };
+
+        let segmentStart = 0;
+        for (const gap of sortedGaps) {
+            const gapStart = Math.max(0, Math.min(groundWidth, gap.x));
+            const gapEnd = Math.max(gapStart, Math.min(groundWidth, gap.x + gap.w));
+            drawSegment(segmentStart, gapStart - segmentStart);
+            this.ground.rect(gapStart, this.groundY, gapEnd - gapStart, groundDepth + 120).fill(0x05070b);
+            this.ground.rect(gapStart, this.groundY, 8, groundDepth).fill({ color: topColor, alpha: 0.66 });
+            this.ground.rect(gapEnd - 8, this.groundY, 8, groundDepth).fill({ color: topColor, alpha: 0.66 });
+            this.ground.rect(gapStart + 10, this.groundY + 22, Math.max(0, gapEnd - gapStart - 20), 8).fill({ color: 0xff4d6d, alpha: 0.32 });
+            segmentStart = gapEnd;
         }
+        drawSegment(segmentStart, groundWidth - segmentStart);
+
+        for (const platform of this.terrainPlatforms) {
+            this.ground.roundRect(platform.x, platform.y, platform.w, platform.h, 8).fill(topColor).stroke({ color: 0xffffff, width: 2, alpha: 0.24 });
+            this.ground.rect(platform.x + 8, platform.y + platform.h, Math.max(12, platform.w - 16), 10).fill(this.level.id >= 5 ? 0x33241e : 0x16262e);
+            for (let x = platform.x + 20; x < platform.x + platform.w - 8; x += 54) {
+                this.ground.circle(x, platform.y + 10, 4).fill({ color: 0xffffff, alpha: 0.22 });
+            }
+        }
+
+        for (const hazard of this.hazards) {
+            if (hazard.type === 'spikes') {
+                this.ground.rect(hazard.x, this.groundY - 6, hazard.w, 6).fill(0x2d1720);
+                for (let x = hazard.x; x < hazard.x + hazard.w - 2; x += 18) {
+                    this.ground.moveTo(x, this.groundY - 4)
+                        .lineTo(x + 9, this.groundY - 30)
+                        .lineTo(x + 18, this.groundY - 4)
+                        .closePath()
+                        .fill(0xff4d6d)
+                        .stroke({ color: 0xffd166, width: 1, alpha: 0.45 });
+                }
+            } else {
+                this.ground.roundRect(hazard.x, this.groundY - 14, hazard.w, 14, 5).fill(0x3b1c12).stroke({ color: 0xffd166, width: 1, alpha: 0.45 });
+                if (hazard.active) {
+                    this.ground.rect(hazard.x + 12, hazard.y, Math.max(8, hazard.w - 24), hazard.h).fill({ color: 0xff7a3d, alpha: 0.58 });
+                    this.ground.rect(hazard.x + 22, hazard.y + 10, Math.max(4, hazard.w - 44), Math.max(8, hazard.h - 14)).fill({ color: 0xfff1a8, alpha: 0.35 });
+                } else {
+                    this.ground.circle(hazard.x + hazard.w * 0.5, this.groundY - 18, 7).fill({ color: 0xff7a3d, alpha: 0.48 });
+                }
+            }
+        }
+        this.renderObstacleSprites();
+    }
+
+    private getObstacleFrame(index: number): Texture {
+        if (!this.obstacleFrames.length) {
+            const base = Texture.from(OBSTACLE_SHEET.image);
+            const frameW = OBSTACLE_SHEET.width / OBSTACLE_SHEET.cols;
+            const frameH = OBSTACLE_SHEET.height / OBSTACLE_SHEET.rows;
+            for (let i = 0; i < OBSTACLE_SHEET.cols * OBSTACLE_SHEET.rows; i++) {
+                const col = i % OBSTACLE_SHEET.cols;
+                const row = Math.floor(i / OBSTACLE_SHEET.cols);
+                this.obstacleFrames.push(new Texture({
+                    source: base.source,
+                    frame: new Rectangle(col * frameW, row * frameH, frameW, frameH),
+                }));
+            }
+        }
+        return this.obstacleFrames[index] || this.obstacleFrames[0];
+    }
+
+    private renderObstacleSprites(): void {
+        if (!this.obstacleLayer) return;
+        this.obstacleLayer.removeChildren();
+        for (const hazard of this.hazards) {
+            const frame = hazard.type === 'spikes'
+                ? Math.min(3, Math.max(0, Math.round((hazard.w - 56) / 24)))
+                : (hazard.active ? 7 : 4);
+            const sprite = new Sprite(this.getObstacleFrame(frame));
+            sprite.anchor.set(0.5, 1);
+            sprite.x = hazard.x + hazard.w * 0.5;
+            sprite.y = this.groundY + 6;
+            if (hazard.type === 'spikes') {
+                sprite.width = Math.max(70, hazard.w * 1.18);
+                sprite.height = 42;
+            } else {
+                sprite.width = Math.max(80, hazard.w * 1.45);
+                sprite.height = hazard.active ? Math.max(105, hazard.h + 24) : 52;
+            }
+            this.obstacleLayer.addChild(sprite);
+        }
+    }
+
+    private buildTerrainPlatforms(): TerrainPlatform[] {
+        const platforms: TerrainPlatform[] = [];
+        const depth = this.isEndless ? this.endlessDepth : this.level.id;
+        const modifiers = this.level.levelModifiers;
+        const count = Math.min(24, Math.max(2, Math.floor((this.level.levelLength - 1200) / (1700 - modifiers.hazardDensity * 460)) + Math.floor(depth / 5)));
+        const profile = this.level.terrainProfile;
+        for (let i = 0; i < count; i++) {
+            const x = 980 + i * Math.max(520, this.level.encounterSpacing + 170) + ((i * 137 + depth * 71) % 180);
+            if (x > this.level.levelLength - 360) break;
+            if (profile === 'shore-sprint' && i % 4 === 3) continue;
+            const heightStep = (i + depth) % 3;
+            const verticalBoost = modifiers.verticality * 40;
+            let y = this.groundY - 86 - heightStep * (34 + verticalBoost * 0.22);
+            let w = 170 + ((i + depth) % 3) * 34;
+            if (profile === 'broken-steps') {
+                y = this.groundY - 58 - (i % 4) * (28 + verticalBoost * 0.2);
+                w = 150;
+            } else if (profile === 'witchline-crossfire') {
+                y = this.groundY - (i % 2 ? 156 + verticalBoost * 0.4 : 96 + verticalBoost * 0.2);
+                w = 210;
+            } else if (profile === 'serpent-lanes') {
+                y = this.groundY - (i % 3 === 1 ? 122 + verticalBoost * 0.15 : 62);
+                w = 250;
+            } else if (profile === 'stone-guard') {
+                y = this.groundY - 118 - (i % 3) * (20 + verticalBoost * 0.16);
+                w = i % 2 ? 310 : 220;
+            } else if (profile === 'crossfire-ridge') {
+                y = this.groundY - (i % 4 === 1 ? 180 + verticalBoost * 0.45 : 104 + verticalBoost * 0.2);
+                w = i % 2 ? 168 : 230;
+            } else if (profile === 'golem-bridge') {
+                y = this.groundY - 88 - (i % 3 === 2 ? verticalBoost * 0.35 : 0);
+                w = i % 3 === 1 ? 380 : 330;
+            } else if (profile === 'night-ambush') {
+                y = this.groundY - (i % 2 ? 148 + verticalBoost * 0.42 : 78 + verticalBoost * 0.12);
+                w = i % 3 === 0 ? 150 : 225;
+            } else if (profile === 'iron-rush') {
+                y = this.groundY - 72 - (i % 2) * (46 + verticalBoost * 0.22);
+                w = i % 4 === 0 ? 250 : 185;
+            } else if (profile === 'sky-gauntlet') {
+                y = this.groundY - 166 - verticalBoost * 0.5 + (i % 3) * 32;
+                w = i % 2 ? 150 : 205;
+            }
+            if (modifiers.routeStyle === 'rush-lanes' && i % 5 === 2) w += 70;
+            if (modifiers.routeStyle === 'ambush-switchbacks' && i % 4 === 0) y -= verticalBoost * 0.45;
+            platforms.push({
+                x,
+                y: Math.max(120, y),
+                w,
+                h: 18,
+            });
+        }
+        return platforms;
+    }
+
+    private buildTerrainGaps(): TerrainGap[] {
+        const gaps: TerrainGap[] = [];
+        const depth = this.isEndless ? this.endlessDepth : this.level.id;
+        const modifiers = this.level.levelModifiers;
+        const spacing = Math.max(1500, 2850 - modifiers.hazardDensity * 1200 - modifiers.verticality * 260);
+        const count = Math.min(18, Math.max(1, Math.floor((this.level.levelLength - 1800) / spacing)));
+        const startX = 1420 + depth * 17;
+
+        for (let i = 0; i < count; i++) {
+            let x = startX + i * spacing + ((i * 193 + depth * 89) % 340);
+            if (modifiers.routeStyle === 'sky-chains' && i % 3 === 1) x += 180;
+            if (modifiers.routeStyle === 'rush-lanes' && i % 4 === 2) x += 120;
+            if (x > this.level.levelLength - 720) break;
+
+            const widthBoost = modifiers.routeStyle === 'sky-chains' ? 34 : modifiers.routeStyle === 'hazard-ridge' ? 22 : 0;
+            const w = Math.min(238, 126 + ((i + depth) % 3) * 24 + modifiers.hazardDensity * 58 + widthBoost);
+            gaps.push({
+                x,
+                w,
+                depth: Math.min(260, 170 + modifiers.verticality * 105 + (i % 2) * 24),
+            });
+        }
+
+        return gaps;
+    }
+
+    private buildHazards(): Hazard[] {
+        const hazards: Hazard[] = [];
+        const depth = this.isEndless ? this.endlessDepth : this.level.id;
+        const modifiers = this.level.levelModifiers;
+        const spacing = Math.max(980, 2600 - modifiers.hazardDensity * 1500);
+        const count = Math.min(24, Math.max(2, Math.floor((this.level.levelLength - 1800) / spacing)));
+
+        for (let i = 0; i < count; i++) {
+            let x = 1160 + i * spacing + ((i * 149 + depth * 53) % 300);
+            if (x > this.level.levelLength - 520) break;
+            x = this.pushAwayFromGap(x, 120);
+
+            const fireVent = (i + depth) % 4 === 2 || modifiers.routeStyle === 'hazard-ridge' && i % 3 === 1;
+            if (fireVent) {
+                const h = 104 + modifiers.hazardDensity * 46;
+                hazards.push({
+                    type: 'fireVent',
+                    x,
+                    y: this.groundY - h,
+                    w: 58,
+                    h,
+                    damage: 14,
+                    active: (i + depth) % 2 === 0,
+                    phase: i * 0.72 + depth * 0.35,
+                });
+            } else {
+                const w = 64 + ((i + depth) % 3) * 18;
+                hazards.push({
+                    type: 'spikes',
+                    x,
+                    y: this.groundY - 30,
+                    w,
+                    h: 30,
+                    damage: 12,
+                    active: true,
+                    phase: 0,
+                });
+            }
+        }
+
+        return hazards;
+    }
+
+    private pushAwayFromGap(x: number, padding: number): number {
+        let safeX = x;
+        for (const gap of this.terrainGaps) {
+            if (safeX + padding < gap.x || safeX > gap.x + gap.w + padding) continue;
+            safeX = gap.x + gap.w + padding;
+        }
+        return Math.min(this.level.levelLength - 360, safeX);
     }
 
     private syncViewportLayout(): void {
@@ -165,6 +509,13 @@ export class GameScene extends Scene {
         if (nextGroundY === this.groundY) return;
         this.groundY = nextGroundY;
         this.engine.physics.setGroundY(this.groundY);
+        this.engine.physics.clearPlatforms();
+        this.engine.physics.clearGroundGaps();
+        this.terrainPlatforms = this.buildTerrainPlatforms();
+        this.terrainGaps = this.buildTerrainGaps();
+        this.hazards = this.buildHazards();
+        for (const platform of this.terrainPlatforms) this.engine.physics.addPlatform(platform);
+        this.engine.physics.setGroundGaps(this.terrainGaps);
         this.drawGround();
         this.player.setWorldBounds(this.level.levelLength);
         this.player.body.y = Math.min(this.player.body.y, this.groundY - this.player.body.h);
@@ -175,15 +526,21 @@ export class GameScene extends Scene {
 
     private spawnWave(initial: boolean = false): void {
         if (this.state !== 'PLAYING') return;
-        const needed = Math.min(this.level.maxActive - this.enemies.length, this.level.targetKills - this.kills - this.enemies.length);
+        const pressureCap = this.hasMetLevelGoal() ? Math.min(2, this.level.maxActive) : this.level.maxActive;
+        const remainingObjectiveSlots = this.hasMetLevelGoal()
+            ? pressureCap
+            : this.level.targetKills - this.kills - this.enemies.length;
+        const needed = Math.min(pressureCap - this.enemies.length, remainingObjectiveSlots);
         if (needed <= 0) return;
 
+        const startingEnemyCount = this.enemies.length;
         for (let i = 0; i < needed; i++) {
-            const kind = this.level.enemyKinds[(this.kills + this.enemies.length + i) % this.level.enemyKinds.length];
+            const pattern = this.level.spawnPattern.length ? this.level.spawnPattern : this.level.enemyKinds;
+            const kind = pattern[(this.kills + startingEnemyCount + i) % pattern.length];
             const spacing = initial ? 150 : 120;
             const minVisibleAhead = this.player.body.x + 520;
             const maxSpawnX = this.level.levelLength - 180;
-            const x = Math.min(maxSpawnX, Math.max(this.nextSpawnX, minVisibleAhead) + i * spacing + Math.random() * 40);
+            const x = this.getSafeSpawnX(Math.min(maxSpawnX, Math.max(this.nextSpawnX, minVisibleAhead) + i * spacing + Math.random() * 40));
             const enemy = this.createEnemy(kind, x);
             this.enemies.push(enemy);
             this.stage.addChild(enemy.view);
@@ -192,16 +549,28 @@ export class GameScene extends Scene {
         this.nextSpawnX = Math.min(this.level.levelLength - 180, this.nextSpawnX + this.level.encounterSpacing);
     }
 
+    private getSafeSpawnX(x: number): number {
+        let safeX = x;
+        for (const gap of this.terrainGaps) {
+            if (safeX < gap.x - 80 || safeX > gap.x + gap.w + 80) continue;
+            safeX = gap.x + gap.w + 130;
+        }
+        for (const hazard of this.hazards) {
+            if (safeX < hazard.x - 70 || safeX > hazard.x + hazard.w + 70) continue;
+            safeX = hazard.x + hazard.w + 120;
+        }
+        return Math.min(this.level.levelLength - 180, safeX);
+    }
+
     private createEnemy(kind: EnemyKind, x: number): Enemy {
         const y = this.groundY - 90;
         if (kind === 'RANGED') return new RangedEnemy(x, y);
         if (kind === 'HEAVY') return new HeavyEnemy(x, this.groundY - 110);
-        if (kind === 'SERPENT') {
-            const serpent = new Enemy(x, this.groundY - 58, 'SERPENT');
-            serpent.body.w = 58;
-            serpent.body.h = 48;
-            return serpent;
-        }
+        if (kind === 'SERPENT') return new SerpentEnemy(x, this.groundY - 58);
+        if (kind === 'BOMBER') return new BomberEnemy(x, this.groundY - 76);
+        if (kind === 'DIVER') return new DiverEnemy(x, this.groundY - 238);
+        if (kind === 'PTERO') return new PteroEnemy(x, this.groundY - 252);
+        if (kind === 'GUARDIAN') return new GuardianEnemy(x, this.groundY - 96);
         return new Enemy(x, y, 'CHASER');
     }
 
@@ -222,6 +591,15 @@ export class GameScene extends Scene {
         this.updateCamera();
         this.background.update(dt, this.cameraX);
         this.particles.update(dt);
+        this.updateHazards(dt);
+        this.updateLastSafePosition();
+        this.checkHazards();
+        this.checkPitFall();
+
+        if (this.player.hp <= 0) {
+            this.showDead();
+            return;
+        }
 
         if (this.player.attackId !== this.lastResolvedAttackId) {
             this.lastResolvedAttackId = this.player.attackId;
@@ -236,6 +614,7 @@ export class GameScene extends Scene {
         }
 
         this.updateProjectiles(dt);
+        this.updatePlayerProjectiles(dt);
         this.updateEnemies(dt);
 
         this.spawnTimer -= dt;
@@ -243,6 +622,73 @@ export class GameScene extends Scene {
             this.spawnTimer = this.level.spawnGap;
             this.spawnWave();
         }
+
+        this.checkLevelCompletion();
+    }
+
+    private updateHazards(dt: number): void {
+        let needsRedraw = false;
+        for (const hazard of this.hazards) {
+            if (hazard.type !== 'fireVent') continue;
+            hazard.phase += dt;
+            const wasActive = hazard.active;
+            hazard.active = Math.sin(hazard.phase * 2.45) > -0.12;
+            hazard.h = hazard.active ? 104 + this.level.levelModifiers.hazardDensity * 46 : 24;
+            hazard.y = this.groundY - hazard.h;
+            if (wasActive !== hazard.active) needsRedraw = true;
+        }
+        if (needsRedraw) this.drawGround();
+    }
+
+    private updateLastSafePosition(): void {
+        if (!this.player.body.onGround) return;
+        if (this.isBodyOverGap(this.player.body)) return;
+        if (this.hazards.some((hazard) => hazard.active && this.overlaps(this.player.body, hazard, 2))) return;
+        this.lastSafeX = Math.max(80, this.player.body.x);
+    }
+
+    private checkHazards(): void {
+        if (this.player.isHit) return;
+        for (const hazard of this.hazards) {
+            if (!hazard.active) continue;
+            if (!this.overlaps(this.player.body, hazard, 2)) continue;
+            this.player.takeDamage(hazard.damage, this.player.body.x < hazard.x ? -1 : 1);
+            SoundManager.playCue('damage');
+            this.applyShake(12, 0.16);
+            this.updateHUD();
+            return;
+        }
+    }
+
+    private checkPitFall(): void {
+        if (this.player.body.y < this.groundY + 170) return;
+        const resetX = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
+        if (!this.player.isHit) {
+            this.player.takeDamage(18, this.player.body.vx >= 0 ? -1 : 1);
+            SoundManager.playCue('damage');
+            this.applyShake(18, 0.2);
+            this.updateHUD();
+        }
+        this.player.body.x = resetX;
+        this.player.body.y = this.groundY - this.player.body.h - 2;
+        this.player.body.vx = 0;
+        this.player.body.vy = 0;
+        this.player.body.onGround = true;
+    }
+
+    private isBodyOverGap(body: { x: number; w: number }): boolean {
+        const footCenterX = body.x + body.w * 0.5;
+        return this.terrainGaps.some((gap) => footCenterX > gap.x && footCenterX < gap.x + gap.w);
+    }
+
+    private checkLevelCompletion(): void {
+        if (this.hasMetLevelGoal()) {
+            this.completeLevel();
+        }
+    }
+
+    private hasMetLevelGoal(): boolean {
+        return this.kills >= this.level.targetKills;
     }
 
     private updateCamera(): void {
@@ -264,23 +710,87 @@ export class GameScene extends Scene {
                 continue;
             }
             
+            if (this.player.isCrouching && p.highProjectile) {
+                continue;
+            }
+
             if (!this.player.isHit && this.overlaps(this.player.body, p.body, 8)) {
-                this.player.takeDamage(10, Math.sign(this.player.body.x - p.body.x) || -1);
+                this.player.takeDamage(p.damage, Math.sign(this.player.body.x - p.body.x) || -1);
                 this.applyShake(15, 0.2);
                 p.isDead = true;
             }
         }
     }
 
+    private updatePlayerProjectiles(dt: number): void {
+        if (this.player.consumeRangedShot()) {
+            SoundManager.playCue('ranged');
+            const dir = this.player.facingRight ? 1 : -1;
+            const x = this.player.facingRight ? this.player.body.x + this.player.body.w + 10 : this.player.body.x - 20;
+            const y = this.player.body.y + 31;
+            const p = new Projectile(x, y, dir * 680, 0, 0x91e5ff, 0, 22, this.level.levelLength + window.innerWidth);
+            p.body.w = 18;
+            p.body.h = 8;
+            p.view.clear();
+            p.view.roundRect(0, 0, 18, 8, 4).fill(0x91e5ff).stroke({ color: 0xffffff, width: 1, alpha: 0.7 });
+            this.playerProjectiles.push(p);
+            this.stage.addChild(p.view);
+            this.engine.physics.addBody(p.body);
+            this.particles.spawn(x, y + 4, 0x91e5ff, 6);
+        }
+
+        for (let i = this.playerProjectiles.length - 1; i >= 0; i--) {
+            const p = this.playerProjectiles[i];
+            p.update(dt);
+
+            for (const enemy of this.enemies) {
+                if (enemy.isDead || p.isDead) continue;
+                if (!this.overlaps(p.body, enemy.body, 4)) continue;
+
+                enemy.takeDamage(p.damage, Math.sign(p.body.vx) || 1);
+                p.isDead = true;
+                this.applyShake(7, 0.08);
+                this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + enemy.body.h / 2, 0x91e5ff, 10);
+                if (enemy.isDead) this.registerKill(enemy);
+                this.updateHUD();
+            }
+
+            if (p.isDead) {
+                this.stage.removeChild(p.view);
+                this.engine.physics.removeBody(p.body);
+                this.playerProjectiles.splice(i, 1);
+            }
+        }
+    }
+
     private updateEnemies(dt: number): void {
         for (const enemy of this.enemies) {
-            enemy.update(dt, this.player.body.x);
+            enemy.update(dt, this.getEnemyTargetSnapshot());
             if (enemy.isDead) continue;
 
             if ((enemy as any).pendingShot) {
                 (enemy as any).pendingShot = false;
-                const vx = this.player.body.x < enemy.body.x ? -420 : 420;
-                const p = new Projectile(enemy.body.x, enemy.body.y + 20, vx, -80);
+                const lead = Number.isFinite((enemy as RangedEnemy).pendingShotLead) ? (enemy as RangedEnemy).pendingShotLead : 0;
+                const aimX = this.player.body.x + this.player.body.w * 0.5 + lead;
+                const dir = aimX < enemy.body.x ? -1 : 1;
+                const speed = 420 + Math.min(120, Math.abs(lead) * 0.45);
+                const highProjectile = (enemy as RangedEnemy).pendingShotHigh !== false;
+                const p = new Projectile(enemy.body.x, enemy.body.y + (highProjectile ? 18 : 40), dir * speed, highProjectile ? -28 : -12, 0xffff00, 0.08, 10, this.level.levelLength + window.innerWidth, highProjectile);
+                this.projectiles.push(p);
+                this.stage.addChild(p.view);
+                this.engine.physics.addBody(p.body);
+            }
+
+            if ((enemy as any).pendingBomb) {
+                (enemy as BomberEnemy).pendingBomb = false;
+                const targetX = this.player.body.x + this.player.body.w * 0.5;
+                const dir = targetX < enemy.body.x ? -1 : 1;
+                const p = new Projectile(enemy.body.x + enemy.body.w * 0.5, enemy.body.y + 18, dir * 255, -430, 0x171923, 0.78, 16, this.level.levelLength + window.innerWidth, false);
+                p.body.w = 24;
+                p.body.h = 24;
+                p.view.clear();
+                p.view.circle(12, 12, 12).fill(0x171923).stroke({ color: 0xffd166, width: 3, alpha: 0.95 });
+                p.view.circle(17, 7, 3).fill(0xff7a3d);
                 this.projectiles.push(p);
                 this.stage.addChild(p.view);
                 this.engine.physics.addBody(p.body);
@@ -289,7 +799,9 @@ export class GameScene extends Scene {
             const playerCanHurt = this.player.canDealAttackDamage();
             if (playerCanHurt && this.attackOverlaps(enemy) && !this.hitThisAttack.has(enemy)) {
                 this.hitThisAttack.add(enemy);
+                SoundManager.playCue('melee');
                 enemy.takeDamage(28, this.player.facingRight ? 1 : -1);
+                SoundManager.playCue('hit');
                 this.applyShake(10, 0.1);
                 this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + enemy.body.h / 2, 0xfff1a8, 12);
                 if (enemy.isDead) this.registerKill(enemy);
@@ -299,7 +811,8 @@ export class GameScene extends Scene {
 
             if (this.player.canDealPoundDamage() && this.overlaps(this.player.body, enemy.body, 6) && !this.hitThisAttack.has(enemy)) {
                 this.hitThisAttack.add(enemy);
-                enemy.takeDamage(36, this.player.facingRight ? 1 : -1);
+                SoundManager.playCue('hit');
+                enemy.takePoundDamage(36, this.player.facingRight ? 1 : -1);
                 this.player.body.vy = -360;
                 this.player.isPounding = false;
                 this.applyShake(14, 0.12);
@@ -309,8 +822,9 @@ export class GameScene extends Scene {
                 continue;
             }
 
-            if (!this.player.isHit && this.overlaps(this.player.body, enemy.body, 4)) {
+            if (!this.player.isHit && enemy.canDealContactDamage() && this.overlaps(this.player.body, enemy.body, 4)) {
                 this.player.takeDamage(10, this.player.body.x < enemy.body.x ? -1 : 1);
+                SoundManager.playCue('damage');
                 this.applyShake(15, 0.2);
                 this.updateHUD();
             }
@@ -324,14 +838,23 @@ export class GameScene extends Scene {
         });
     }
 
+    private getEnemyTargetSnapshot(): EnemyTargetSnapshot {
+        return {
+            x: this.player.body.x,
+            y: this.player.body.y,
+            vx: this.player.body.vx,
+            vy: this.player.body.vy,
+            onGround: this.player.body.onGround,
+            width: this.player.body.w,
+            height: this.player.body.h,
+        };
+    }
+
     private registerKill(enemy: Enemy): void {
         this.kills++;
         this.gems += 5;
         this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + enemy.body.h / 2, 0xffd700, 16);
         writeNumber('gronk_gems', this.gems);
-        if (this.kills >= this.level.targetKills) {
-            this.completeLevel();
-        }
     }
 
     private attackOverlaps(enemy: Enemy): boolean {
@@ -354,17 +877,85 @@ export class GameScene extends Scene {
 
     private completeLevel(): void {
         this.state = 'LEVEL_COMPLETE';
-        const unlocked = Math.max(readNumber('gronk_unlocked_level', 1), Math.min(LEVELS.length, this.level.id + 1));
-        writeNumber('gronk_unlocked_level', unlocked);
+        SoundManager.playCue('clear');
+        if (this.isEndless) {
+            writeNumber('gronk_endless_depth', this.endlessDepth + 1);
+        } else {
+            const unlocked = Math.max(readNumber('gronk_unlocked_level', 1), Math.min(LEVELS.length, this.level.id + 1));
+            writeNumber('gronk_unlocked_level', unlocked);
+        }
         this.gems += this.level.reward;
         writeNumber('gronk_gems', this.gems);
         this.updateHUD();
-        this.drawResultOverlay('LEVEL CLEAR', `${this.level.name} complete`, 'ENTER / TAP: NEXT LEVEL');
+        this.drawResultOverlay(this.isEndless ? 'RIFT CLEAR' : 'LEVEL CLEAR', `${this.level.name} complete`, this.isEndless ? 'ENTER / TAP: NEXT RIFT' : 'ENTER / TAP: NEXT LEVEL');
     }
 
     private showDead(): void {
         this.state = 'DEAD';
         this.drawResultOverlay('RUN ENDED', 'Try the attack before contact', 'ENTER / TAP: RETRY');
+    }
+
+    private showPause(): void {
+        if (this.state !== 'PLAYING') return;
+        this.state = 'PAUSED';
+        this.drawPauseOverlay();
+    }
+
+    private resumeGame(): void {
+        if (this.state !== 'PAUSED') return;
+        this.state = 'PLAYING';
+        this.overlayLayer.removeChildren();
+        this.overlayLayer.removeAllListeners('pointerdown');
+    }
+
+    private drawPauseOverlay(): void {
+        this.overlayLayer.removeChildren();
+        const shade = new Graphics();
+        shade.rect(0, 0, window.innerWidth, window.innerHeight).fill({ color: 0x05070b, alpha: 0.62 });
+        this.overlayLayer.addChild(shade);
+
+        const panelW = Math.min(560, window.innerWidth - 48);
+        const panelH = 300;
+        const panelX = (window.innerWidth - panelW) / 2;
+        const panelY = Math.max(34, (window.innerHeight - panelH) / 2);
+        const panel = new Graphics();
+        panel.roundRect(panelX, panelY, panelW, panelH, 12).fill(0x101822).stroke({ color: 0xc4b5fd, width: 2 });
+        this.overlayLayer.addChild(panel);
+
+        const titleText = new Text({ text: 'PAUSED', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
+        titleText.anchor.set(0.5);
+        titleText.position.set(window.innerWidth / 2, panelY + 58);
+        this.overlayLayer.addChild(titleText);
+
+        const statusText = new Text({
+            text: `${this.level.name.toUpperCase()}  ${this.kills}/${this.level.targetKills} KILLS  ${Math.round(this.player.body.x)}/${this.level.levelLength}M`,
+            style: new TextStyle({ fill: 0x91e5ff, fontSize: 15, fontWeight: 'bold', wordWrap: true, wordWrapWidth: panelW - 56 }),
+        });
+        statusText.anchor.set(0.5);
+        statusText.position.set(window.innerWidth / 2, panelY + 104);
+        this.overlayLayer.addChild(statusText);
+
+        this.addPauseButton(panelX + 70, panelY + 138, panelW - 140, 44, 'RESUME', 0x44ff88, () => this.resumeGame());
+        this.addPauseButton(panelX + 70, panelY + 192, panelW - 140, 44, 'RETRY LEVEL', 0xffd166, () => this.restartLevel());
+        this.addPauseButton(panelX + 70, panelY + 246, panelW - 140, 44, 'MAIN MENU', 0x67e8f9, () => this.engine.scenes.loadScene(MenuScene));
+    }
+
+    private addPauseButton(x: number, y: number, w: number, h: number, label: string, color: number, onClick: () => void): void {
+        const button = new Container();
+        const bg = new Graphics();
+        bg.roundRect(0, 0, w, h, 9).fill(color);
+        button.addChild(bg);
+
+        const text = new Text({ text: label, style: new TextStyle({ fill: 0x07110b, fontSize: 18, fontWeight: 'bold' }) });
+        text.anchor.set(0.5);
+        text.position.set(w / 2, h / 2);
+        button.addChild(text);
+
+        button.position.set(x, y);
+        button.eventMode = 'static';
+        button.cursor = 'pointer';
+        button.on('pointerdown', onClick);
+        this.overlayLayer.addChild(button);
     }
 
     private drawResultOverlay(title: string, subtitle: string, cta: string): void {
@@ -415,7 +1006,7 @@ export class GameScene extends Scene {
     }
 
     private goToNextLevel(): void {
-        GameScene.selectLevel(this.level.id >= LEVELS.length ? 1 : this.level.id + 1);
+        GameScene.selectLevel(this.isEndless ? 0 : (this.level.id >= LEVELS.length ? 1 : this.level.id + 1));
         this.engine.scenes.loadScene(GameScene);
     }
 
@@ -432,6 +1023,7 @@ export class GameScene extends Scene {
         this.player.render();
         for (const enemy of this.enemies) enemy.render();
         for (const p of this.projectiles) p.view.position.set(p.body.x, p.body.y);
+        for (const p of this.playerProjectiles) p.view.position.set(p.body.x, p.body.y);
     }
 
     public destroy(): void {
@@ -444,6 +1036,9 @@ export class GameScene extends Scene {
         this.engine.physics.removeBody(this.player.body);
         for (const enemy of this.enemies) this.engine.physics.removeBody(enemy.body);
         for (const p of this.projectiles) this.engine.physics.removeBody(p.body);
+        for (const p of this.playerProjectiles) this.engine.physics.removeBody(p.body);
+        this.engine.physics.clearPlatforms();
+        this.engine.physics.clearGroundGaps();
         this.stage.destroy({ children: true });
         this.uiLayer.destroy({ children: true });
     }
@@ -454,6 +1049,9 @@ export class GameScene extends Scene {
             level: this.level.id,
             level_name: this.level.name,
             biome: this.level.biome,
+            endless: this.isEndless,
+            endless_depth: this.endlessDepth,
+            difficultyMultiplier: this.difficultyMultiplier,
             kills: this.kills,
             target_kills: this.level.targetKills,
             gems: this.gems,
@@ -471,8 +1069,12 @@ export class GameScene extends Scene {
                 pounding: this.player.isPounding,
                 facingRight: this.player.facingRight,
                 attackId: this.player.attackId,
+                attackMode: this.player.attackMode,
                 attackPhase: this.player.attackPhase,
                 slashVisible: this.player.isSlashVisible(),
+                rangedShotsFired: this.player.rangedShotsFired,
+                rangedCooldownReady: this.player.rangedCooldownReady(),
+                rangedCooldownRemaining: Number(this.player.rangedCooldownRemaining.toFixed(2)),
             },
             camera: { x: Math.round(this.cameraX) },
             pacing: {
@@ -480,13 +1082,55 @@ export class GameScene extends Scene {
                 next_spawn_x: Math.round(this.nextSpawnX),
                 level_length: this.level.levelLength,
             },
+            variety: {
+                terrain_profile: this.level.terrainProfile,
+                spawn_pattern: this.level.spawnPattern,
+                enemy_kinds: this.level.enemyKinds,
+                level_modifiers: this.level.levelModifiers,
+            },
+            progress: {
+                distance: Math.round(this.player.body.x),
+                distance_pct: Number(Math.min(1, this.player.body.x / Math.max(1, this.level.levelLength)).toFixed(3)),
+                goal_met: this.hasMetLevelGoal(),
+            },
+            terrain: this.terrainPlatforms.map((platform) => ({
+                x: Math.round(platform.x),
+                screenX: Math.round(platform.x - this.cameraX),
+                y: Math.round(platform.y),
+                w: Math.round(platform.w),
+                h: Math.round(platform.h),
+            })),
+            gaps: this.terrainGaps.map((gap) => ({
+                x: Math.round(gap.x),
+                screenX: Math.round(gap.x - this.cameraX),
+                w: Math.round(gap.w),
+                depth: Math.round(gap.depth),
+            })),
+            hazards: this.hazards.map((hazard) => ({
+                type: hazard.type,
+                x: Math.round(hazard.x),
+                screenX: Math.round(hazard.x - this.cameraX),
+                y: Math.round(hazard.y),
+                w: Math.round(hazard.w),
+                h: Math.round(hazard.h),
+                active: hazard.active,
+            })),
             enemies: this.enemies.map((enemy) => ({
                 type: enemy.type,
                 x: Math.round(enemy.body.x),
                 screenX: Math.round(enemy.body.x - this.cameraX),
                 y: Math.round(enemy.body.y),
+                vx: Math.round(enemy.body.vx),
                 hp: enemy.hp,
                 dead: enemy.isDead,
+                attacking: enemy.isAttacking,
+                mechanic: enemy.mechanic,
+            })),
+            player_projectiles: this.playerProjectiles.map((projectile) => ({
+                x: Math.round(projectile.body.x),
+                screenX: Math.round(projectile.body.x - this.cameraX),
+                y: Math.round(projectile.body.y),
+                vx: Math.round(projectile.body.vx),
             })),
             projectiles: this.projectiles.length,
         };

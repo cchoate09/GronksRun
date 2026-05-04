@@ -4,6 +4,7 @@ import { InputManager } from '../../engine/input';
 import { SkeletalSprite } from './SkeletalSprite';
 import { HERO_SHEETS } from '../assets/spriteData';
 
+export type AttackMode = 'NONE' | 'MELEE' | 'RANGED';
 export type AttackPhase = 'NONE' | 'WINDUP' | 'ACTIVE' | 'RECOVERY';
 
 export class Player {
@@ -12,10 +13,11 @@ export class Player {
     public sprite: SkeletalSprite;
     private slash: Graphics;
 
-    private speed: number = 430;
-    private acceleration: number = 1900;
-    private deceleration: number = 2600;
-    private airControl: number = 0.62;
+    private speed: number = 660;
+    private acceleration: number = 3300;
+    private deceleration: number = 3600;
+    private airControl: number = 0.5;
+    private airSpeedMultiplier: number = 0.68;
     private jumpForce: number = -760;
     public isDashing: boolean = false;
     public isPounding: boolean = false;
@@ -29,17 +31,24 @@ export class Player {
     private attackElapsed: number = 0;
     public attackId: number = 0;
     public attackRange: number = 145;
+    public attackMode: AttackMode = 'NONE';
     public attackPhase: AttackPhase = 'NONE';
+    public rangedShotsFired: number = 0;
+    public rangedCooldownRemaining: number = 0;
     private worldMaxX: number = window.innerWidth;
+    private readonly standingHeight: number = 80;
+    private readonly crouchHeight: number = 48;
 
     private readonly attackWindup: number = 0.1;
     private readonly attackActive: number = 0.14;
     private readonly attackRecovery: number = 0.16;
+    private readonly rangedCooldown: number = 0.85;
+    private pendingRangedShot: boolean = false;
 
     constructor() {
         this.body = new Body();
         this.body.w = 40;
-        this.body.h = 80;
+        this.body.h = this.standingHeight;
         this.body.x = 100;
         this.body.y = 100;
 
@@ -81,19 +90,24 @@ export class Player {
 
         this.isDashing = false;
 
+        this.rangedCooldownRemaining = Math.max(0, this.rangedCooldownRemaining - dt);
         this.updateAttackState(dt);
 
+        const targetSpeed = this.body.onGround ? this.speed : this.speed * this.airSpeedMultiplier;
         let targetVx = 0;
         if (input.isDown('ArrowLeft') || input.isDown('KeyA')) {
-            targetVx = -this.speed;
+            targetVx = -targetSpeed;
             this.facingRight = false;
         } else if (input.isDown('ArrowRight') || input.isDown('KeyD')) {
-            targetVx = this.speed;
+            targetVx = targetSpeed;
             this.facingRight = true;
         }
 
         const smoothing = (targetVx === 0 ? this.deceleration : this.acceleration) * (this.body.onGround ? 1 : this.airControl);
         this.body.vx = this.moveToward(this.body.vx, targetVx, smoothing * dt);
+        if (!this.body.onGround && Math.abs(this.body.vx) > targetSpeed) {
+            this.body.vx = this.moveToward(this.body.vx, Math.sign(this.body.vx) * targetSpeed, this.deceleration * 1.25 * dt);
+        }
 
         if ((input.justPressed('ArrowUp') || input.justPressed('KeyW') || input.actionJustPressed('jump')) && this.body.onGround) {
             this.body.vy = this.jumpForce;
@@ -112,15 +126,26 @@ export class Player {
         } else {
             this.isCrouching = false;
         }
+        this.applyCrouchHitbox();
 
         if (input.justPressed('Space') || input.justPressed('KeyJ') || input.justPressed('KeyF') || input.justPressed('Enter') || input.actionJustPressed('attack')) {
              if (!this.isAttacking) {
                  this.isAttacking = true;
                  this.attackTimer = this.attackWindup + this.attackActive + this.attackRecovery;
                  this.attackElapsed = 0;
+                 this.attackMode = 'MELEE';
                  this.attackPhase = 'WINDUP';
                  this.attackId++;
              }
+        }
+
+        if (input.justPressed('KeyK') || input.justPressed('KeyL') || input.actionJustPressed('ranged')) {
+            if (this.rangedCooldownRemaining <= 0) {
+                this.attackMode = 'RANGED';
+                this.rangedCooldownRemaining = this.rangedCooldown;
+                this.rangedShotsFired++;
+                this.pendingRangedShot = true;
+            }
         }
 
         // State update for animation
@@ -135,14 +160,20 @@ export class Player {
         }
 
         this.sprite.update(dt, Math.abs(this.body.vx) / 220 || 1);
-        this.sprite.scale.x = this.facingRight ? 1 : -1;
+        this.sprite.setFacingRight(this.facingRight, this.body.w);
         this.sprite.scale.y = this.isCrouching ? 0.72 : this.isPounding ? 0.86 : 1;
-        // Adjust pivot for flipping
-        this.sprite.x = this.facingRight ? 0 : this.body.w;
         this.updateSlash();
 
         // Screen bounds logic (clamp instead of wrap for a room-based feel)
         this.clampToScreen();
+    }
+
+    private applyCrouchHitbox(): void {
+        const targetHeight = this.isCrouching ? this.crouchHeight : this.standingHeight;
+        if (this.body.h === targetHeight) return;
+        const feetY = this.body.y + this.body.h;
+        this.body.h = targetHeight;
+        this.body.y = feetY - this.body.h;
     }
 
     public render(): void {
@@ -183,6 +214,16 @@ export class Player {
         } else {
             this.attackPhase = 'RECOVERY';
         }
+    }
+
+    public consumeRangedShot(): boolean {
+        if (!this.pendingRangedShot) return false;
+        this.pendingRangedShot = false;
+        return true;
+    }
+
+    public rangedCooldownReady(): boolean {
+        return this.rangedCooldownRemaining <= 0;
     }
 
     private updateSlash(): void {

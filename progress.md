@@ -204,3 +204,130 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Disabled dash as a gameplay damage path, kept attacks available while moving, moved the attack button above the Android navigation region, and updated the menu tagline to `RUN  JUMP  POUND  STRIKE`.
 - Tightened collision rules so level-1 enemy/projectile contact can damage the player even if an attack animation is in progress, while airborne pound can bounce off and damage enemies.
 - Avoided the hero sheet frames that read as hit/death poses during normal running, and expanded smoke coverage for joystick-up jump, joystick-down pound, dash removal, moving attacks, and level-1 contact damage.
+2026-05-04
+- Gameplay systems continuation pass:
+- Added a real melee/ranged attack split in the Pixi runtime. Melee keeps the existing wind-up/active/recovery slash path; ranged is fired through `KeyK`/`KeyL` or native `ranged` action, has cooldown telemetry, spawns forward player projectiles, damages enemies, and remains independent from movement.
+- Updated the Android overlay from one `ATTACK` button to separate `RANGED` and `MELEE` buttons while preserving the joystick-up jump / joystick-down crouch-pound model.
+- Added close-range enemy pressure state: melee enemies now lunge and expose attack windows instead of idling at close distance; contact damage now respects `enemy.canDealContactDamage()`, and enemy attack/vx state is exposed in `render_game_to_text()`.
+- Added an endless mode and settings screen in `MenuScene`: main menu now exposes `ENDLESS RUN`, `LEVEL SELECT`, and `SETTINGS`; settings persist difficulty and sound toggles; endless levels are generated from persisted `gronk_endless_depth` with increasing enemy variety, target kills, active enemy counts, spacing, length, and reward.
+- Added platform terrain support to the fixed-step physics engine and generated level platforms in `GameScene`; terrain is drawn into the world and exposed in snapshots so future automation can verify jump/platform routes.
+- Added source-level contract harnesses for the new systems:
+  `scripts/combat_modes_check.js`, `scripts/enemy_pressure_contract_check.js`, `scripts/endless_settings_contract_check.js`, and `scripts/terrain_contract_check.js`.
+- Regenerated the committed Android WebView payload with `npm run build:webview`.
+- Verification for this pass:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `node scripts/combat_modes_check.js`, `node scripts/enemy_pressure_contract_check.js`, `node scripts/endless_settings_contract_check.js`, and `node scripts/terrain_contract_check.js`.
+- Browser/Puppeteer verification remains blocked in this workspace by local Chromium `spawn EPERM`; `npm run smoke:mobile-webview` and `npm run smoke:systemic-loop` fail before app launch for that reason. The new combat harness falls back to a source contract when this EPERM occurs.
+- Remaining objective gaps before the game can honestly be called complete/competitive and released: visual QA of the rebuilt Pixi runtime on real browser/Android, stronger level authoring around the new platform system, richer enemy-specific attack patterns beyond the base lunge/ranged/heavy split, more polished full settings/audio implementation, version bump, release AAB build, commit, push/GitHub work, and Play Console artifact validation.
+- Crouch / pound / enemy-variety follow-up:
+- Crouch now changes the actual player collision height instead of only scaling the sprite, and high ranged projectiles are flagged so crouching can dodge them.
+- Heavy enemies now have an armored damage path and a stronger dedicated pound-damage path, making airborne pound a better answer to armored targets.
+- Added `SerpentEnemy` as a custom low-leap enemy instead of reusing the base chaser behavior for the `SERPENT` type.
+- Enemy snapshots now expose mechanic labels such as `chase_lunge`, `highProjectile`, `armored_pound_break`, and `low_leap`.
+- Added `scripts/crouch_pound_enemy_contract_check.js` and wired all gameplay contract checks into `npm run check:gameplay-contracts`.
+- Level-duration follow-up:
+- Authored Pixi campaign levels now use much longer distances (`26000` to `76000`) and larger target kill counts so runs are closer to the requested 1-3 minute range at current movement speed.
+- Completion now requires both meeting the kill goal and reaching the level endpoint; target kills alone no longer instantly clear a level.
+- Endless generated levels now start at `30000` distance and scale up toward `78000`.
+- Added light post-objective enemy pressure so the level does not become empty after the kill goal is met but before the endpoint.
+- Added `scripts/level_duration_contract_check.js`.
+- Verification for this follow-up:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, and `npm run check:gameplay-contracts`.
+- Attempted release AAB build:
+  `android\\gradlew.bat bundleRelease --no-daemon` failed before Gradle execution because the wrapper tried to create/use Gradle lock files in unwritable locations. Retrying with `GRADLE_USER_HOME` set to the repo `.gradle` directory hit `Access is denied` on `.gradle\\wrapper\\dists\\gradle-9.0.0-bin\\...\\gradle-9.0.0-bin.zip.lck`; using `C:\\tmp` and `output\\gradle-home` also failed to create directories in this sandbox. Policy also rejected removing the stale generated zero-byte lock file directly. No fresh AAB was produced in this pass.
+- Sound/settings follow-up:
+- Added `src/game/audio/SoundManager.ts`, a safe WebAudio-backed cue manager that respects persisted `gronk_sound_enabled` and no-ops if browser/WebView audio is unavailable or blocked.
+- Wired sound cues into menu selection, melee hit, ranged fire, enemy hit feedback, player damage, and level clear.
+- Added `scripts/sound_contract_check.js` and included it in `npm run check:gameplay-contracts`.
+- Verification for this follow-up:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, and `npm run check:gameplay-contracts`.
+- Gradle packaging follow-up:
+- Setting `GRADLE_USER_HOME` to `android\\.gradle` allowed the wrapper to download Gradle 9.0.0 and start a daemon, avoiding the repo-root `.gradle` lock-file issue. However, `bundleRelease`, `:app:bundleRelease`, `tasks --all`, and `help` still exit nonzero after only daemon startup/configuration-cache text. Daemon logs report `Runtime.exit(0)` / successful daemon shutdown without task output. The existing `android\\app\\build\\outputs\\bundle\\release\\app-release.aab` is still timestamped `2026-05-03 22:08:46`, so it is not evidence of a fresh build from the latest changes.
+- Pause UI follow-up:
+- Added in-run `PAUSED` state in `GameScene` with a proper overlay showing current level, kill progress, and distance progress.
+- Pause overlay supports Resume, Retry Level, and Main Menu.
+- Android back button and native `pause` action now toggle pause/resume instead of being ignored or immediately leaving the run.
+- Added a compact pause button to the native overlay beside Ranged/Melee controls.
+- Added `scripts/pause_ui_contract_check.js` and included it in `npm run check:gameplay-contracts`.
+- Verification for this follow-up:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, and `npm run check:gameplay-contracts`.
+- Current objective follow-up:
+- Added `scripts/current_objective_contract_check.js` and wired it into `npm run check:gameplay-contracts`; the check first failed on the missing native jump action, then passed after the runtime fixes.
+- Restored a dedicated native `JUMP` overlay button in `App.js` while keeping `RANGED`, `MELEE`, and pause controls.
+- Reworked the Pixi home menu around `src/game/scenes/menuLayout.ts`, a pure responsive layout helper that keeps `CONTINUE`, `ENDLESS RUN`, `LEVEL SELECT`, and `SETTINGS` inside compact landscape viewports such as `844x390` and `640x360`; `MenuScene` snapshots now expose `main_menu_buttons`.
+- Added authored `terrainProfile` and `spawnPattern` fields to all 10 campaign levels, used spawn patterns for enemy selection, generated profile-specific platform routes, and made biome backgrounds render with distinct palettes/shapes.
+- Increased close-range melee enemy pressure by replacing the slow crawl between lunges with continued forward pressure, while preserving explicit `canDealContactDamage()` gating.
+- Regenerated the committed WebView payload with `npm run build:webview`.
+- Verification for this follow-up:
+  `node scripts/current_objective_contract_check.js`, `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, and `npm run check:gameplay-contracts`.
+- Browser/runtime visual QA remains blocked in this workspace by Chromium `spawn EPERM`: `npm run smoke:mobile-webview`, `npm run smoke:systemic-loop`, and the `develop-web-game` Playwright client all fail before app launch. No fresh screenshots could be captured from this environment.
+- Runtime fallback hardening:
+- Added `scripts/current_objective_runtime_check.js`, which executes the actual `Player` and `Enemy` TypeScript logic under minimal Pixi/browser stubs to verify moving while attacking, native jump action, and close enemy pressure behavior without launching Chromium.
+- Included the runtime check in `npm run check:gameplay-contracts`.
+- Confirmed a system Chrome executable exists, but direct Puppeteer launch with `C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe` still fails with `spawn EPERM`, so the browser blocker is not limited to the bundled Chromium path.
+- Android QA attempt:
+- `adb devices -l` cannot run in this workspace because `adb.exe` tries to create `C:\\Users\\CodexSandboxOnline\\.android` and fails with permission denied, even when `ANDROID_USER_HOME`, `ANDROID_SDK_HOME`, `HOME`, and `USERPROFILE` are pointed into the repo.
+- `emulator -list-avds` produced no available AVD names, so there is no emulator target to launch for visual gameplay verification from this session.
+- Non-visual engagement fallback:
+- Added `scripts/current_objective_play_loop_check.js`, which parses the authored `LEVELS` data and menu layout helper to verify campaign variety and pacing without launching the game. It checks terrain profile diversity, biome diversity, spawn-pattern diversity, enemy roster coverage, 1-3 minute estimated run lengths, combat density, encounter spacing, level/kill ramping, active enemy pressure, and compact-viewport bounds for the third home-menu button.
+- Included the play-loop audit in `npm run check:gameplay-contracts`.
+- QA environment preflight:
+- Added `scripts/qa_environment_preflight.js` and `npm run qa:preflight` to capture whether browser or Android visual QA targets are launchable before running smoke tests.
+- Latest preflight wrote `output/qa-environment-preflight.json` and reported `browserLaunchable=false`, `adbUsable=false`, and `avds=none`; Chrome, Edge, adb, and emulator launches all fail with `EPERM` in this workspace.
+- Visual QA gate wrapper:
+- Added `scripts/run_visual_qa_gate.js` and `npm run qa:visual`. The wrapper runs `qa:preflight`, then runs the browser smoke suites only if a browser target is launchable.
+- In this workspace, `npm run qa:visual` fails fast with `Visual QA blocked: no browser target is launchable in this workspace`, pointing to `output/qa-environment-preflight.json`; this is expected and prevents a missing visual test from being mistaken for a game failure or a pass.
+- Tightened `npm run qa:visual` so in a browser-capable environment it now runs `build:webview`, `verify:webview-bundle`, `smoke:mobile-webview`, `smoke:systemic-loop`, and the develop-web-game client choreography that captures `output/web-game-current-objective/shot-*.png` plus `state-*.json`.
+- Visual QA handoff checklist:
+- Added `docs/CURRENT_OBJECTIVE_VISUAL_QA_CHECKLIST.md`, mapping the remaining visual/gameplay gate to exact commands, screenshots, state files, and pass criteria for browser and Android environments.
+- Visual QA unblocked:
+- Fixed `scripts/run_web_game_client_with_server.js` so the local HTTP server stays responsive while the develop-web-game Playwright client runs; the previous synchronous child process blocked Node's HTTP event loop.
+- Added deterministic Pixi render flushing in `GameEngine.step()` and browser-automation-only `preserveDrawingBuffer` so Playwright can capture nonblack WebGL canvas screenshots.
+- `npm run qa:web-game-client` now passes and writes visible gameplay screenshots plus `state-*.json` under `output/web-game-current-objective`.
+- Fresh completion verification passed:
+  `npx tsc --noEmit`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, and `npm run qa:visual`.
+- Inspected `output/web-game-current-objective/shot-0.png` and `output/batch1-mobile-smoke.png`; both show visible gameplay with HUD, player, enemies, and terrain.
+- Run-feel / variety / art follow-up:
+- User selected visual companion Option B, asking for stronger changes without a full animation rebuild.
+- Added `docs/superpowers/specs/2026-05-04-run-feel-variety-art-design.md` and `docs/superpowers/plans/2026-05-04-run-feel-variety-art.md` to capture the approved direction and checklist.
+- Used OpenAI image generation to create a six-biome side-scroller panorama and copied it into `assets/backgrounds/biome-panorama.png`.
+- Integrated the generated panorama in `BackgroundManager` as a low-parallax Pixi Sprite layer behind existing procedural geometry, and preloaded it through `spriteData.ts`.
+- Tuned airborne horizontal movement with an `airSpeedMultiplier` so sustained jump movement stays below grounded run speed while remaining responsive.
+- Changed level completion so reaching `targetKills` immediately clears the level; endpoint distance no longer blocks completion.
+- Added explicit `levelModifiers` to campaign and endless levels, including route style, hazard density, verticality, and pressure bias; snapshots now expose these modifiers.
+- Added `scripts/current_tuning_contract_check.js` for air-speed, kill-completion, modifier, and generated-art source/runtime coverage.
+- Added `scripts/target_kill_completion_smoke.js`, which verifies the WebView runtime transitions from `PLAYING` to `LEVEL_COMPLETE` at the target kill count.
+- Final verification for this pass:
+  `npx tsc --noEmit`, `npm run check:gameplay-contracts`, and `npm run qa:visual` all passed.
+- Inspected `output/web-game-current-objective/shot-0.png`, `output/batch1-mobile-smoke.png`, and `output/target-kill-completion/target-kill-completion.png`; generated coast art is visible and gameplay/UI remain readable.
+- Arcade Gauntlet follow-up:
+- Increased grounded run speed substantially while keeping airborne horizontal speed clearly lower than grounded speed.
+- Reworked enemy updates around a full player target snapshot so chasers can lead moving targets, keep pressure at encounter distance, hop/lunge at airborne players, and ranged enemies can queue predictive high/low shots.
+- Added real ground gaps to the physics engine and generated jump gaps per level, with pit fall recovery to the last safe point.
+- Added active terrain traps, currently spikes and cycling fire vents, with damage, screen rendering, and snapshot telemetry.
+- Made enemy spawns avoid gaps and traps so encounters do not start in impossible positions.
+- Tightened the generated-art background companion layer so procedural silhouettes stay subtle and Ruined Coast no longer gets floating window marks over the panorama.
+- Added `scripts/arcade_gauntlet_contract_check.js` and wired it into `npm run check:gameplay-contracts`.
+- Added `scripts/arcade_gauntlet_smoke.js` plus `npm run qa:arcade-gauntlet` to exercise gap visibility, a successful gap jump, and trap damage in the browser.
+- Verification for this pass:
+  `npx tsc --noEmit`, `npm run check:gameplay-contracts`, `npm run qa:visual`, and `npm run qa:arcade-gauntlet` all passed.
+- Inspected `output/web-game-current-objective/shot-0.png`, `output/arcade-gauntlet/near-gap.png`, `output/arcade-gauntlet/gap-jump.png`, and `output/arcade-gauntlet/trap-contact.png`; the playfield is readable and the new gaps/traps are visible.
+- Full art replacement / enemy roster follow-up:
+- Used OpenAI image generation for a full replacement atlas pass and processed the results into `assets/spritesheets/openai/hero-arcade.png`, `assets/spritesheets/openai/enemies-core.png`, `assets/spritesheets/openai/enemies-extra.png`, and `assets/spritesheets/openai/obstacles.png`.
+- Swapped the playable character, core enemies, added enemies, and trap overlays to the generated atlases through `src/game/assets/spriteData.ts`; obstacle sprites now render over the existing collision-safe hazard geometry.
+- Added four enemy behaviors: bomber range control with lobbed bombs, aerial diver attacks, fast aerial swoops, and a shielded guardian pressure unit.
+- Expanded campaign and endless rosters so later levels mix the full enemy set, and fixed spawn wave indexing so adding enemies during a wave no longer skips every other spawn-pattern entry.
+- Increased grounded run speed again and capped airborne sustained speed lower than grounded speed, preserving responsive air control while making ground movement clearly faster.
+- Reworked background panorama rendering to crop the selected biome panel explicitly, fixing the Sky Forge level-10 background so the generated art appears instead of a dark playfield.
+- Added `scripts/full_art_enemy_roster_contract_check.js` to the contract suite and added `scripts/full_art_roster_smoke.js` plus `npm run qa:full-art-roster` for a browser-level level-10 roster/art screenshot gate.
+- Final verification for this pass:
+  `npx tsc --noEmit`, `npm run qa:visual`, `npm run check:gameplay-contracts`, `npm run qa:full-art-roster`, and `npm run qa:arcade-gauntlet` all passed.
+- Inspected `output/full-art-roster/level-10-roster.png`, `output/web-game-current-objective/shot-0.png`, `output/arcade-gauntlet/near-gap.png`, and `output/arcade-gauntlet/gap-jump.png`; generated character/enemy art, Sky Forge background art, gaps, traps, and HUD remain visible.
+- Sprite polish / release follow-up:
+- Added explicit `facesRight` source-art metadata to sprite sheets and routed player/enemy facing through `SkeletalSprite.setFacingRight()`. Generated enemy sheets are now treated as left-facing source art, fixing the double-flip issue.
+- Added sheet-backed run bob/stride motion so the player reads as actively running even when sprite frames are subtle.
+- Added `scripts/sprite_motion_orientation_contract_check.js` and included it in `npm run check:gameplay-contracts`.
+- Bumped app versions to `1.8.13` and Android `versionCode` to `55`.
+- Rebuilt the WebView payload and Android release app bundle at `android/app/build/outputs/bundle/release/app-release.aab`; the AAB timestamp is `2026-05-04 16:21:32`, size `40,475,801` bytes, and release manifest intermediates show `versionCode=55`, `versionName=1.8.13`.
+- Verification for this release follow-up:
+  `node scripts/sprite_motion_orientation_contract_check.js`, `npx tsc --noEmit`, `npm run check:gameplay-contracts`, `npm run qa:visual`, `npm run qa:full-art-roster`, `npm run qa:arcade-gauntlet`, `android\\gradlew.bat :app:bundleRelease --no-daemon --stacktrace`, and `jarsigner -verify -verbose -certs android\\app\\build\\outputs\\bundle\\release\\app-release.aab` all exited 0.
+- Inspected `output/sprite-motion/run-right.png`, `output/full-art-roster/level-10-roster.png`, and `output/web-game-current-objective/shot-0.png`; the player shows a run pose and enemies to the right face toward the player.

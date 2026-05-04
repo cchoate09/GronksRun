@@ -7,6 +7,11 @@ export interface AABB {
     h: number;
 }
 
+export interface GroundGap {
+    x: number;
+    w: number;
+}
+
 export class Body implements AABB {
     public x: number = 0;
     public y: number = 0;
@@ -15,6 +20,7 @@ export class Body implements AABB {
 
     public vx: number = 0;
     public vy: number = 0;
+    public previousBottom: number = 0;
 
     public isStatic: boolean = false;
     public onGround: boolean = false;
@@ -26,6 +32,8 @@ export class Body implements AABB {
 
 export class PhysicsEngine {
     private bodies: Body[] = [];
+    private platforms: AABB[] = [];
+    private groundGaps: GroundGap[] = [];
     private gravity: number = 2000; // Strong base gravity for snappy jumping
     private groundY: number = 600;
 
@@ -44,6 +52,25 @@ export class PhysicsEngine {
         this.groundY = y;
     }
 
+    public addPlatform(platform: AABB): void {
+        this.platforms.push(platform);
+    }
+
+    public clearPlatforms(): void {
+        this.platforms = [];
+    }
+
+    public setGroundGaps(gaps: GroundGap[]): void {
+        this.groundGaps = gaps.map((gap) => ({
+            x: gap.x,
+            w: Math.max(0, gap.w),
+        }));
+    }
+
+    public clearGroundGaps(): void {
+        this.groundGaps = [];
+    }
+
     public step(dt: number): void {
         // Integrate forces
         for (const body of this.bodies) {
@@ -54,6 +81,8 @@ export class PhysicsEngine {
 
             // Apply terminal velocity
             if (body.vy > 1200) body.vy = 1200;
+
+            body.previousBottom = body.y + body.h;
 
             // Integrate velocity
             body.x += body.vx * dt;
@@ -74,11 +103,29 @@ export class PhysicsEngine {
 
             body.onGround = false;
 
-            if (body.y + body.h >= this.groundY) {
+            for (const platform of this.platforms) {
+                const nextBottom = body.y + body.h;
+                const overlapsX = body.x + body.w > platform.x && body.x < platform.x + platform.w;
+                const fallingOntoTop = body.vy >= 0 && body.previousBottom <= platform.y + 8 && nextBottom >= platform.y;
+                if (overlapsX && fallingOntoTop) {
+                    body.y = platform.y - body.h;
+                    body.vy = 0;
+                    body.onGround = true;
+                    break;
+                }
+            }
+
+            if (body.y + body.h >= this.groundY && !this.isOverGroundGap(body)) {
                 body.y = this.groundY - body.h;
                 body.vy = 0;
                 body.onGround = true;
             }
         }
+    }
+
+    private isOverGroundGap(body: Body): boolean {
+        if (!this.groundGaps.length) return false;
+        const footCenterX = body.x + body.w * 0.5;
+        return this.groundGaps.some((gap) => footCenterX > gap.x && footCenterX < gap.x + gap.w);
     }
 }

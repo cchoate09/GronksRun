@@ -2,14 +2,19 @@ import { Scene } from '../../engine/scenes/SceneManager';
 import { GameEngine } from '../../engine/GameEngine';
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { GameScene, LEVELS } from './GameScene';
-import { readNumber } from '../storage';
+import { readNumber, writeNumber } from '../storage';
+import { SoundManager } from '../audio/SoundManager';
+import { getMainMenuLayout, MainMenuButtonLayout } from './menuLayout';
 
-type MenuMode = 'MAIN' | 'LEVEL_SELECT';
+type MenuMode = 'MAIN' | 'LEVEL_SELECT' | 'SETTINGS';
 
 export class MenuScene extends Scene {
     private stage: Container;
     private mode: MenuMode = 'MAIN';
     private unlockedLevel: number = 1;
+    private difficulty: number = 1;
+    private soundEnabled: number = 1;
+    private mainMenuButtons: MainMenuButtonLayout[] = [];
 
     constructor(engine: GameEngine) {
         super(engine);
@@ -19,6 +24,8 @@ export class MenuScene extends Scene {
     public init(): void {
         this.engine.app.stage.addChild(this.stage);
         this.unlockedLevel = Math.max(1, Math.min(LEVELS.length, readNumber('gronk_unlocked_level', 1)));
+        this.difficulty = Math.max(0, Math.min(2, readNumber('gronk_difficulty', 1)));
+        this.soundEnabled = readNumber('gronk_sound_enabled', 1) ? 1 : 0;
         this.drawMainMenu();
         window.addEventListener('keydown', this.handleKeyDown);
         window.addEventListener('message', this.handleMessage as any);
@@ -48,34 +55,45 @@ export class MenuScene extends Scene {
         this.mode = 'MAIN';
         this.clear();
         this.drawBackdrop();
+        const layout = getMainMenuLayout(window.innerWidth, window.innerHeight);
+        this.mainMenuButtons = layout.buttons;
 
         const title = new Text({
             text: 'GRONK RUN',
             style: new TextStyle({
                 fill: 0xffffff,
-                fontSize: Math.min(72, Math.max(44, window.innerWidth * 0.07)),
+                fontSize: layout.titleFontSize,
                 fontWeight: 'bold',
                 dropShadow: { alpha: 0.55, angle: Math.PI / 6, blur: 4, color: '#000000', distance: 5 },
             }),
         });
         title.anchor.set(0.5);
-        title.position.set(window.innerWidth / 2, Math.max(76, window.innerHeight * 0.2));
+        title.position.set(window.innerWidth / 2, layout.titleY);
         this.stage.addChild(title);
 
         const subtitle = new Text({
             text: 'RUN  JUMP  POUND  STRIKE',
-            style: new TextStyle({ fill: 0x91e5ff, fontSize: 20, fontWeight: 'bold' }),
+            style: new TextStyle({ fill: 0x91e5ff, fontSize: layout.subtitleFontSize, fontWeight: 'bold' }),
         });
         subtitle.anchor.set(0.5);
-        subtitle.position.set(window.innerWidth / 2, title.y + 58);
+        subtitle.position.set(window.innerWidth / 2, layout.subtitleY);
         this.stage.addChild(subtitle);
 
-        const startY = Math.max(220, window.innerHeight * 0.46);
-        this.addButton(window.innerWidth / 2 - 130, startY, 260, 58, 'CONTINUE', 0x44ff88, () => {
+        const buttonsByLabel = new Map(layout.buttons.map((button) => [button.label, button]));
+        const continueButton = buttonsByLabel.get('CONTINUE')!;
+        this.addButton(continueButton.x, continueButton.y, continueButton.w, continueButton.h, 'CONTINUE', 0x44ff88, () => {
             GameScene.selectLevel(this.unlockedLevel);
             this.engine.scenes.loadScene(GameScene);
         });
-        this.addButton(window.innerWidth / 2 - 130, startY + 76, 260, 54, 'LEVEL SELECT', 0x67e8f9, () => this.drawLevelSelect());
+        const endlessButton = buttonsByLabel.get('ENDLESS RUN')!;
+        this.addButton(endlessButton.x, endlessButton.y, endlessButton.w, endlessButton.h, 'ENDLESS RUN', 0xffd166, () => {
+            GameScene.selectLevel(0);
+            this.engine.scenes.loadScene(GameScene);
+        });
+        const levelButton = buttonsByLabel.get('LEVEL SELECT')!;
+        this.addButton(levelButton.x, levelButton.y, levelButton.w, levelButton.h, 'LEVEL SELECT', 0x67e8f9, () => this.drawLevelSelect());
+        const settingsButton = buttonsByLabel.get('SETTINGS')!;
+        this.addButton(settingsButton.x, settingsButton.y, settingsButton.w, settingsButton.h, 'SETTINGS', 0xc4b5fd, () => this.drawSettings());
     }
 
     private drawLevelSelect(): void {
@@ -110,6 +128,49 @@ export class MenuScene extends Scene {
         this.addButton(panelX + 22, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
     }
 
+    private drawSettings(): void {
+        this.mode = 'SETTINGS';
+        this.clear();
+        this.drawBackdrop();
+
+        const title = new Text({ text: 'SETTINGS', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
+        title.anchor.set(0.5);
+        title.position.set(window.innerWidth / 2, 66);
+        this.stage.addChild(title);
+
+        const panelW = Math.min(680, window.innerWidth - 44);
+        const panelX = (window.innerWidth - panelW) / 2;
+        const panelY = 124;
+        const panel = new Graphics();
+        panel.roundRect(panelX, panelY, panelW, Math.max(270, window.innerHeight - 184), 10).fill(0x101822).stroke({ color: 0xc4b5fd, width: 2 });
+        this.stage.addChild(panel);
+
+        this.addSettingLabel(panelX + 32, panelY + 36, 'DIFFICULTY');
+        const labels = ['EASY', 'NORMAL', 'HARD'];
+        labels.forEach((label, index) => {
+            this.addButton(panelX + 32 + index * 148, panelY + 70, 128, 46, label, this.difficulty === index ? 0x44ff88 : 0x67e8f9, () => {
+                this.difficulty = index;
+                writeNumber('gronk_difficulty', this.difficulty);
+                this.drawSettings();
+            });
+        });
+
+        this.addSettingLabel(panelX + 32, panelY + 150, 'SOUND');
+        this.addButton(panelX + 32, panelY + 184, 180, 48, this.soundEnabled ? 'SOUND ON' : 'SOUND OFF', this.soundEnabled ? 0x44ff88 : 0xff7a45, () => {
+            this.soundEnabled = this.soundEnabled ? 0 : 1;
+            writeNumber('gronk_sound_enabled', this.soundEnabled);
+            this.drawSettings();
+        });
+
+        this.addButton(panelX + 32, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
+    }
+
+    private addSettingLabel(x: number, y: number, label: string): void {
+        const text = new Text({ text: label, style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold' }) });
+        text.position.set(x, y);
+        this.stage.addChild(text);
+    }
+
     private addLevelButton(x: number, y: number, w: number, h: number, id: number, name: string, color: number): void {
         const button = new Container();
         const bg = new Graphics();
@@ -128,6 +189,7 @@ export class MenuScene extends Scene {
         button.eventMode = 'static';
         button.cursor = 'pointer';
         button.on('pointerdown', () => {
+            SoundManager.playCue('select');
             GameScene.selectLevel(id);
             this.engine.scenes.loadScene(GameScene);
         });
@@ -148,7 +210,10 @@ export class MenuScene extends Scene {
         button.position.set(x, y);
         button.eventMode = 'static';
         button.cursor = 'pointer';
-        button.on('pointerdown', onClick);
+        button.on('pointerdown', () => {
+            SoundManager.playCue('select');
+            onClick();
+        });
         this.stage.addChild(button);
     }
 
@@ -158,7 +223,7 @@ export class MenuScene extends Scene {
             this.engine.input.clearActions();
             GameScene.selectLevel(this.unlockedLevel);
             this.engine.scenes.loadScene(GameScene);
-        } else if (this.mode === 'LEVEL_SELECT' && e.code === 'Escape') {
+        } else if ((this.mode === 'LEVEL_SELECT' || this.mode === 'SETTINGS') && e.code === 'Escape') {
             this.drawMainMenu();
         }
     };
@@ -190,7 +255,20 @@ export class MenuScene extends Scene {
 
     public getSnapshot(): unknown {
         return {
-            phase: this.mode === 'MAIN' ? 'MENU' : 'LEVEL_SELECT',
+            phase: this.mode === 'MAIN' ? 'MENU' : this.mode,
+            main_menu_buttons: this.mode === 'MAIN'
+                ? this.mainMenuButtons.map((button) => ({
+                    label: button.label,
+                    x: Math.round(button.x),
+                    y: Math.round(button.y),
+                    w: Math.round(button.w),
+                    h: Math.round(button.h),
+                }))
+                : [],
+            settings: {
+                difficulty: this.difficulty,
+                sound_enabled: this.soundEnabled === 1,
+            },
             unlocked_level: this.unlockedLevel,
             levels: LEVELS.map((level) => ({
                 id: level.id,

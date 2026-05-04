@@ -17,6 +17,8 @@ export class SkeletalSprite extends Container {
     private sheetSprite?: Sprite;
     private frames: Texture[] = [];
     private frameIndex: number = 0;
+    private baseSpriteX: number = 20;
+    private baseSpriteY: number = 82;
 
     constructor(color: number = 0x4488ff, sheet?: SpriteSheetDefinition) {
         super();
@@ -37,8 +39,10 @@ export class SkeletalSprite extends Container {
             }
 
             this.sheetSprite = new Sprite(this.frames[0]);
-            this.sheetSprite.anchor.set(0.5, 1);
-            this.sheetSprite.position.set(20, 82);
+            this.sheetSprite.anchor.set(sheet.anchorX ?? 0.5, sheet.anchorY ?? 1);
+            this.baseSpriteX = sheet.spriteOffsetX ?? 20;
+            this.baseSpriteY = sheet.spriteOffsetY ?? 82;
+            this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY);
             this.sheetSprite.scale.set(sheet.scale);
             this.addChild(this.sheetSprite);
             return;
@@ -94,6 +98,13 @@ export class SkeletalSprite extends Container {
         if (this.weapon) this.weapon.visible = state === 'ATTACK';
     }
 
+    public setFacingRight(facingRight: boolean, bodyWidth: number): void {
+        const sourceFacesRight = this.sheet?.facesRight ?? true;
+        const shouldFlip = facingRight !== sourceFacesRight;
+        this.scale.x = shouldFlip ? -1 : 1;
+        this.x = shouldFlip ? bodyWidth : 0;
+    }
+
     public update(dt: number, speedScale: number = 1): void {
         this.time += dt * speedScale;
 
@@ -103,9 +114,18 @@ export class SkeletalSprite extends Container {
             this.frameIndex = Math.floor(this.time * fps) % animation.length;
             this.sheetSprite.texture = this.frames[animation[this.frameIndex]] || this.frames[0];
 
-            if (this.state === 'ATTACK') {
+            if (this.state === 'RUN') {
+                const phase = this.time * 15;
+                const bounce = Math.abs(Math.sin(phase)) * 4;
+                const stride = Math.sin(phase) * 1.8;
+                this.sheetSprite.position.set(this.baseSpriteX + stride, this.baseSpriteY - bounce);
+                this.sheetSprite.rotation = Math.sin(phase) * 0.035;
+            } else if (this.state === 'ATTACK') {
+                this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY);
                 this.sheetSprite.rotation = Math.sin(this.time * 28) * 0.04;
             } else {
+                const breath = this.state === 'IDLE' ? Math.sin(this.time * 4) * 1.2 : 0;
+                this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY + breath);
                 this.sheetSprite.rotation = 0;
             }
             return;

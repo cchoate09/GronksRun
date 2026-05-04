@@ -21,6 +21,8 @@ export class GameEngine {
     }
 
     public async initialize(canvasElement: HTMLCanvasElement): Promise<void> {
+        const preserveDrawingBuffer = typeof navigator !== 'undefined' && navigator.webdriver === true;
+
         await this.app.init({
             canvas: canvasElement,
             resizeTo: window,
@@ -28,6 +30,7 @@ export class GameEngine {
             antialias: true,
             resolution: window.devicePixelRatio || 1,
             autoDensity: true,
+            preserveDrawingBuffer,
         });
 
         // Setup the game loop
@@ -72,5 +75,6 @@ export class GameEngine {
         }
 
         this.scenes.render(this.accumulator / this.fixedTimeStep);
+        this.app.render();
     }
 }

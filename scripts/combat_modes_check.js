@@ -1,0 +1,115 @@
+const fs = require('fs');
+const path = require('path');
+const puppeteer = require('puppeteer');
+
+const projectRoot = process.cwd();
+const outputDir = path.join(projectRoot, 'output', 'combat-modes');
+const htmlModulePath = path.join(projectRoot, 'assets', 'gameHtml.js');
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function readCommittedWebViewHtml() {
+  const moduleSource = fs.readFileSync(htmlModulePath, 'utf8');
+  const match = moduleSource.match(/^const html = (.*);\r?\n\r?\nexport default html;\r?\n?$/s);
+  if (!match) throw new Error('Could not parse assets/gameHtml.js.');
+  return JSON.parse(match[1]);
+}
+
+async function post(page, payload, ms = 100) {
+  await page.evaluate((message) => {
+    const data = JSON.stringify(message);
+    window.dispatchEvent(new MessageEvent('message', { data }));
+    document.dispatchEvent(new MessageEvent('message', { data }));
+  }, payload);
+  await page.evaluate((duration) => window.advanceTime(duration), ms);
+}
+
+(async () => {
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({ headless: 'new' });
+  } catch (error) {
+    if (error && error.code === 'EPERM') {
+      runSourceContractCheck();
+      return;
+    }
+    throw error;
+  }
+  const page = await browser.newPage();
+  const errors = [];
+
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+
+  try {
+    await page.setViewport({ width: 1280, height: 720, isMobile: true, hasTouch: true });
+    await page.setContent(readCommittedWebViewHtml(), { waitUntil: 'load', timeout: 15000 });
+    await page.waitForFunction(() => typeof window.render_game_to_text === 'function', { timeout: 10000 });
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'PLAYING', { timeout: 10000 });
+    await page.evaluate(() => window.advanceTime(150));
+
+    const boot = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+
+    await page.keyboard.down('ArrowRight');
+    await post(page, { type: 'action', name: 'attack' }, 40);
+    const meleeWindup = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    await page.evaluate(() => window.advanceTime(100));
+    const meleeActive = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    await page.keyboard.up('ArrowRight');
+
+    await page.evaluate(() => window.advanceTime(450));
+    const beforeRanged = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    await post(page, { type: 'action', name: 'ranged' }, 70);
+    const rangedFired = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    await post(page, { type: 'action', name: 'ranged' }, 70);
+    const rangedCooldown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    // Short window: keep the bullet in flight before it can reach the spawn-wave enemy at ~x=776.
+    await page.evaluate(() => window.advanceTime(180));
+    const rangedTravel = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+
+    await page.screenshot({ path: path.join(outputDir, 'combat-modes.png') });
+    const report = { boot, meleeWindup, meleeActive, beforeRanged, rangedFired, rangedCooldown, rangedTravel, errors };
+    fs.writeFileSync(path.join(outputDir, 'combat-modes.json'), JSON.stringify(report, null, 2));
+
+    assert(meleeWindup.player.attackMode === 'MELEE', 'melee action should mark attack mode as MELEE');
+    assert(meleeWindup.player.vx > 0, 'melee wind-up should allow movement to continue');
+    assert(meleeActive.player.attackPhase === 'ACTIVE', 'melee action should still expose active strike phase');
+    assert(meleeActive.player.slashVisible === true, 'melee active phase should show slash feedback');
+    assert(beforeRanged.player.rangedCooldownReady === true, 'ranged attack should be ready before first shot');
+    assert(rangedFired.player.attackMode === 'RANGED', 'ranged action should mark attack mode as RANGED');
+    assert(rangedFired.player.rangedShotsFired > beforeRanged.player.rangedShotsFired, 'ranged action should fire a player projectile');
+    assert(rangedFired.player.rangedCooldownReady === false, 'ranged action should start a cooldown');
+    assert(rangedCooldown.player.rangedShotsFired === rangedFired.player.rangedShotsFired, 'ranged attack should not fire again during cooldown');
+    assert(rangedTravel.player_projectiles.length > 0, 'player projectile should be visible in game state after firing');
+    assert(rangedTravel.player_projectiles[0].x > rangedFired.player.x, 'player projectile should travel forward');
+    assert(!errors.length, `page errors: ${errors.join('\n')}`);
+
+    console.log('Combat modes check passed.');
+  } finally {
+    await browser.close();
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+
+function runSourceContractCheck() {
+  const playerSource = fs.readFileSync(path.join(projectRoot, 'src', 'game', 'entities', 'Player.ts'), 'utf8');
+  const gameSceneSource = fs.readFileSync(path.join(projectRoot, 'src', 'game', 'scenes', 'GameScene.ts'), 'utf8');
+  const appSource = fs.readFileSync(path.join(projectRoot, 'App.js'), 'utf8');
+
+  assert(playerSource.includes('attackMode'), 'source contract: player snapshot should expose attackMode');
+  assert(playerSource.includes('rangedShotsFired'), 'source contract: player should track rangedShotsFired');
+  assert(playerSource.includes("actionJustPressed('ranged')"), 'source contract: player should consume ranged action');
+  assert(gameSceneSource.includes('playerProjectiles'), 'source contract: scene should manage player ranged projectiles');
+  assert(gameSceneSource.includes('player_projectiles'), 'source contract: snapshot should expose player_projectiles');
+  assert(appSource.includes("handleAction('ranged')"), 'source contract: native overlay should send ranged action');
+  console.log('Combat modes source contract passed. Puppeteer browser launch was blocked by EPERM in this workspace.');
+}

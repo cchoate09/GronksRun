@@ -232,8 +232,17 @@ function GameApp() {
             </View>
 
             <View style={styles.actionButtonsContainer}>
+                <View onTouchStart={() => handleAction('jump')} style={[styles.actionButton, styles.jumpButton]}>
+                    <Text style={styles.jumpText}>JUMP</Text>
+                </View>
+                <View onTouchStart={() => handleAction('pause')} style={[styles.actionButton, styles.pauseButton]}>
+                    <Text style={styles.pauseText}>II</Text>
+                </View>
+                <View onTouchStart={() => handleAction('ranged')} style={[styles.actionButton, styles.rangedButton]}>
+                    <Text style={styles.rangedText}>RANGED</Text>
+                </View>
                 <View onTouchStart={() => handleAction('attack')} style={[styles.actionButton, styles.attackButton]}>
-                    <Text style={styles.attackText}>ATTACK</Text>
+                    <Text style={styles.attackText}>MELEE</Text>
                 </View>
             </View>
         </View>
@@ -262,11 +271,17 @@ const styles = StyleSheet.create({
   joystickContainer: { position: 'absolute', left: 28, bottom: 34, width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
   joystickBase: { width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   joystickStick: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.4)' },
-  actionButtonsContainer: { position: 'absolute', right: 46, bottom: 58, alignItems: 'flex-end' },
+  actionButtonsContainer: { position: 'absolute', right: 30, bottom: 38, alignItems: 'center', flexDirection: 'row', gap: 10 },
   actionButton: { borderRadius: 40, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
-  attackButton: { width: 100, height: 100, backgroundColor: 'rgba(255,85,85,0.4)', borderColor: '#ff5555' },
+  attackButton: { width: 88, height: 88, backgroundColor: 'rgba(255,85,85,0.4)', borderColor: '#ff5555' },
+  rangedButton: { width: 76, height: 76, backgroundColor: 'rgba(103,232,249,0.32)', borderColor: '#67e8f9' },
+  jumpButton: { width: 76, height: 76, backgroundColor: 'rgba(68,255,136,0.32)', borderColor: '#44ff88' },
+  pauseButton: { width: 54, height: 54, backgroundColor: 'rgba(196,181,253,0.3)', borderColor: '#c4b5fd' },
   buttonText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  attackText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  attackText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  rangedText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  jumpText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
+  pauseText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   errorContainer: { flex: 1, backgroundColor: '#0a1628', justifyContent: 'center', alignItems: 'center', padding: 40 },
   errorTitle: { color: '#FF6644', fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   errorMessage: { color: '#AABBCC', fontSize: 14, textAlign: 'center', marginBottom: 32, fontFamily: 'monospace' },

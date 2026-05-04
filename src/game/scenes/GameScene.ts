@@ -19,20 +19,23 @@ export interface LevelDefinition {
     maxActive: number;
     enemyKinds: EnemyKind[];
     spawnGap: number;
+    runUpDistance: number;
+    encounterSpacing: number;
+    levelLength: number;
     reward: number;
 }
 
 export const LEVELS: LevelDefinition[] = [
-    { id: 1, name: 'Blue Gate', biome: 'Ruined Coast', targetKills: 3, maxActive: 1, enemyKinds: ['CHASER'], spawnGap: 0.8, reward: 20 },
-    { id: 2, name: 'Broken Steps', biome: 'Ruined Coast', targetKills: 4, maxActive: 2, enemyKinds: ['CHASER'], spawnGap: 0.7, reward: 25 },
-    { id: 3, name: 'Witchline', biome: 'Moonlit Road', targetKills: 5, maxActive: 2, enemyKinds: ['CHASER', 'RANGED'], spawnGap: 0.65, reward: 30 },
-    { id: 4, name: 'Serpent Run', biome: 'Temple Jungle', targetKills: 6, maxActive: 2, enemyKinds: ['CHASER', 'SERPENT'], spawnGap: 0.6, reward: 35 },
-    { id: 5, name: 'Stone Guard', biome: 'Temple Jungle', targetKills: 7, maxActive: 2, enemyKinds: ['CHASER', 'HEAVY'], spawnGap: 0.55, reward: 40 },
-    { id: 6, name: 'Crossfire', biome: 'Ash Ravine', targetKills: 8, maxActive: 3, enemyKinds: ['CHASER', 'RANGED', 'SERPENT'], spawnGap: 0.52, reward: 45 },
-    { id: 7, name: 'Golem Bridge', biome: 'Ash Ravine', targetKills: 9, maxActive: 3, enemyKinds: ['CHASER', 'HEAVY', 'RANGED'], spawnGap: 0.5, reward: 50 },
-    { id: 8, name: 'Night Ambush', biome: 'Glass City', targetKills: 10, maxActive: 3, enemyKinds: ['CHASER', 'SERPENT', 'RANGED'], spawnGap: 0.48, reward: 60 },
-    { id: 9, name: 'Iron Rush', biome: 'Glass City', targetKills: 11, maxActive: 4, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT'], spawnGap: 0.46, reward: 70 },
-    { id: 10, name: 'Gronk Gauntlet', biome: 'Sky Forge', targetKills: 12, maxActive: 4, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT'], spawnGap: 0.42, reward: 100 },
+    { id: 1, name: 'Blue Gate', biome: 'Ruined Coast', targetKills: 3, maxActive: 1, enemyKinds: ['CHASER'], spawnGap: 1.0, runUpDistance: 760, encounterSpacing: 580, levelLength: 2600, reward: 20 },
+    { id: 2, name: 'Broken Steps', biome: 'Ruined Coast', targetKills: 4, maxActive: 1, enemyKinds: ['CHASER'], spawnGap: 0.95, runUpDistance: 820, encounterSpacing: 540, levelLength: 3200, reward: 25 },
+    { id: 3, name: 'Witchline', biome: 'Moonlit Road', targetKills: 5, maxActive: 2, enemyKinds: ['CHASER', 'RANGED'], spawnGap: 0.9, runUpDistance: 880, encounterSpacing: 520, levelLength: 3800, reward: 30 },
+    { id: 4, name: 'Serpent Run', biome: 'Temple Jungle', targetKills: 6, maxActive: 2, enemyKinds: ['CHASER', 'SERPENT'], spawnGap: 0.85, runUpDistance: 900, encounterSpacing: 500, levelLength: 4300, reward: 35 },
+    { id: 5, name: 'Stone Guard', biome: 'Temple Jungle', targetKills: 7, maxActive: 2, enemyKinds: ['CHASER', 'HEAVY'], spawnGap: 0.8, runUpDistance: 920, encounterSpacing: 500, levelLength: 4800, reward: 40 },
+    { id: 6, name: 'Crossfire', biome: 'Ash Ravine', targetKills: 8, maxActive: 2, enemyKinds: ['CHASER', 'RANGED', 'SERPENT'], spawnGap: 0.76, runUpDistance: 940, encounterSpacing: 480, levelLength: 5300, reward: 45 },
+    { id: 7, name: 'Golem Bridge', biome: 'Ash Ravine', targetKills: 9, maxActive: 3, enemyKinds: ['CHASER', 'HEAVY', 'RANGED'], spawnGap: 0.72, runUpDistance: 960, encounterSpacing: 470, levelLength: 5800, reward: 50 },
+    { id: 8, name: 'Night Ambush', biome: 'Glass City', targetKills: 10, maxActive: 3, enemyKinds: ['CHASER', 'SERPENT', 'RANGED'], spawnGap: 0.68, runUpDistance: 980, encounterSpacing: 460, levelLength: 6300, reward: 60 },
+    { id: 9, name: 'Iron Rush', biome: 'Glass City', targetKills: 11, maxActive: 3, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT'], spawnGap: 0.64, runUpDistance: 1000, encounterSpacing: 450, levelLength: 6800, reward: 70 },
+    { id: 10, name: 'Gronk Gauntlet', biome: 'Sky Forge', targetKills: 12, maxActive: 3, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT'], spawnGap: 0.6, runUpDistance: 1040, encounterSpacing: 440, levelLength: 7400, reward: 100 },
 ];
 
 export class GameScene extends Scene {
@@ -59,6 +62,8 @@ export class GameScene extends Scene {
     private ground: Graphics;
     private resizeHandler: () => void;
     private spawnTimer: number = 0;
+    private nextSpawnX: number = 0;
+    private cameraX: number = 0;
     private lastResolvedAttackId: number = -1;
     private hitThisAttack: Set<Enemy> = new Set();
     private state: 'PLAYING' | 'LEVEL_COMPLETE' | 'DEAD' = 'PLAYING';
@@ -76,13 +81,14 @@ export class GameScene extends Scene {
         this.groundY = this.calculateGroundY();
         this.engine.physics.setGroundY(this.groundY);
         
-        this.background = new BackgroundManager(this.stage, window.innerWidth, window.innerHeight);
+        this.background = new BackgroundManager(this.stage, this.level.levelLength + window.innerWidth, window.innerHeight);
         
         this.ground = new Graphics();
         this.drawGround();
         this.stage.addChild(this.ground);
 
         this.player = new Player();
+        this.player.setWorldBounds(this.level.levelLength);
         this.hud = new HUD();
         this.particles = new ParticleSystem();
         
@@ -103,6 +109,7 @@ export class GameScene extends Scene {
         window.addEventListener('keydown', this.handleKeyDown);
 
         this.gems = readNumber('gronk_gems', 0);
+        this.nextSpawnX = this.level.runUpDistance;
 
         this.spawnWave(true);
         this.updateHUD();
@@ -125,9 +132,10 @@ export class GameScene extends Scene {
     private drawGround(): void {
         this.ground.clear();
         const topColor = this.level.id >= 8 ? 0x88e0ff : this.level.id >= 5 ? 0xffb347 : 0x50d6a8;
-        this.ground.rect(0, this.groundY, window.innerWidth * 2, 18).fill(topColor);
-        this.ground.rect(0, this.groundY + 18, window.innerWidth * 2, Math.max(160, window.innerHeight - this.groundY)).fill(0x12131a);
-        for (let i = 0; i < window.innerWidth * 2; i += 96) {
+        const groundWidth = Math.max(this.level.levelLength + window.innerWidth, window.innerWidth * 2);
+        this.ground.rect(0, this.groundY, groundWidth, 18).fill(topColor);
+        this.ground.rect(0, this.groundY + 18, groundWidth, Math.max(160, window.innerHeight - this.groundY)).fill(0x12131a);
+        for (let i = 0; i < groundWidth; i += 96) {
             this.ground.rect(i, this.groundY + 18, 4, window.innerHeight).fill(this.level.id >= 5 ? 0x33241e : 0x16262e);
             this.ground.circle(i + 38, this.groundY + 38, 7).fill(0x263647);
         }
@@ -139,6 +147,7 @@ export class GameScene extends Scene {
         this.groundY = nextGroundY;
         this.engine.physics.setGroundY(this.groundY);
         this.drawGround();
+        this.player.setWorldBounds(this.level.levelLength);
         this.player.body.y = Math.min(this.player.body.y, this.groundY - this.player.body.h);
         for (const enemy of this.enemies) {
             enemy.body.y = Math.min(enemy.body.y, this.groundY - enemy.body.h);
@@ -152,14 +161,16 @@ export class GameScene extends Scene {
 
         for (let i = 0; i < needed; i++) {
             const kind = this.level.enemyKinds[(this.kills + this.enemies.length + i) % this.level.enemyKinds.length];
-            const spacing = initial ? 180 : 110;
-            const maxX = Math.max(360, window.innerWidth - 120);
-            const x = Math.min(maxX, 430 + i * spacing + Math.random() * 50);
+            const spacing = initial ? 150 : 120;
+            const minVisibleAhead = this.player.body.x + 520;
+            const maxSpawnX = this.level.levelLength - 180;
+            const x = Math.min(maxSpawnX, Math.max(this.nextSpawnX, minVisibleAhead) + i * spacing + Math.random() * 40);
             const enemy = this.createEnemy(kind, x);
             this.enemies.push(enemy);
             this.stage.addChild(enemy.view);
             this.engine.physics.addBody(enemy.body);
         }
+        this.nextSpawnX = Math.min(this.level.levelLength - 180, this.nextSpawnX + this.level.encounterSpacing);
     }
 
     private createEnemy(kind: EnemyKind, x: number): Enemy {
@@ -189,7 +200,8 @@ export class GameScene extends Scene {
         }
 
         this.player.update(dt, this.engine.input);
-        this.background.update(dt, this.player.body.x);
+        this.updateCamera();
+        this.background.update(dt, this.cameraX);
         this.particles.update(dt);
 
         if (this.player.attackId !== this.lastResolvedAttackId) {
@@ -199,19 +211,27 @@ export class GameScene extends Scene {
 
         if (this.shakeTimer > 0) {
             this.shakeTimer -= dt;
-            this.stage.position.set((Math.random() - 0.5) * this.shakeIntensity, (Math.random() - 0.5) * this.shakeIntensity);
+            this.stage.position.set(-this.cameraX + (Math.random() - 0.5) * this.shakeIntensity, (Math.random() - 0.5) * this.shakeIntensity);
         } else {
-            this.stage.position.set(0, 0);
+            this.stage.position.set(-this.cameraX, 0);
         }
 
         this.updateProjectiles(dt);
         this.updateEnemies(dt);
 
         this.spawnTimer -= dt;
-        if (this.spawnTimer <= 0) {
+        if (this.spawnTimer <= 0 && this.player.body.x + window.innerWidth * 0.78 >= this.nextSpawnX) {
             this.spawnTimer = this.level.spawnGap;
             this.spawnWave();
         }
+    }
+
+    private updateCamera(): void {
+        const target = Math.max(0, this.player.body.x - window.innerWidth * 0.34);
+        const maxCamera = Math.max(0, this.level.levelLength - window.innerWidth);
+        this.cameraX += (Math.min(maxCamera, target) - this.cameraX) * 0.14;
+        this.stage.x = -this.cameraX;
+        this.stage.y = 0;
     }
 
     private updateProjectiles(dt: number): void {
@@ -247,12 +267,12 @@ export class GameScene extends Scene {
                 this.engine.physics.addBody(p.body);
             }
 
-            const playerCanHurt = this.player.isAttacking || this.player.isDashing;
+            const playerCanHurt = this.player.canDealAttackDamage();
             if (playerCanHurt && this.attackOverlaps(enemy) && !this.hitThisAttack.has(enemy)) {
                 this.hitThisAttack.add(enemy);
-                enemy.takeDamage(this.player.isDashing ? 45 : 55, this.player.facingRight ? 1 : -1);
+                enemy.takeDamage(this.player.isDashing ? 38 : 28, this.player.facingRight ? 1 : -1);
                 this.applyShake(10, 0.1);
-                this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + enemy.body.h / 2, 0xffffff, 8);
+                this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + enemy.body.h / 2, 0xfff1a8, 12);
                 if (enemy.isDead) this.registerKill(enemy);
                 this.updateHUD();
                 continue;
@@ -406,6 +426,7 @@ export class GameScene extends Scene {
             gems: this.gems,
             player: {
                 x: Math.round(this.player.body.x),
+                screenX: Math.round(this.player.body.x - this.cameraX),
                 y: Math.round(this.player.body.y),
                 vx: Math.round(this.player.body.vx),
                 vy: Math.round(this.player.body.vy),
@@ -415,10 +436,19 @@ export class GameScene extends Scene {
                 dashing: this.player.isDashing,
                 facingRight: this.player.facingRight,
                 attackId: this.player.attackId,
+                attackPhase: this.player.attackPhase,
+                slashVisible: this.player.isSlashVisible(),
+            },
+            camera: { x: Math.round(this.cameraX) },
+            pacing: {
+                run_up_distance: this.level.runUpDistance,
+                next_spawn_x: Math.round(this.nextSpawnX),
+                level_length: this.level.levelLength,
             },
             enemies: this.enemies.map((enemy) => ({
                 type: enemy.type,
                 x: Math.round(enemy.body.x),
+                screenX: Math.round(enemy.body.x - this.cameraX),
                 y: Math.round(enemy.body.y),
                 hp: enemy.hp,
                 dead: enemy.isDead,

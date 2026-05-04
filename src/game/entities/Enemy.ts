@@ -93,7 +93,11 @@ export class Enemy {
 
     protected aiLogic(dt: number, targetX: number): void {
         const dx = targetX - this.body.x;
-        if (Math.abs(dx) > 112) {
+        if (Math.abs(dx) > 460) {
+            this.body.vx = 0;
+            this.facingRight = dx > 0;
+            this.sprite.setState('IDLE');
+        } else if (Math.abs(dx) > 112) {
             this.body.vx = Math.sign(dx) * this.speed;
             this.facingRight = dx > 0;
             this.sprite.setState('RUN');
@@ -145,7 +149,11 @@ export class RangedEnemy extends Enemy {
         const dx = targetX - this.body.x;
         const dist = Math.abs(dx);
 
-        if (dist > 400) {
+        if (dist > 560) {
+            this.body.vx = 0;
+            this.facingRight = dx > 0;
+            this.sprite.setState('IDLE');
+        } else if (dist > 400) {
             this.body.vx = Math.sign(dx) * this.speed;
             this.facingRight = dx > 0;
             this.sprite.setState('RUN');

@@ -32,7 +32,7 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
         animations: {
             IDLE: [0, 1, 2, 3],
             RUN: [8, 9, 10, 11, 12, 13],
-            ATTACK: [16, 17, 18, 19],
+            ATTACK: [0, 1, 2, 3],
             HIT: [4],
         },
     },
@@ -47,7 +47,7 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
         animations: {
             IDLE: [0, 1, 2, 3],
             RUN: [8, 9, 10, 11, 12, 13],
-            ATTACK: [16, 17, 18, 19],
+            ATTACK: [0, 1, 2, 3],
             HIT: [4],
         },
     },
@@ -62,7 +62,7 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
         animations: {
             IDLE: [0, 1, 2, 3],
             RUN: [8, 9, 10, 11, 12, 13],
-            ATTACK: [16, 17, 18, 19],
+            ATTACK: [0, 1, 2, 3],
             HIT: [4],
         },
     },

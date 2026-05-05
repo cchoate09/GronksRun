@@ -116,9 +116,8 @@ async function advanceUntilProjectileVisible(page) {
     assert(rangedFired.player.rangedShotsFired > beforeRanged.player.rangedShotsFired, 'ranged action should fire a player projectile');
     assert(rangedFired.player.rangedCooldownReady === false, 'ranged action should start a cooldown');
     assert(rangedCooldown.player.rangedShotsFired === rangedFired.player.rangedShotsFired, 'ranged attack should not fire again during cooldown');
-    if (rangedTravel.player_projectiles.length > 0) {
-      assert(rangedTravel.player_projectiles[0].x > rangedFired.player.x, 'player projectile should travel forward');
-    }
+    assert(rangedTravel.player_projectiles.length > 0, 'player projectile should be visible in game state after firing');
+    assert(rangedTravel.player_projectiles[0].x > rangedFired.player.x, 'player projectile should travel forward');
     assert(!errors.length, `page errors: ${errors.join('\n')}`);
 
     console.log('Combat modes check passed.');

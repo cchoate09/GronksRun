@@ -89,6 +89,11 @@ export class Player {
         if (this.hp < 0) this.hp = 0;
     }
 
+    public grantInvincibility(seconds: number): void {
+        this.isHit = true;
+        this.hitTimer = Math.max(this.hitTimer, seconds);
+    }
+
     public update(dt: number, input: InputManager): void {
         if (this.isHit) {
             this.hitTimer -= dt;

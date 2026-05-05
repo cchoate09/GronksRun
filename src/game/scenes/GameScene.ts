@@ -274,6 +274,9 @@ export class GameScene extends Scene {
             }
             if (data.type === 'adNotReady' || data.type === 'adError') {
                 this.adReady = false;
+                if (data.type === 'adError') {
+                    console.warn('Rewarded ad error:', data.code ?? 'unknown', data.message ?? '');
+                }
                 if (this.state === 'DEAD') this.drawDeadOverlay();
                 return;
             }
@@ -974,6 +977,15 @@ export class GameScene extends Scene {
         return this.terrainGaps.find((gap) => x >= gap.x - 16 && x <= gap.x + gap.w + 16) || null;
     }
 
+    private isEnemyNearGroundGap(enemy: Enemy): boolean {
+        if (enemy.body.gravityScale === 0) return false;
+        const dir = enemy.body.vx >= 0 ? 1 : -1;
+        const lookAhead = enemy.body.w * 0.5 + Math.min(92, Math.max(42, Math.abs(enemy.body.vx) * 0.16));
+        const frontX = dir > 0 ? enemy.body.x + enemy.body.w + lookAhead : enemy.body.x - lookAhead;
+        return this.findGroundGapAt(enemy.body.x + enemy.body.w * 0.5) !== null
+            || this.findGroundGapAt(frontX) !== null;
+    }
+
     private registerKill(enemy: Enemy): void {
         this.kills++;
         this.gems += 5;
@@ -1183,8 +1195,13 @@ export class GameScene extends Scene {
 
     private requestRewardedContinue(): void {
         if (!this.canOfferRewardedContinue()) return;
+        const bridge = window.ReactNativeWebView;
+        if (!bridge) {
+            console.warn('Rewarded continue requested but ReactNativeWebView bridge is unavailable.');
+            return;
+        }
         this.adReady = false;
-        window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'showAd', rewardType: 'continue' }));
+        bridge.postMessage(JSON.stringify({ type: 'showAd', rewardType: 'continue' }));
         this.drawDeadOverlay();
     }
 
@@ -1192,7 +1209,6 @@ export class GameScene extends Scene {
         if (this.state !== 'DEAD' || this.adContinueUsed) return;
         this.adContinueUsed = true;
         this.player.hp = Math.max(55, this.player.hp);
-        this.player.isHit = false;
         this.player.body.x = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
         this.player.body.y = this.groundY - this.player.body.h - 2;
         this.player.body.vx = 240;
@@ -1204,6 +1220,9 @@ export class GameScene extends Scene {
             this.engine.physics.removeBody(projectile.body);
         });
         this.projectiles = [];
+        this.bombExplosions.forEach((explosion) => this.stage.removeChild(explosion.view));
+        this.bombExplosions = [];
+        this.player.grantInvincibility(1.2);
         this.state = 'PLAYING';
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');
@@ -1349,7 +1368,7 @@ export class GameScene extends Scene {
                 dead: enemy.isDead,
                 attacking: enemy.isAttacking,
                 mechanic: enemy.mechanic,
-                enemy_gap_aware: enemy.body.gravityScale !== 0,
+                enemy_gap_aware: this.isEnemyNearGroundGap(enemy),
             })),
             player_projectiles: this.playerProjectiles.map((projectile) => ({
                 x: Math.round(projectile.body.x),

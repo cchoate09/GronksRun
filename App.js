@@ -62,6 +62,7 @@ function GameApp() {
   const adLoadedRef = useRef(false);
   const pendingRewardType = useRef(null);
   const appStateRef = useRef(AppState.currentState || 'active');
+  const adRetryTimerRef = useRef(null);
 
   const [webViewLoaded, setWebViewLoaded] = useState(false);
   const [joystick, setJoystick] = useState({ x: 0, y: 0 });
@@ -152,7 +153,18 @@ function GameApp() {
     const onAdError = rewardedInterstitial.addAdEventListener(AdEventType.ERROR, (error) => {
       console.log('Ad error:', error);
       adLoadedRef.current = false;
-      setTimeout(loadAd, 30000);
+      const code = error?.code || error?.nativeErrorCode || 'unknown';
+      const message = error?.message || error?.nativeErrorMessage || String(error);
+      sendToGame('adError', { code, message });
+      void captureError(error instanceof Error ? error : new Error(message), {
+        source: 'rewarded_ad_error',
+        ad_error_code: String(code),
+      });
+      if (adRetryTimerRef.current != null) clearTimeout(adRetryTimerRef.current);
+      adRetryTimerRef.current = setTimeout(() => {
+        adRetryTimerRef.current = null;
+        loadAd();
+      }, 30000);
     });
 
     loadAd();
@@ -165,6 +177,10 @@ function GameApp() {
       onAdEarned();
       onAdClosed();
       onAdError();
+      if (adRetryTimerRef.current != null) {
+        clearTimeout(adRetryTimerRef.current);
+        adRetryTimerRef.current = null;
+      }
     };
   }, [loadAd, sendToGame, sendWindowMetrics]);
 

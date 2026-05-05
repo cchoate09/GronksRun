@@ -111,6 +111,15 @@ async function postNativeMessage(page, message, ms = 0) {
         await page.evaluate(() => window.advanceTime(25));
         afterJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       }
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 }, 20);
+      await postNativeMessage(page, {
+        type: 'debugSetPlayer',
+        x: afterJump.player.x,
+        y: Math.max(80, beforeJump.player.y - 96),
+        vx: 0,
+        vy: -120,
+        onGround: false,
+      }, 20);
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 1 }, 80);
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 });
       const afterJoystickDown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));

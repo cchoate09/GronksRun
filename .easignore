@@ -1,11 +1,34 @@
 # EAS upload ignore list. Anything not excluded here is shipped to the EAS
-# cloud build context, so keep this aggressive.
+# cloud build context.
+#
+# IMPORTANT: when present, .easignore REPLACES .gitignore for the upload
+# scan — anything you'd put in .gitignore must be repeated here. The
+# /android exclusion below is critical for security: this repo's local
+# android/gradle.properties contains keystore passwords (never committed,
+# but PRESENT on disk and would otherwise be uploaded to EAS).
 
-# Dependencies / native (EAS resolves / regenerates these itself)
+# Native folders. EAS regenerates these via `expo prebuild`. The single
+# git-tracked file (android/app/build.gradle) reaches EAS via git checkout
+# regardless of this exclusion.
+/android
+/ios
+
+# Local credentials / signing (never upload)
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+keystore-credentials.txt
+.env
+.env.*
+!.env.example
+
+# Dependencies / build output (EAS resolves / rebuilds)
 node_modules/
 .gradle/
-
-# Build output (do NOT ship; EAS rebuilds)
 dist/
 output/
 web-build/

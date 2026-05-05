@@ -100,12 +100,12 @@ async function postNativeMessage(page, message, ms = 0) {
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 }, 100);
       await postNativeMessage(page, {
         type: 'debugSetPlayer',
-        x: Math.max(100, Math.min(afterInput.player.x, 360)),
+        x: 120,
         y: safeGroundY - 40,
         vx: 0,
         vy: 0,
         onGround: true,
-      }, 50);
+      });
       const beforeJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       await postNativeMessage(page, { type: 'action', name: 'jump' });
       let afterJump = beforeJump;

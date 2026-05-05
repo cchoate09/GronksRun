@@ -52,6 +52,12 @@ export class MenuScene extends Scene {
         this.buttonRegistry = [];
     }
 
+    private flushPersistence(): void {
+        // localStorage is synchronous in the WebView, so this is a no-op today,
+        // but it's the explicit "save everything before exit" hook for any
+        // future async persistence layer.
+    }
+
     private drawBackdrop(): void {
         const bg = new Graphics();
         bg.rect(0, 0, window.innerWidth, window.innerHeight).fill(0x0a1018);
@@ -395,7 +401,10 @@ export class MenuScene extends Scene {
             const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
             if (data.type === 'backButton') {
                 if (this.mode === 'MAIN') {
-                    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'exitApp' }));
+                    // Flush any pending writes (storage is sync today; placeholder for
+                    // future async persistence). Then signal the host it's safe to exit.
+                    this.flushPersistence();
+                    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'safeToExit' }));
                 } else {
                     this.drawMainMenu();
                 }

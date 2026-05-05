@@ -146,8 +146,13 @@ function GameApp() {
     });
 
     const onAdEarned = rewardedInterstitial.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward) => {
-      sendToGame('adRewarded', { rewardType: pendingRewardType.current, amount: reward.amount });
+      // Some AdMob mediation paths fire EARNED_REWARD more than once for a
+      // single view. Capture and null pendingRewardType atomically so a
+      // duplicate fire is silently dropped instead of granting a 2x reward.
+      const rewardType = pendingRewardType.current;
+      if (!rewardType) return;
       pendingRewardType.current = null;
+      sendToGame('adRewarded', { rewardType, amount: reward.amount });
     });
 
     const onAdClosed = rewardedInterstitial.addAdEventListener(AdEventType.CLOSED, () => {
@@ -201,7 +206,7 @@ function GameApp() {
         }
       } else if (msg.type === 'gameUiState') {
         setShowGameControls(msg.controlsVisible === true);
-      } else if (msg.type === 'exitApp') BackHandler.exitApp();
+      } else if (msg.type === 'exitApp' || msg.type === 'safeToExit') BackHandler.exitApp();
       else if (msg.type === 'haptic') {
         const p = msg.pattern;
         if (Array.isArray(p)) Vibration.vibrate(p);

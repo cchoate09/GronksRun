@@ -77,18 +77,43 @@ if (bundleStat.mtimeMs + 2000 < sourceMtime) {
   fail(`assets/gameHtml.js (${bundleDate}) is older than newest source (${sourceDate}). Run \`npm run build:webview\`.`);
 }
 
-// Parse-smoke: extract the inlined script tag content and compile it with
-// vm.Script. Compilation parses the JS without executing it — catches a
-// truncated minify or stray syntax error. Safe: never .runInContext()'d.
-const scriptMatch = htmlModule.match(/<script[^>]*>([\s\S]*?)<\/script>/);
-if (!scriptMatch) {
-  fail('Inlined HTML in assets/gameHtml.js has no <script> tag.');
+// Parse-smoke: decode the inlined HTML the same way the runtime would, then
+// extract the <script> bodies and compile each with vm.Script. Compilation
+// parses the JS without running it. Safe: never .runInContext()'d.
+//
+// gameHtml.js shape is:  const html = "<json-stringified HTML>"; export default html;
+// We extract the literal via regex, JSON.parse to get the real HTML, then
+// match every <script> body. Earlier version used a brittle hand-rolled
+// `JSON.parse('"' + ... + '"')` un-escaper that miscategorized escape errors
+// as JS syntax errors and only matched the FIRST script tag.
+const literalMatch = htmlModule.match(/^const html = (".*");\s*\n\s*export default html;\s*\n?$/s);
+if (!literalMatch) {
+  fail('assets/gameHtml.js does not match the expected `const html = "..."; export default html;` shape.');
 }
-const inlineJs = JSON.parse('"' + scriptMatch[1] + '"');
+let decodedHtml;
 try {
-  new vm.Script(inlineJs, { filename: 'inlined-bundle.js' });
+  decodedHtml = JSON.parse(literalMatch[1]);
 } catch (err) {
-  fail(`Inlined script failed to parse: ${err.message}`);
+  fail(`Could not decode the inlined HTML literal: ${err.message}. The bundler escape contract may have changed.`);
+}
+
+// Match all <script> bodies. matchAll() avoids the stateful regex API.
+const scriptBodies = Array.from(decodedHtml.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)).map((m) => m[1]);
+if (scriptBodies.length === 0) {
+  fail('Decoded HTML in assets/gameHtml.js has no <script> tag.');
+}
+const largest = scriptBodies.reduce((a, b) => (a.length >= b.length ? a : b));
+// Sanity floor: anything under 50KB is almost certainly NOT the main bundle
+// (probably a small polyfill or shim) and means the bundle is missing.
+if (largest.length < 50_000) {
+  fail(`Largest <script> body is only ${largest.length} bytes — bundle likely missing.`);
+}
+for (let i = 0; i < scriptBodies.length; i++) {
+  try {
+    new vm.Script(scriptBodies[i], { filename: `inlined-script-${i}.js` });
+  } catch (err) {
+    fail(`Inlined <script> #${i} (${scriptBodies[i].length} bytes) failed to parse: ${err.message}`);
+  }
 }
 
 console.log(`WebView bundle OK — ${(bundleStat.size / 1024 / 1024).toFixed(2)} MB, mtime ${new Date(bundleStat.mtimeMs).toISOString()}.`);

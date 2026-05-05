@@ -5,10 +5,27 @@
 // failure (so later contracts went unreported) and had no timeout (so a
 // puppeteer hang would stall the whole gate indefinitely).
 
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
+const isWindows = process.platform === 'win32';
+
+// On Windows, child.kill('SIGKILL') only terminates the direct Node process —
+// any spawned puppeteer/Chromium descendants leak and accumulate across the
+// gauntlet, eventually OOMing the box. Use taskkill /T /F to walk the tree.
+function killTree(child) {
+  if (!child || !child.pid) return;
+  if (isWindows) {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // Already exited.
+    }
+  }
+}
 
 const CONTRACTS = [
   'combat_modes_check.js',
@@ -45,24 +62,49 @@ function runOne(scriptName) {
     });
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
+    let resolved = false;
+    let spawnErrored = false;
+
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
 
     const timer = setTimeout(() => {
-      child.kill('SIGKILL');
+      timedOut = true;
+      killTree(child);
     }, PER_SCRIPT_TIMEOUT_MS);
 
-    child.on('close', (code, signal) => {
+    const finish = (result) => {
+      if (resolved) return;
+      resolved = true;
       clearTimeout(timer);
+      resolve(result);
+    };
+
+    child.on('close', (code, signal) => {
       const elapsed = Date.now() - start;
-      const killedByTimeout = signal === 'SIGKILL' && elapsed >= PER_SCRIPT_TIMEOUT_MS;
-      const passed = code === 0 && !killedByTimeout;
-      resolve({ scriptName, passed, code, signal, elapsed, killedByTimeout, stdout, stderr });
+      // killedByTimeout is driven by our own flag, not by signal name —
+      // Node lies about the SIGKILL signal on Windows (it's TerminateProcess
+      // under the hood) and a script that self-exited at ~89.9s right before
+      // the timer fires would otherwise be misclassified.
+      const passed = code === 0 && !timedOut && !spawnErrored;
+      finish({ scriptName, passed, code, signal, elapsed, killedByTimeout: timedOut, spawnErrored, stdout, stderr });
     });
 
     child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ scriptName, passed: false, code: -1, signal: null, elapsed: Date.now() - start, killedByTimeout: false, stdout, stderr: stderr + '\n' + err.message });
+      spawnErrored = true;
+      const elapsed = Date.now() - start;
+      finish({
+        scriptName,
+        passed: false,
+        code: null,
+        signal: null,
+        elapsed,
+        killedByTimeout: false,
+        spawnErrored: true,
+        stdout,
+        stderr: stderr + '\n' + err.message,
+      });
     });
   });
 }
@@ -77,6 +119,8 @@ function runOne(scriptName) {
       console.log(`PASS (${(r.elapsed / 1000).toFixed(1)}s)`);
     } else if (r.killedByTimeout) {
       console.log(`TIMEOUT (${(r.elapsed / 1000).toFixed(1)}s)`);
+    } else if (r.spawnErrored) {
+      console.log(`SPAWN-ERROR (${(r.elapsed / 1000).toFixed(1)}s)`);
     } else {
       console.log(`FAIL (exit ${r.code}, ${(r.elapsed / 1000).toFixed(1)}s)`);
     }
@@ -85,7 +129,13 @@ function runOne(scriptName) {
   console.log('\n--- Contract summary ---');
   const failures = results.filter((r) => !r.passed);
   for (const r of results) {
-    const status = r.passed ? 'PASS' : r.killedByTimeout ? 'TIMEOUT' : 'FAIL';
+    const status = r.passed
+      ? 'PASS'
+      : r.killedByTimeout
+        ? 'TIMEOUT'
+        : r.spawnErrored
+          ? 'SPAWN'
+          : 'FAIL';
     console.log(`  ${status.padEnd(7)} ${r.scriptName}  ${(r.elapsed / 1000).toFixed(1)}s`);
   }
   if (failures.length === 0) {
@@ -94,7 +144,12 @@ function runOne(scriptName) {
   }
   console.log(`\n${failures.length}/${results.length} contracts failed:`);
   for (const f of failures) {
-    console.log(`\n=== ${f.scriptName} ${f.killedByTimeout ? '(TIMEOUT)' : `(exit ${f.code})`} ===`);
+    const reason = f.killedByTimeout
+      ? '(TIMEOUT)'
+      : f.spawnErrored
+        ? '(SPAWN-ERROR)'
+        : `(exit ${f.code})`;
+    console.log(`\n=== ${f.scriptName} ${reason} ===`);
     if (f.stdout.trim()) console.log('--- stdout ---\n' + f.stdout.trim());
     if (f.stderr.trim()) console.log('--- stderr ---\n' + f.stderr.trim());
   }

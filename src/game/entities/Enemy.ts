@@ -31,7 +31,11 @@ export class Projectile {
     }
 
     public update(dt: number): void {
-        if (this.body.onGround || this.body.x < -100 || this.body.x > this.maxX) {
+        // Y-bound check kills bombs that fall into a pit and would otherwise
+        // never touch ground or cross the x bounds. Without this, lobbed
+        // explosives leak forever in physics during long endless runs.
+        const yLimit = (typeof window !== 'undefined' ? window.innerHeight : 1080) + 600;
+        if (this.body.onGround || this.body.x < -100 || this.body.x > this.maxX || this.body.y > yLimit) {
             this.isDead = true;
         }
     }

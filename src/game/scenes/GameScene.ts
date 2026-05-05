@@ -780,7 +780,43 @@ export class GameScene extends Scene {
     private checkLevelCompletion(): void {
         if (this.hasMetLevelGoal()) {
             this.completeLevel();
+            return;
         }
+        this.preventUnwinnableState();
+    }
+
+    // Failsafe against soft-locks: if the player still owes kills but no enemy
+    // can reach them (zero alive, OR all surviving enemies are far behind /
+    // stuck across a gap they can't cross), force a fresh spawn near the
+    // player so the level remains beatable.
+    private preventUnwinnableState(): void {
+        if (this.kills >= this.level.targetKills) return;
+        const playerCenterX = this.player.body.x + this.player.body.w * 0.5;
+        const reachable = this.enemies.some((enemy) => {
+            const dx = enemy.body.x + enemy.body.w * 0.5 - playerCenterX;
+            return Math.abs(dx) < 1500;
+        });
+        if (reachable) return;
+        // Bring the closest stuck enemy to the player rather than spawning a
+        // brand-new one — preserves the wave/encounter feel.
+        if (this.enemies.length > 0) {
+            const closest = this.enemies.reduce((a, b) => {
+                const da = Math.abs(a.body.x + a.body.w * 0.5 - playerCenterX);
+                const db = Math.abs(b.body.x + b.body.w * 0.5 - playerCenterX);
+                return da < db ? a : b;
+            });
+            const targetX = Math.min(this.level.levelLength - 240, this.player.body.x + 520);
+            closest.body.x = targetX;
+            closest.body.y = this.groundY - closest.body.h;
+            closest.body.vx = 0;
+            closest.body.vy = 0;
+            closest.body.onGround = true;
+            closest.body.groundedOn = 'ground';
+            return;
+        }
+        // No alive enemies at all — force the spawn gate to fire next frame.
+        this.spawnTimer = 0;
+        this.nextSpawnX = Math.min(this.nextSpawnX, this.player.body.x + 320);
     }
 
     private hasMetLevelGoal(): boolean {

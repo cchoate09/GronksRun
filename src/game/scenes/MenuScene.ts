@@ -70,6 +70,7 @@ export class MenuScene extends Scene {
         this.mode = 'MAIN';
         this.clear();
         this.drawBackdrop();
+        this.publishNativeUiState(false);
         const layout = getMainMenuLayout(window.innerWidth, window.innerHeight);
         this.mainMenuButtons = layout.buttons;
 
@@ -117,6 +118,7 @@ export class MenuScene extends Scene {
         this.mode = 'LEVEL_SELECT';
         this.clear();
         this.drawBackdrop();
+        this.publishNativeUiState(false);
 
         const title = new Text({ text: 'SELECT LEVEL', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
         title.anchor.set(0.5);
@@ -149,6 +151,7 @@ export class MenuScene extends Scene {
         this.mode = 'SETTINGS';
         this.clear();
         this.drawBackdrop();
+        this.publishNativeUiState(false);
 
         const title = new Text({ text: 'SETTINGS', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
         title.anchor.set(0.5);
@@ -186,6 +189,7 @@ export class MenuScene extends Scene {
         this.mode = 'ARMORY';
         this.clear();
         this.drawBackdrop();
+        this.publishNativeUiState(false);
         this.gems = Math.max(0, readNumber('gronk_gems', 0));
 
         const title = new Text({ text: 'ARMORY', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
@@ -364,6 +368,14 @@ export class MenuScene extends Scene {
             h: Math.round(h),
             enabled,
         });
+    }
+
+    private publishNativeUiState(controlsVisible: boolean): void {
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'gameUiState',
+            phase: this.mode === 'MAIN' ? 'MENU' : this.mode,
+            controlsVisible,
+        }));
     }
 
     private handleKeyDown = (e: KeyboardEvent) => {

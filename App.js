@@ -65,6 +65,7 @@ function GameApp() {
   const adRetryTimerRef = useRef(null);
 
   const [webViewLoaded, setWebViewLoaded] = useState(false);
+  const [showGameControls, setShowGameControls] = useState(false);
   const [joystick, setJoystick] = useState({ x: 0, y: 0 });
 
   const sendToGame = useCallback((type, data) => {
@@ -194,6 +195,8 @@ function GameApp() {
           sendToGame('adNotReady', {});
           loadAd();
         }
+      } else if (msg.type === 'gameUiState') {
+        setShowGameControls(msg.controlsVisible === true);
       } else if (msg.type === 'exitApp') BackHandler.exitApp();
       else if (msg.type === 'haptic') {
         const p = msg.pattern;
@@ -239,7 +242,7 @@ function GameApp() {
         </View>
       )}
 
-      {webViewLoaded && (
+      {webViewLoaded && showGameControls && (
         <View style={styles.controlsLayer} pointerEvents="box-none">
             <View style={styles.topControlsContainer}>
                 <View onTouchStart={() => handleAction('pause')} style={[styles.actionButton, styles.pauseButton]}>

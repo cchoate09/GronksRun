@@ -65,6 +65,7 @@ class SkeletalSprite extends Container {
   setFacingRight() {}
 
   setRangedAttackCue() {}
+  setMeleeAttackCue() {}
 
   update() {}
 }
@@ -149,8 +150,12 @@ assert(gameSceneSource.includes('buildTerrainGaps'), 'gap terrain: scene should 
 assert(gameSceneSource.includes('hazards'), 'trap terrain: scene should store hazard data');
 assert(gameSceneSource.includes('buildHazards'), 'trap terrain: scene should build traps per level');
 assert(gameSceneSource.includes('checkHazards'), 'trap terrain: hazards should be able to damage the player');
+assert(/checkPitFall\(\):\s*void\s*\{[\s\S]{0,360}this\.showDead\(\)/.test(gameSceneSource), 'pit terrain: falling below a terrain gap should end the run instead of resetting to safe ground');
 assert(gameSceneSource.includes('gaps: this.terrainGaps'), 'snapshot: terrain gaps should be exposed for automation');
 assert(gameSceneSource.includes('hazards: this.hazards'), 'snapshot: hazards should be exposed for automation');
+assert(gameSceneSource.includes('OBSTACLE_FRAME_ANCHORS'), 'obstacle art: atlas frames should use per-frame content anchors');
+assert(gameSceneSource.includes('getObstacleFrameIndex'), 'obstacle art: scene should choose animated atlas frames per hazard state');
+assert(gameSceneSource.includes('getObstacleFrameAnchor'), 'obstacle art: scene should keep dormant/active obstacle frames position-stable');
 
 const { Player } = loadTs('src/game/entities/Player.ts');
 const { Enemy, RangedEnemy } = loadTs('src/game/entities/Enemy.ts');

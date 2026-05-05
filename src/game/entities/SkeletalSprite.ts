@@ -53,7 +53,7 @@ export class SkeletalSprite extends Container {
             this.baseSpriteY = sheet.spriteOffsetY ?? 82;
             this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY);
             this.sheetSprite.scale.set(sheet.scale);
-            this.addChild(this.runStrideCue, this.sheetSprite, this.rangedAttackCue);
+            this.addChild(this.sheetSprite, this.rangedAttackCue);
             return;
         }
 
@@ -144,7 +144,7 @@ export class SkeletalSprite extends Container {
                 const stride = Math.sin(phase) * 1.1;
                 this.applyFrameOffset(this.baseSpriteX + stride, this.baseSpriteY - bounce);
                 this.sheetSprite.rotation = Math.sin(phase) * 0.025;
-                this.drawRunStrideCues(true, phase);
+                this.drawRunStrideCues(false, 0);
             } else if (this.state === 'ATTACK') {
                 this.applyFrameOffset(this.baseSpriteX, this.baseSpriteY);
                 this.sheetSprite.rotation = Math.sin(this.time * 28) * 0.04;
@@ -182,7 +182,7 @@ export class SkeletalSprite extends Container {
             
             this.armL.rotation = Math.sin(phase + Math.PI) * 0.5;
             this.armR.rotation = Math.sin(phase) * 0.5;
-            this.drawRunStrideCues(true, phase);
+            this.drawRunStrideCues(false, 0);
         } else if (this.state === 'IDLE') {
             const breath = Math.sin(this.time * 4) * 2;
             this.torso.scale.y = 1 + breath * 0.02;

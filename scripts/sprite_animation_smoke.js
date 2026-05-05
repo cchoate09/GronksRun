@@ -126,9 +126,9 @@ function sourceFallback() {
     await page.screenshot({ path: path.join(outputDir, 'player-melee.png') });
     await advance(page, 360);
 
-    const jumping = await postAndAdvance(page, { type: 'debugSetPlayer', x: 420, y: 210, vx: 0, vy: -520, onGround: false }, 90);
+    const jumping = await postAndAdvance(page, { type: 'debugSetPlayer', x: 420, y: 210, vx: 0, vy: -520, onGround: false, clearHit: true }, 90);
     assert(jumping.player.animation_state === 'JUMP', `expected JUMP animation after upward debug velocity, got ${jumping.player.animation_state}`);
-    const falling = await postAndAdvance(page, { type: 'debugSetPlayer', x: 420, y: 190, vx: 0, vy: 520, onGround: false }, 90);
+    const falling = await postAndAdvance(page, { type: 'debugSetPlayer', x: 420, y: 190, vx: 0, vy: 520, onGround: false, clearHit: true }, 90);
     assert(falling.player.animation_state === 'FALL', `expected FALL animation after downward debug velocity, got ${falling.player.animation_state}`);
     await page.screenshot({ path: path.join(outputDir, 'player-fall.png') });
 

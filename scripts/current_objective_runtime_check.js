@@ -78,6 +78,8 @@ class SkeletalSprite extends Container {
 
   setRangedAttackCue() {}
 
+  setMeleeAttackCue() {}
+
   update() {}
 }
 

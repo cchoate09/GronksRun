@@ -22,7 +22,8 @@ const backgroundSource = read('src/game/levels/BackgroundManager.ts');
 
 assert(spriteDataSource.includes("'RANGED_ATTACK'"), 'animation: sprite states should include a dedicated ranged attack state');
 assert(spriteDataSource.includes('RANGED_ATTACK:'), 'animation: hero sheet should map a ranged attack animation');
-assert(skeletalSource.includes('drawRunStrideCues'), 'animation: sheet-backed player should render explicit running leg/stride cues');
+assert(!/this\.drawRunStrideCues\(true,/.test(skeletalSource), 'animation: sheet-backed player should not render synthetic shadow-leg stride cues');
+assert(!skeletalSource.includes('drawMeleeAttackCue'), 'animation: player should avoid a doubled melee slash overlay');
 assert(skeletalSource.includes('drawRangedAttackCue'), 'animation: sheet-backed player should render a ranged attack cue');
 assert(playerSource.includes('rangedAttackTimer'), 'animation: player should hold a visible ranged attack animation timer');
 assert(playerSource.includes('runningAttackBlend'), 'animation: player should expose when movement and attack are blended');

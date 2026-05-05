@@ -1,5 +1,13 @@
 Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is in a broken state, and I need help to revive it. The app does not load and there is an issue with the sprite animations. Can you take a deep look at this app, get it to a working state so it loads? Then can you do a gap analysis of this app, which is a sidescroller for android, and see what kinds of improvements you would recommend. Take as much time as you need.
 
+2026-05-05
+- Started a bugfix pass for menu controls and moving attacks. Root cause found: native overlay controls in `App.js` render as soon as the WebView loads, so the joystick/buttons can sit over menu/submenu buttons; sprite "shadow legs" are caused by synthetic `drawRunStrideCues(true, ...)` strokes layered with the sheet-backed player sprite.
+- Added a failing regression contract in `scripts/menu_controls_and_attack_contract_check.js` and wired it into `npm run check:gameplay-contracts`. Current red result is expected: `App.js` does not yet track `showGameControls`.
+- Completed the fix: menu scenes now publish `gameUiState` with controls hidden, active gameplay publishes controls visible only while `PLAYING`, native controls render behind `webViewLoaded && showGameControls`, synthetic stride strokes were disabled, and melee/ranged attack cues now overlay the running body so movement and attacks can happen together.
+- Verification passed: `npx tsc --noEmit`, `npm run build:webview`, `npm run check:gameplay-contracts`, `npm run verify:webview-bundle`, `npm run qa:polish-pass`, `npm run qa:sprite-animation`, `npm run smoke:mobile-webview`, `npm run qa:web-game-client`, and `git diff --check`.
+- Follow-up obstacle/combat fix: removed the duplicate skeletal melee slash so only the gameplay slash renders, changed pit falls to end the run instead of resetting to safe ground, and switched obstacle rendering to content-anchored OpenAI atlas frames with active fire animation in place. Added regression coverage in `arcade_gauntlet_contract_check.js`, `arcade_gauntlet_smoke.js`, `menu_controls_and_attack_contract_check.js`, and `sprite_animation_smoke.js`.
+- Verification passed after rebuild: `npx tsc --noEmit`, `npm run build:webview`, `npm run check:gameplay-contracts`, `npm run verify:webview-bundle`, `npm run qa:arcade-gauntlet`, `npm run qa:sprite-animation`, `npm run qa:polish-pass`, `npm run smoke:mobile-webview`, `npm run qa:web-game-client`, targeted fire obstacle capture at `output/obstacle-art-check/`, and `git diff --check`.
+
 2026-03-27
 - Initial triage found two hard boot blockers:
 - `index.html` inline game script has a syntax error caused by literal `\n` escapes being converted into real newlines inside a JS string.
@@ -356,3 +364,20 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Verification for this pass:
   `node scripts/polish_pass_contract_check.js`, `node scripts/current_objective_runtime_check.js`, `node scripts/current_tuning_contract_check.js`, `node scripts/sprite_motion_orientation_contract_check.js`, `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, `npm run qa:visual`, `npm run qa:polish-pass`, `npm run qa:arcade-gauntlet`, and `npm run qa:full-art-roster` all exited 0.
 - Inspected `output/polish-pass/settings-buttons.png`, `output/polish-pass/armory-upgrade.png`, and `output/polish-pass/polish-gameplay.png`; settings/armory buttons show the new chrome, the Armory shows the gem upgrade purchase state, and the gameplay frame shows level-10 background art plus a moving ranged shot/cue.
+2026-05-05
+- Obstacle art replacement pass:
+- Used OpenAI image generation for a new 4x3 transparent obstacle atlas covering red crystal spikes, cycling fire vents, and magic rune traps in the current stylized fantasy arcade look.
+- Processed the generated atlas through chroma-key removal and packed it into `assets/spritesheets/openai/obstacles.png`; source/preview artifacts are under `output/generated-obstacles/`.
+- Recalibrated per-frame obstacle anchors from alpha bounds so fire vent dormant/active frames stay grounded in the same position, and scaled the sprites up so static/dormant traps read clearly during gameplay.
+- Updated `GameScene` so spell/rune traps now animate through their generated frame row instead of only showing the final burst frame.
+- Rebuilt the WebView payload and restarted the local preview on `http://127.0.0.1:4174/`.
+- Verification for this pass:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, `npm run qa:arcade-gauntlet`, `npm run smoke:mobile-webview`, and `npm run qa:web-game-client` all exited 0.
+- Inspected `output/obstacle-art-check/spikes.png`, `output/obstacle-art-check/fire-dormant.png`, `output/obstacle-art-check/fire-active.png`, and `output/obstacle-art-check/spell-rune.png`; the new trap art is visible, active fire stays aligned with the dormant vent, and rune traps use the generated magic effect.
+2026-05-05
+- Release build 1.8.18:
+- Bumped app release metadata to `1.8.18` and Android `versionCode` to `60` in `package.json`, `package-lock.json`, `app.json`, and `android/app/build.gradle`.
+- Rebuilt the WebView payload and Android release app bundle at `android/app/build/outputs/bundle/release/app-release.aab`; the AAB timestamp is `2026-05-05 16:44:06`, size `40,416,214` bytes, and release manifest intermediates show `versionCode=60`, `versionName=1.8.18`.
+- The first Gradle build attempt from the long workspace path failed in Ninja because a React Native prefab header path exceeded 260 characters; rebuilding from a temporary short `subst` drive path succeeded without code changes.
+- Verification for this release:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, `npm run qa:arcade-gauntlet`, `npm run smoke:mobile-webview`, `npm run qa:web-game-client`, `gradlew.bat :app:bundleRelease --no-daemon --stacktrace` from a short mapped path, and `jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab` all exited 0.

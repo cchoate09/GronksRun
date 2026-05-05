@@ -98,6 +98,12 @@ export class Player {
         this.hitTimer = Math.max(this.hitTimer, seconds);
     }
 
+    public clearHitState(): void {
+        this.isHit = false;
+        this.hitTimer = 0;
+        this.sprite.tint = 0xffffff;
+    }
+
     public update(dt: number, input: InputManager): void {
         if (this.isHit) {
             this.hitTimer -= dt;

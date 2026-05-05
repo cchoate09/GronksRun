@@ -81,6 +81,21 @@ interface OverlayButtonSnapshot {
     h: number;
 }
 
+const OBSTACLE_FRAME_ANCHORS: Record<number, { x: number; y: number }> = {
+    0: { x: 0.568, y: 0.855 },
+    1: { x: 0.499, y: 0.855 },
+    2: { x: 0.499, y: 0.996 },
+    3: { x: 0.486, y: 0.996 },
+    4: { x: 0.405, y: 0.832 },
+    5: { x: 0.331, y: 0.832 },
+    6: { x: 0.366, y: 0.996 },
+    7: { x: 0.409, y: 0.996 },
+    8: { x: 0.401, y: 0.859 },
+    9: { x: 0.327, y: 0.859 },
+    10: { x: 0.363, y: 0.859 },
+    11: { x: 0.406, y: 0.859 },
+};
+
 export const LEVELS: LevelDefinition[] = [
     { id: 1, name: 'Blue Gate', biome: 'Ruined Coast', targetKills: 18, maxActive: 2, enemyKinds: ['CHASER'], spawnGap: 1.0, runUpDistance: 760, encounterSpacing: 680, levelLength: 26000, reward: 20, terrainProfile: 'shore-sprint', spawnPattern: ['CHASER', 'CHASER', 'CHASER'], levelModifiers: { routeStyle: 'flat-pressure', hazardDensity: 0.08, verticality: 0.15, pressureBias: 'steady' } },
     { id: 2, name: 'Broken Steps', biome: 'Ruined Coast', targetKills: 20, maxActive: 2, enemyKinds: ['CHASER'], spawnGap: 0.95, runUpDistance: 820, encounterSpacing: 650, levelLength: 30000, reward: 25, terrainProfile: 'broken-steps', spawnPattern: ['CHASER', 'CHASER', 'CHASER'], levelModifiers: { routeStyle: 'broken-climb', hazardDensity: 0.16, verticality: 0.34, pressureBias: 'steady' } },
@@ -206,6 +221,7 @@ export class GameScene extends Scene {
 
         this.spawnWave(true);
         this.updateHUD();
+        this.publishNativeUiState(this.state === 'PLAYING');
     }
 
     private readDifficultyMultiplier(): number {
@@ -308,6 +324,7 @@ export class GameScene extends Scene {
             this.player.body.vx = Number.isFinite(data.vx) ? data.vx : this.player.body.vx;
             this.player.body.vy = Number.isFinite(data.vy) ? data.vy : this.player.body.vy;
             this.player.body.onGround = typeof data.onGround === 'boolean' ? data.onGround : false;
+            if (data.clearHit === true) this.player.clearHitState();
             if (this.player.body.onGround) this.lastSafeX = this.player.body.x;
         } catch (error) {
             console.error('Failed to parse game scene message:', error);
@@ -359,34 +376,15 @@ export class GameScene extends Scene {
 
         for (const hazard of this.hazards) {
             if (hazard.type === 'spikes') {
-                this.ground.rect(hazard.x, this.groundY - 6, hazard.w, 6).fill(0x2d1720);
-                for (let x = hazard.x; x < hazard.x + hazard.w - 2; x += 18) {
-                    this.ground.moveTo(x, this.groundY - 4)
-                        .lineTo(x + 9, this.groundY - 30)
-                        .lineTo(x + 18, this.groundY - 4)
-                        .closePath()
-                        .fill(0xff4d6d)
-                        .stroke({ color: 0xffd166, width: 1, alpha: 0.45 });
-                }
+                this.ground.roundRect(hazard.x, this.groundY - 8, hazard.w, 8, 4).fill({ color: 0x2d1720, alpha: 0.72 });
+                this.ground.rect(hazard.x + 5, this.groundY - 11, Math.max(0, hazard.w - 10), 3).fill({ color: 0xff4d6d, alpha: 0.22 });
             } else if (hazard.type === 'fireVent') {
-                this.ground.roundRect(hazard.x, this.groundY - 14, hazard.w, 14, 5).fill(0x3b1c12).stroke({ color: 0xffd166, width: 1, alpha: 0.45 });
-                if (hazard.active) {
-                    this.ground.rect(hazard.x + 12, hazard.y, Math.max(8, hazard.w - 24), hazard.h).fill({ color: 0xff7a3d, alpha: 0.58 });
-                    this.ground.rect(hazard.x + 22, hazard.y + 10, Math.max(4, hazard.w - 44), Math.max(8, hazard.h - 14)).fill({ color: 0xfff1a8, alpha: 0.35 });
-                } else {
-                    this.ground.circle(hazard.x + hazard.w * 0.5, this.groundY - 18, 7).fill({ color: 0xff7a3d, alpha: 0.48 });
-                }
+                this.ground.roundRect(hazard.x, this.groundY - 13, hazard.w, 13, 5).fill({ color: 0x3b1c12, alpha: 0.7 }).stroke({ color: 0xffd166, width: 1, alpha: hazard.active ? 0.52 : 0.28 });
+                this.ground.circle(hazard.x + hazard.w * 0.5, this.groundY - 13, hazard.active ? 24 : 10).fill({ color: hazard.active ? 0xff7a3d : 0xffd166, alpha: hazard.active ? 0.16 : 0.12 });
             } else {
                 const cx = hazard.x + hazard.w * 0.5;
-                this.ground.circle(cx, this.groundY - 9, hazard.w * 0.46).fill({ color: 0x26144a, alpha: 0.76 }).stroke({ color: 0xc4b5fd, width: 2, alpha: 0.72 });
-                this.ground.moveTo(cx - hazard.w * 0.26, this.groundY - 10)
-                    .lineTo(cx, this.groundY - 30)
-                    .lineTo(cx + hazard.w * 0.26, this.groundY - 10)
-                    .stroke({ color: 0x91e5ff, width: 3, alpha: 0.72 });
-                if (hazard.active) {
-                    this.ground.circle(cx, hazard.y + hazard.h * 0.32, 12).fill({ color: 0xc4b5fd, alpha: 0.7 });
-                    this.ground.rect(cx - 8, hazard.y + 12, 16, Math.max(24, hazard.h - 22)).fill({ color: 0x91e5ff, alpha: 0.28 });
-                }
+                this.ground.circle(cx, this.groundY - 9, hazard.w * 0.42).fill({ color: 0x26144a, alpha: 0.42 }).stroke({ color: 0xc4b5fd, width: 2, alpha: hazard.active ? 0.68 : 0.34 });
+                this.ground.circle(cx, this.groundY - 22, hazard.active ? 18 : 10).fill({ color: 0x91e5ff, alpha: hazard.active ? 0.14 : 0.07 });
             }
         }
         this.renderObstacleSprites();
@@ -413,27 +411,40 @@ export class GameScene extends Scene {
         if (!this.obstacleLayer) return;
         this.obstacleLayer.removeChildren();
         for (const hazard of this.hazards) {
-            const frame = hazard.type === 'spikes'
-                ? Math.min(3, Math.max(0, Math.round((hazard.w - 56) / 24)))
-                : hazard.type === 'spellRune'
-                    ? (hazard.active ? 11 : 9)
-                    : (hazard.active ? 7 : 4);
+            const frame = this.getObstacleFrameIndex(hazard);
             const sprite = new Sprite(this.getObstacleFrame(frame));
-            sprite.anchor.set(0.5, 1);
+            const anchor = this.getObstacleFrameAnchor(frame);
+            sprite.anchor.set(anchor.x, anchor.y);
             sprite.x = hazard.x + hazard.w * 0.5;
             sprite.y = this.groundY + 6;
             if (hazard.type === 'spikes') {
-                sprite.width = Math.max(70, hazard.w * 1.18);
-                sprite.height = 42;
+                sprite.width = Math.max(108, hazard.w * 1.48);
+                sprite.height = 74;
             } else if (hazard.type === 'fireVent') {
-                sprite.width = Math.max(80, hazard.w * 1.45);
-                sprite.height = hazard.active ? Math.max(105, hazard.h + 24) : 52;
+                sprite.width = Math.max(124, hazard.w * 1.72);
+                sprite.height = hazard.active ? Math.max(132, hazard.h + 36) : 94;
             } else {
-                sprite.width = Math.max(82, hazard.w * 1.34);
-                sprite.height = hazard.active ? Math.max(92, hazard.h + 18) : 58;
+                sprite.width = Math.max(118, hazard.w * 1.56);
+                sprite.height = hazard.active ? Math.max(118, hazard.h + 30) : 82;
             }
             this.obstacleLayer.addChild(sprite);
         }
+    }
+
+    private getObstacleFrameIndex(hazard: Hazard): number {
+        if (hazard.type === 'spikes') {
+            return Math.min(3, Math.max(0, Math.round((hazard.w - 56) / 24)));
+        }
+        if (hazard.type === 'fireVent') {
+            if (!hazard.active) return 4;
+            return 5 + (Math.floor(hazard.phase * OBSTACLE_SHEET.fps) % 3);
+        }
+        if (!hazard.active) return 8;
+        return 9 + (Math.floor(hazard.phase * OBSTACLE_SHEET.fps) % 3);
+    }
+
+    private getObstacleFrameAnchor(frame: number): { x: number; y: number } {
+        return OBSTACLE_FRAME_ANCHORS[frame] || { x: 0.5, y: 1 };
     }
 
     private buildTerrainPlatforms(): TerrainPlatform[] {
@@ -672,6 +683,7 @@ export class GameScene extends Scene {
         this.updateLastSafePosition();
         this.checkHazards();
         this.checkPitFall();
+        if (this.state !== 'PLAYING') return;
 
         if (this.player.hp <= 0) {
             this.showDead();
@@ -705,23 +717,27 @@ export class GameScene extends Scene {
     }
 
     private updateHazards(dt: number): void {
-        let needsRedraw = false;
+        let needsGroundRedraw = false;
+        let needsSpriteRedraw = false;
         for (const hazard of this.hazards) {
             hazard.phase += dt;
             const wasActive = hazard.active;
             if (hazard.type === 'fireVent') {
                 hazard.active = Math.sin(hazard.phase * 2.45) > -0.12;
                 hazard.h = hazard.active ? 104 + this.level.levelModifiers.hazardDensity * 46 : 24;
+                needsSpriteRedraw = true;
             } else if (hazard.type === 'spellRune') {
                 hazard.active = Math.sin(hazard.phase * 3.1) > 0.24;
                 hazard.h = hazard.active ? 68 + this.level.levelModifiers.verticality * 34 : 30;
+                needsSpriteRedraw = true;
             } else {
                 continue;
             }
             hazard.y = this.groundY - hazard.h;
-            if (wasActive !== hazard.active) needsRedraw = true;
+            if (wasActive !== hazard.active) needsGroundRedraw = true;
         }
-        if (needsRedraw) this.drawGround();
+        if (needsGroundRedraw) this.drawGround();
+        else if (needsSpriteRedraw) this.renderObstacleSprites();
     }
 
     private updateLastSafePosition(): void {
@@ -746,18 +762,14 @@ export class GameScene extends Scene {
 
     private checkPitFall(): void {
         if (this.player.body.y < this.groundY + 170) return;
-        const resetX = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
-        if (!this.player.isHit) {
-            this.player.takeDamage(18, this.player.body.vx >= 0 ? -1 : 1);
-            SoundManager.playCue('damage');
-            this.applyShake(18, 0.2);
-            this.updateHUD();
-        }
-        this.player.body.x = resetX;
-        this.player.body.y = this.groundY - this.player.body.h - 2;
+        this.player.hp = 0;
         this.player.body.vx = 0;
         this.player.body.vy = 0;
-        this.player.body.onGround = true;
+        this.player.body.onGround = false;
+        SoundManager.playCue('damage');
+        this.applyShake(18, 0.2);
+        this.updateHUD();
+        this.showDead();
     }
 
     private isBodyOverGap(body: { x: number; w: number }): boolean {
@@ -1057,6 +1069,7 @@ export class GameScene extends Scene {
 
     private completeLevel(): void {
         this.state = 'LEVEL_COMPLETE';
+        this.publishNativeUiState();
         SoundManager.playCue('clear');
         if (this.isEndless) {
             writeNumber('gronk_endless_depth', this.endlessDepth + 1);
@@ -1074,18 +1087,21 @@ export class GameScene extends Scene {
 
     private showDead(): void {
         this.state = 'DEAD';
+        this.publishNativeUiState();
         this.drawDeadOverlay();
     }
 
     private showPause(): void {
         if (this.state !== 'PLAYING') return;
         this.state = 'PAUSED';
+        this.publishNativeUiState();
         this.drawPauseOverlay();
     }
 
     private resumeGame(): void {
         if (this.state !== 'PAUSED') return;
         this.state = 'PLAYING';
+        this.publishNativeUiState();
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');
         this.overlayButtonRegistry = [];
@@ -1271,6 +1287,7 @@ export class GameScene extends Scene {
         this.bombExplosions = [];
         this.player.grantInvincibility(1.2);
         this.state = 'PLAYING';
+        this.publishNativeUiState();
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');
         this.overlayButtonRegistry = [];
@@ -1290,6 +1307,14 @@ export class GameScene extends Scene {
 
     private updateHUD(): void {
         this.hud.updateStats(this.player.hp, 100, this.gems, this.level.id, this.kills, this.level.targetKills);
+    }
+
+    private publishNativeUiState(controlsVisible: boolean = this.state === 'PLAYING'): void {
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'gameUiState',
+            phase: this.state,
+            controlsVisible,
+        }));
     }
 
     public render(alpha: number): void {

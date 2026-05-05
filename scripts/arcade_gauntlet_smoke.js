@@ -111,9 +111,24 @@ async function advance(page, ms) {
     const afterTrap = await snapshot(page);
     await page.screenshot({ path: path.join(outputDir, 'trap-contact.png') });
     assert(afterTrap.player.hp < afterJump.player.hp, `expected trap contact to damage player, got ${afterTrap.player.hp} after ${afterJump.player.hp}`);
+
+    await page.evaluate((gap, playerY) => {
+      window.postMessage(JSON.stringify({
+        type: 'debugSetPlayer',
+        x: gap.x + gap.w * 0.5 - 20,
+        y: playerY + 260,
+        vx: 0,
+        vy: 1100,
+        onGround: false,
+      }), '*');
+    }, firstGap, boot.player.y);
+    await advance(page, 90);
+    const afterPitFall = await snapshot(page);
+    assert(afterPitFall.phase === 'DEAD', `falling through a ground gap should end the run, got ${afterPitFall.phase}`);
+
     assert(!pageErrors.length, `page errors: ${pageErrors.join('\n')}`);
 
-    fs.writeFileSync(path.join(outputDir, 'arcade-gauntlet.json'), JSON.stringify({ boot, nearGap, afterJump, afterTrap, pageErrors }, null, 2));
+    fs.writeFileSync(path.join(outputDir, 'arcade-gauntlet.json'), JSON.stringify({ boot, nearGap, afterJump, afterTrap, afterPitFall, pageErrors }, null, 2));
     console.log('Arcade gauntlet smoke passed.');
   } finally {
     await browser.close();

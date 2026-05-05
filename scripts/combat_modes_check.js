@@ -74,9 +74,11 @@ async function post(page, payload, ms = 100) {
     const rangedFired = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
     await post(page, { type: 'action', name: 'ranged' }, 70);
     const rangedCooldown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-    // Short window: keep the bullet in flight before it can reach the spawn-wave enemy at ~x=776.
-    await page.evaluate(() => window.advanceTime(180));
-    const rangedTravel = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    let rangedTravel = rangedFired;
+    for (let i = 0; i < 10 && rangedTravel.player_projectiles.length === 0; i++) {
+      await page.evaluate(() => window.advanceTime(20));
+      rangedTravel = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    }
 
     await page.screenshot({ path: path.join(outputDir, 'combat-modes.png') });
     const report = { boot, meleeWindup, meleeActive, beforeRanged, rangedFired, rangedCooldown, rangedTravel, errors };

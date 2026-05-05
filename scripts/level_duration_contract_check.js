@@ -15,7 +15,7 @@ assert(Math.min(...lengthMatches.slice(0, 10)) >= 26000, 'duration contract: aut
 assert(Math.max(...lengthMatches.slice(0, 10)) <= 78000, 'duration contract: authored levels should stay under roughly 3 minutes at current run speed');
 assert(gameSceneSource.includes('checkLevelCompletion'), 'duration contract: scene should centralize completion checks');
 assert(gameSceneSource.includes('hasMetLevelGoal'), 'duration contract: completion should require objective progress');
-assert(gameSceneSource.includes('if (this.hasMetLevelGoal()) {\n            this.completeLevel();'), 'duration contract: target kills should now complete the level without endpoint distance');
+assert(/if\s*\(\s*this\.hasMetLevelGoal\(\)\s*\)\s*\{\s*this\.completeLevel\(\);/.test(gameSceneSource), 'duration contract: target kills should now complete the level without endpoint distance');
 assert(!gameSceneSource.includes('this.player.body.x >= this.level.levelLength'), 'duration contract: endpoint distance should not block target-kill completion');
 assert(gameSceneSource.includes('progress: {'), 'snapshot contract: automation should see level progress');
 

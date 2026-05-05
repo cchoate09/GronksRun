@@ -1,5 +1,4 @@
 function logStorageError(op: 'read' | 'write', key: string, error: unknown): void {
-    if (typeof window === 'undefined' || !window.localStorage) return;
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[storage] ${op} failed for "${key}": ${message}`);
 }

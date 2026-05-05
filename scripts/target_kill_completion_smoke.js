@@ -28,7 +28,7 @@ function readCommittedWebViewHtml() {
     if (error && error.code === 'EPERM') {
       const gameSceneSource = fs.readFileSync(path.join(projectRoot, 'src', 'game', 'scenes', 'GameScene.ts'), 'utf8');
       assert(gameSceneSource.includes("data.type === 'debugSetKills'"), 'source fallback: debug kill setter should exist for completion smoke');
-      assert(gameSceneSource.includes('if (this.hasMetLevelGoal()) {\n            this.completeLevel();'), 'source fallback: target kills should complete level');
+      assert(/if\s*\(\s*this\.hasMetLevelGoal\(\)\s*\)\s*\{\s*this\.completeLevel\(\);/.test(gameSceneSource), 'source fallback: target kills should complete level');
       console.log('Target-kill completion source contract passed. Puppeteer browser launch was blocked by EPERM in this workspace.');
       return;
     }

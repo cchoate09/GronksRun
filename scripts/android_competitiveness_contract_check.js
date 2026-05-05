@@ -27,6 +27,7 @@ assert(appSource.includes('topControlsContainer'), 'mobile controls: pause butto
 assert(/pauseButton:\s*\{[^}]*width:\s*4[0-9][^}]*height:\s*4[0-9]/s.test(appSource), 'mobile controls: pause button should be smaller than combat buttons');
 assert(appSource.includes('combatButtonsRow'), 'mobile controls: melee/ranged buttons should be grouped below jump');
 assert(appSource.indexOf("handleAction('jump')") < appSource.indexOf('combatButtonsRow'), 'mobile controls: jump should render above the melee/ranged row');
+assert(appSource.includes("baseUrl: 'https://gronks-run.local/'"), 'android webview: inline game HTML should have a stable origin for DOM storage');
 
 assert(physicsSource.includes('groundedOn'), 'platform drop: physics bodies should expose whether they stand on ground or a platform');
 assert(physicsSource.includes('dropThroughTimer'), 'platform drop: physics should support temporarily ignoring one-way platforms');

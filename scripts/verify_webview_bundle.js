@@ -21,7 +21,7 @@ if (!appSource.includes("from './assets/gameHtml'") && !appSource.includes('from
   fail('App.js must import the committed assets/gameHtml module.');
 }
 
-if (!appSource.includes('source={{ html: gameHtml }}')) {
+if (!/source=\{\{\s*html:\s*gameHtml\b/.test(appSource)) {
   fail('WebView source must use inline committed gameHtml content.');
 }
 

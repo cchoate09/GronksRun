@@ -211,7 +211,7 @@ function GameApp() {
 
       <WebView
         ref={webViewRef}
-        source={{ html: gameHtml }}
+        source={{ html: gameHtml, baseUrl: 'https://gronks-run.local/' }}
         style={[styles.webview, { opacity: webViewLoaded ? 1 : 0 }]}
         javaScriptEnabled={true}
         domStorageEnabled={true}

@@ -26,6 +26,10 @@ export class Player {
     public hp: number = 100;
     public isHit: boolean = false;
     private hitTimer: number = 0;
+    // True only when the player is in the damage-recoil state. Drives the red
+    // tint and HIT animation. Decoupled from isHit so grantInvincibility() can
+    // give i-frames without locking the visual into looking-injured.
+    private isInjuredVisual: boolean = false;
     public facingRight: boolean = true;
     public isAttacking: boolean = false;
     private attackTimer: number = 0;
@@ -85,6 +89,7 @@ export class Player {
         if (this.isHit) return;
         this.hp -= amount;
         this.isHit = true;
+        this.isInjuredVisual = true;
         this.hitTimer = 0.5;
         this.body.vx = knockbackDir * 600;
         this.body.vy = -400;
@@ -94,12 +99,17 @@ export class Player {
     }
 
     public grantInvincibility(seconds: number): void {
+        // i-frames without the damage visual — the player gets to keep moving
+        // and animating normally during the grace period.
         this.isHit = true;
+        this.isInjuredVisual = false;
         this.hitTimer = Math.max(this.hitTimer, seconds);
+        this.sprite.tint = 0xffffff;
     }
 
     public clearHitState(): void {
         this.isHit = false;
+        this.isInjuredVisual = false;
         this.hitTimer = 0;
         this.sprite.tint = 0xffffff;
     }
@@ -109,9 +119,12 @@ export class Player {
             this.hitTimer -= dt;
             if (this.hitTimer <= 0) {
                 this.isHit = false;
+                this.isInjuredVisual = false;
                 this.sprite.tint = 0xffffff;
+            } else if (this.isInjuredVisual) {
+                this.sprite.tint = 0xff8888;
             } else {
-                this.sprite.tint = 0xff8888; // Red tint when hit
+                this.sprite.tint = 0xffffff;
             }
         }
 
@@ -146,13 +159,17 @@ export class Player {
         const downHeld = input.isDown('ArrowDown') || input.isDown('KeyS');
         const downJustPressed = input.justPressed('ArrowDown') || input.justPressed('KeyS') || input.actionJustPressed('pound');
         if (downJustPressed && this.body.onGround && this.body.groundedOn === 'platform') {
+            // Drop-through-and-pound: single tap drops off the platform AND
+            // immediately enters pound state. Players intuitively expect a
+            // down-press above an enemy to attack it; making them re-press
+            // mid-air felt clumsy.
             this.body.dropThroughTimer = 0.26;
             this.body.y += 10;
-            this.body.vy = Math.max(this.body.vy, 120);
+            this.body.vy = Math.max(this.body.vy, 980);
             this.body.onGround = false;
             this.body.groundedOn = null;
-            this.isPounding = false;
-            this.isCrouching = true;
+            this.isPounding = true;
+            this.isCrouching = false;
         } else if (downJustPressed && !this.body.onGround) {
             this.body.vy = Math.max(this.body.vy, 980);
             this.isPounding = true;
@@ -190,7 +207,7 @@ export class Player {
         const moving = Math.abs(this.body.vx) > 10;
         const rangedPoseVisible = this.isRangedPoseVisible();
         this.runningAttackBlend = moving && (this.isAttacking || rangedPoseVisible);
-        if (this.isHit) {
+        if (this.isInjuredVisual) {
             this.animationState = 'HIT';
         } else if (!this.body.onGround && !this.isAttacking && !rangedPoseVisible) {
             this.animationState = this.body.vy < 0 ? 'JUMP' : 'FALL';

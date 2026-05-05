@@ -957,7 +957,11 @@ export class GameScene extends Scene {
             if (this.player.canDealPoundDamage() && this.overlaps(this.player.body, enemy.body, 6) && !this.hitThisAttack.has(enemy)) {
                 this.hitThisAttack.add(enemy);
                 SoundManager.playCue('hit');
-                enemy.takePoundDamage(36, this.player.facingRight ? 1 : -1);
+                // Pound damage scales with the equipped melee weapon so upgrades
+                // like Sky Maul actually matter. Slight bonus over melee for the
+                // commitment of being airborne.
+                const poundDamage = Math.round(this.player.meleeDamage * 1.15);
+                enemy.takePoundDamage(poundDamage, this.player.facingRight ? 1 : -1);
                 this.player.body.vy = -360;
                 this.player.isPounding = false;
                 this.applyShake(14, 0.12);
@@ -1277,8 +1281,10 @@ export class GameScene extends Scene {
     private applyRewardedContinue(): void {
         if (this.state !== 'DEAD' || this.adContinueUsed) return;
         this.adContinueUsed = true;
+        this.player.clearHitState();
         this.player.hp = Math.max(55, this.player.hp);
-        this.player.body.x = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
+        const respawnX = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
+        this.player.body.x = respawnX;
         this.player.body.y = this.groundY - this.player.body.h - 2;
         this.player.body.vx = 240;
         this.player.body.vy = 0;
@@ -1291,7 +1297,17 @@ export class GameScene extends Scene {
         this.projectiles = [];
         this.bombExplosions.forEach((explosion) => this.stage.removeChild(explosion.view));
         this.bombExplosions = [];
-        this.player.grantInvincibility(1.2);
+        // Despawn enemies that would re-kill the player as soon as i-frames end.
+        const safeRadius = 320;
+        this.enemies = this.enemies.filter((enemy) => {
+            const dx = enemy.body.x + enemy.body.w * 0.5 - (respawnX + this.player.body.w * 0.5);
+            if (Math.abs(dx) > safeRadius) return true;
+            this.stage.removeChild(enemy.view);
+            this.engine.physics.removeBody(enemy.body);
+            return false;
+        });
+        this.hitThisAttack.clear();
+        this.player.grantInvincibility(1.5);
         this.state = 'PLAYING';
         this.publishNativeUiState();
         this.overlayLayer.removeChildren();

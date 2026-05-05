@@ -21,6 +21,7 @@ const androidBuildSource = read('android/app/build.gradle');
 const preflightSource = read('scripts/qa_environment_preflight.js');
 const puppeteerLaunchOptionsSource = read('scripts/puppeteerLaunchOptions.js');
 const webGameClientRunnerSource = read('scripts/run_web_game_client_with_server.js');
+const combatModesSource = read('scripts/combat_modes_check.js');
 
 assert(appSource.includes('topControlsContainer'), 'mobile controls: pause button should live in a top controls container');
 assert(/pauseButton:\s*\{[^}]*width:\s*4[0-9][^}]*height:\s*4[0-9]/s.test(appSource), 'mobile controls: pause button should be smaller than combat buttons');
@@ -73,5 +74,7 @@ assert(workflowSource.includes('npx puppeteer browsers install'), 'visual QA: wo
 assert(webGameClientRunnerSource.includes('runFallbackWebGameClient'), 'visual QA: web game client should have a repo-owned fallback for CI');
 assert(!webGameClientRunnerSource.includes('throw new Error(`Missing develop-web-game client'), 'visual QA: missing agent-local web game client should not fail CI before repo-owned smokes run');
 assert(webGameClientRunnerSource.includes('isBenignFallbackConsoleError'), 'visual QA: fallback client should filter benign browser resource-load console noise');
+assert(combatModesSource.includes('postAndAdvance'), 'visual QA: combat smoke should dispatch one-frame actions and advance time atomically');
+assert(combatModesSource.includes('advanceUntilMeleeActive'), 'visual QA: combat smoke should sample melee ACTIVE phase inside the page without Node await gaps');
 
 console.log('Android competitiveness contract passed.');

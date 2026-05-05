@@ -18,13 +18,45 @@ function readCommittedWebViewHtml() {
   return JSON.parse(match[1]);
 }
 
-async function post(page, payload, ms = 100) {
-  await page.evaluate((message) => {
+async function postAndAdvance(page, payload, ms = 100) {
+  return page.evaluate(({ message, duration }) => {
     const data = JSON.stringify(message);
     window.dispatchEvent(new MessageEvent('message', { data }));
     document.dispatchEvent(new MessageEvent('message', { data }));
-  }, payload);
-  await page.evaluate((duration) => window.advanceTime(duration), ms);
+    if (duration > 0) window.advanceTime(duration);
+    return JSON.parse(window.render_game_to_text());
+  }, { message: payload, duration: ms });
+}
+
+async function advanceAndRead(page, ms) {
+  return page.evaluate((duration) => {
+    window.advanceTime(duration);
+    return JSON.parse(window.render_game_to_text());
+  }, ms);
+}
+
+async function advanceUntilMeleeActive(page) {
+  return page.evaluate(() => {
+    let state = JSON.parse(window.render_game_to_text());
+    for (let elapsed = 0; elapsed <= 700; elapsed += 8) {
+      if (state.player?.attackPhase === 'ACTIVE') return state;
+      window.advanceTime(8);
+      state = JSON.parse(window.render_game_to_text());
+    }
+    return state;
+  });
+}
+
+async function advanceUntilProjectileVisible(page) {
+  return page.evaluate(() => {
+    let state = JSON.parse(window.render_game_to_text());
+    for (let elapsed = 0; elapsed <= 260; elapsed += 20) {
+      if ((state.player_projectiles || []).length > 0) return state;
+      window.advanceTime(20);
+      state = JSON.parse(window.render_game_to_text());
+    }
+    return state;
+  });
 }
 
 (async () => {
@@ -59,25 +91,16 @@ async function post(page, payload, ms = 100) {
     const boot = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
 
     await page.keyboard.down('ArrowRight');
-    await post(page, { type: 'action', name: 'attack' }, 40);
-    const meleeWindup = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-    let meleeActive = meleeWindup;
-    for (let i = 0; i < 80 && meleeActive.player.attackPhase !== 'ACTIVE'; i++) {
-      await page.evaluate(() => window.advanceTime(12));
-      meleeActive = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-    }
+    const meleeWindup = await postAndAdvance(page, { type: 'action', name: 'attack' }, 40);
+    const meleeActive = meleeWindup.player.attackPhase === 'ACTIVE' ? meleeWindup : await advanceUntilMeleeActive(page);
     await page.keyboard.up('ArrowRight');
 
-    await page.evaluate(() => window.advanceTime(450));
-    const beforeRanged = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-    await post(page, { type: 'action', name: 'ranged' }, 70);
-    const rangedFired = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-    await post(page, { type: 'action', name: 'ranged' }, 70);
-    const rangedCooldown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    const beforeRanged = await advanceAndRead(page, 450);
+    const rangedFired = await postAndAdvance(page, { type: 'action', name: 'ranged' }, 70);
+    const rangedCooldown = await postAndAdvance(page, { type: 'action', name: 'ranged' }, 70);
     let rangedTravel = rangedFired;
-    for (let i = 0; i < 10 && rangedTravel.player_projectiles.length === 0; i++) {
-      await page.evaluate(() => window.advanceTime(20));
-      rangedTravel = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+    if (rangedTravel.player_projectiles.length === 0) {
+      rangedTravel = await advanceUntilProjectileVisible(page);
     }
 
     await page.screenshot({ path: path.join(outputDir, 'combat-modes.png') });

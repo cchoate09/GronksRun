@@ -36,7 +36,12 @@
           "androidAppId": "ca-app-pub-8879184280264151~8722286751"
         }
       ],
-      "@sentry/react-native"
+      [
+        "@sentry/react-native",
+        {
+          "disableAutoUpload": true
+        }
+      ]
     ],
     "extra": {
       "eas": {

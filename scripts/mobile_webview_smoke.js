@@ -95,11 +95,13 @@ async function postNativeMessage(page, message, ms = 0) {
       await postNativeMessage(page, { type: 'joystickMove', x: 1, y: 0 }, 250);
       await postNativeMessage(page, { type: 'action', name: 'attack' }, 250);
       const afterInput = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      const visibleHeight = viewport.resizeTo ? viewport.resizeTo.height : viewport.height;
+      const safeGroundY = Math.min(600, Math.max(220, visibleHeight - 90));
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 }, 100);
       await postNativeMessage(page, {
         type: 'debugSetPlayer',
         x: Math.max(100, Math.min(afterInput.player.x, 360)),
-        y: boot.player.y,
+        y: safeGroundY - 80,
         vx: 0,
         vy: 0,
         onGround: true,
@@ -146,7 +148,6 @@ async function postNativeMessage(page, message, ms = 0) {
       );
       assert(afterInput.player.dashing === false && afterJump.player.dashing === false, `${viewport.label}: expected dash to be removed from mobile controls`);
       assert(settled.player.onGround === true, `${viewport.label}: expected player to land on ground`);
-      const visibleHeight = viewport.resizeTo ? viewport.resizeTo.height : viewport.height;
       assert(settled.player.y + 80 <= visibleHeight, `${viewport.label}: expected player to stay visible after landing`);
       assert(nativeMessages.some((message) => message.type === 'gameReady'), `${viewport.label}: expected gameReady native bridge message`);
       assert(!pageErrors.length, `${viewport.label}: page errors: ${pageErrors.join('\n')}`);

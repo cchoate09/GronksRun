@@ -1,4 +1,4 @@
-import { Application } from 'pixi.js';
+import { Application, Ticker } from 'pixi.js';
 import { PhysicsEngine } from './physics';
 import { SceneManager } from './scenes/SceneManager';
 import { InputManager } from './input';
@@ -8,6 +8,11 @@ export class GameEngine {
     public physics: PhysicsEngine;
     public scenes: SceneManager;
     public input: InputManager;
+
+    // When true the fixed-step loop (input drain + physics + scene logic) is
+    // skipped. Render still runs so pause overlays animate. Scenes set this
+    // when they enter pause state.
+    public paused: boolean = false;
 
     private fixedTimeStep: number = 1000 / 60;
     private accumulator: number = 0;
@@ -26,19 +31,18 @@ export class GameEngine {
         await this.app.init({
             canvas: canvasElement,
             resizeTo: window,
-            backgroundColor: 0x1a1a24, // Dark modern background
+            backgroundColor: 0x1a1a24,
             antialias: true,
             resolution: window.devicePixelRatio || 1,
             autoDensity: true,
             preserveDrawingBuffer,
         });
 
-        // Setup the game loop
         this.lastTime = performance.now();
         this.app.ticker.add(this.update.bind(this));
     }
 
-    private update(ticker: any): void {
+    private update(_ticker: Ticker): void {
         const currentTime = performance.now();
         const deltaTime = currentTime - this.lastTime;
         this.lastTime = currentTime;
@@ -46,18 +50,23 @@ export class GameEngine {
         // Prevent spiral of death if tab is inactive
         if (deltaTime > 250) return;
 
+        if (this.paused) {
+            this.accumulator = 0;
+            this.scenes.render(0);
+            return;
+        }
+
         this.accumulator += deltaTime;
 
-        // Fixed timestep for physics and logic
+        this.input.beginFrame();
         while (this.accumulator >= this.fixedTimeStep) {
             this.input.update();
-            this.physics.step(this.fixedTimeStep / 1000); // Pass delta in seconds
+            this.physics.step(this.fixedTimeStep / 1000);
             this.scenes.updateLogic(this.fixedTimeStep / 1000);
             this.input.endFrame();
             this.accumulator -= this.fixedTimeStep;
         }
 
-        // Render update (variable framerate)
         const alpha = this.accumulator / this.fixedTimeStep;
         this.scenes.render(alpha);
     }
@@ -66,6 +75,7 @@ export class GameEngine {
         const clampedMs = Math.max(0, Math.min(ms, 1000));
         this.accumulator += clampedMs;
 
+        this.input.beginFrame();
         while (this.accumulator >= this.fixedTimeStep) {
             this.input.update();
             this.physics.step(this.fixedTimeStep / 1000);

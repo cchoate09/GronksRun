@@ -133,7 +133,15 @@ export class GameScene extends Scene {
     private kills: number = 0;
     private gems: number = 0;
     private groundY: number;
+    // Static layer: drawn ONCE per scene init / terrain rebuild. Holds ground
+    // segments, gap walls, and platform geometry — none of which animate.
     private ground: Graphics;
+    // Dynamic layer: cleared and redrawn whenever a hazard toggles active.
+    // This used to live inside drawGround(), which forced a full redraw of
+    // up to 76,000px of ground geometry every time any of 24 hazards
+    // toggled at ~2.45rad/s. Splitting cuts the redraw to a few hundred
+    // px of hazard outlines.
+    private hazardOverlay: Graphics;
     private obstacleLayer: Container;
     private obstacleFrames: Texture[] = [];
     private terrainPlatforms: TerrainPlatform[] = [];
@@ -151,6 +159,9 @@ export class GameScene extends Scene {
     private hitThisAttack: Set<Enemy> = new Set();
     private state: 'PLAYING' | 'PAUSED' | 'LEVEL_COMPLETE' | 'DEAD' = 'PLAYING';
     private lastSafeX: number = 100;
+    // Cooldown for the unwinnable-state failsafe so it doesn't yo-yo a
+    // single enemy every frame.
+    private unwinnableRescueCooldown: number = 0;
     private adReady: boolean = false;
     private adContinueUsed: boolean = false;
     private meleeWeapon: WeaponDefinition;
@@ -184,9 +195,12 @@ export class GameScene extends Scene {
         this.background = new BackgroundManager(this.stage, this.level.levelLength + window.innerWidth, window.innerHeight, this.level.biome);
         
         this.ground = new Graphics();
+        this.hazardOverlay = new Graphics();
         this.obstacleLayer = new Container();
         this.drawGround();
+        this.drawHazardOverlay();
         this.stage.addChild(this.ground);
+        this.stage.addChild(this.hazardOverlay);
         this.stage.addChild(this.obstacleLayer);
 
         this.player = new Player();
@@ -335,6 +349,8 @@ export class GameScene extends Scene {
         return Math.min(600, Math.max(220, window.innerHeight - 90));
     }
 
+    // Static ground geometry — drawn once on init and on terrain rebuild.
+    // Hazards are NOT drawn here; see drawHazardOverlay().
     private drawGround(): void {
         this.ground.clear();
         const topColor = this.level.id >= 8 ? 0x88e0ff : this.level.id >= 5 ? 0xffb347 : 0x50d6a8;
@@ -373,21 +389,26 @@ export class GameScene extends Scene {
                 this.ground.circle(x, platform.y + 10, 4).fill({ color: 0xffffff, alpha: 0.22 });
             }
         }
+        this.renderObstacleSprites();
+    }
 
+    // Hazard overlay — small, drawn each time a hazard toggles active so we
+    // don't pay for the full ground rebuild.
+    private drawHazardOverlay(): void {
+        this.hazardOverlay.clear();
         for (const hazard of this.hazards) {
             if (hazard.type === 'spikes') {
-                this.ground.roundRect(hazard.x, this.groundY - 8, hazard.w, 8, 4).fill({ color: 0x2d1720, alpha: 0.72 });
-                this.ground.rect(hazard.x + 5, this.groundY - 11, Math.max(0, hazard.w - 10), 3).fill({ color: 0xff4d6d, alpha: 0.22 });
+                this.hazardOverlay.roundRect(hazard.x, this.groundY - 8, hazard.w, 8, 4).fill({ color: 0x2d1720, alpha: 0.72 });
+                this.hazardOverlay.rect(hazard.x + 5, this.groundY - 11, Math.max(0, hazard.w - 10), 3).fill({ color: 0xff4d6d, alpha: 0.22 });
             } else if (hazard.type === 'fireVent') {
-                this.ground.roundRect(hazard.x, this.groundY - 13, hazard.w, 13, 5).fill({ color: 0x3b1c12, alpha: 0.7 }).stroke({ color: 0xffd166, width: 1, alpha: hazard.active ? 0.52 : 0.28 });
-                this.ground.circle(hazard.x + hazard.w * 0.5, this.groundY - 13, hazard.active ? 24 : 10).fill({ color: hazard.active ? 0xff7a3d : 0xffd166, alpha: hazard.active ? 0.16 : 0.12 });
+                this.hazardOverlay.roundRect(hazard.x, this.groundY - 13, hazard.w, 13, 5).fill({ color: 0x3b1c12, alpha: 0.7 }).stroke({ color: 0xffd166, width: 1, alpha: hazard.active ? 0.52 : 0.28 });
+                this.hazardOverlay.circle(hazard.x + hazard.w * 0.5, this.groundY - 13, hazard.active ? 24 : 10).fill({ color: hazard.active ? 0xff7a3d : 0xffd166, alpha: hazard.active ? 0.16 : 0.12 });
             } else {
                 const cx = hazard.x + hazard.w * 0.5;
-                this.ground.circle(cx, this.groundY - 9, hazard.w * 0.42).fill({ color: 0x26144a, alpha: 0.42 }).stroke({ color: 0xc4b5fd, width: 2, alpha: hazard.active ? 0.68 : 0.34 });
-                this.ground.circle(cx, this.groundY - 22, hazard.active ? 18 : 10).fill({ color: 0x91e5ff, alpha: hazard.active ? 0.14 : 0.07 });
+                this.hazardOverlay.circle(cx, this.groundY - 9, hazard.w * 0.42).fill({ color: 0x26144a, alpha: 0.42 }).stroke({ color: 0xc4b5fd, width: 2, alpha: hazard.active ? 0.68 : 0.34 });
+                this.hazardOverlay.circle(cx, this.groundY - 22, hazard.active ? 18 : 10).fill({ color: 0x91e5ff, alpha: hazard.active ? 0.14 : 0.07 });
             }
         }
-        this.renderObstacleSprites();
     }
 
     private getObstacleFrame(index: number): Texture {
@@ -605,6 +626,7 @@ export class GameScene extends Scene {
         for (const platform of this.terrainPlatforms) this.engine.physics.addPlatform(platform);
         this.engine.physics.setGroundGaps(this.terrainGaps);
         this.drawGround();
+        this.drawHazardOverlay();
         this.player.setWorldBounds(this.level.levelLength);
         this.player.body.y = Math.min(this.player.body.y, this.groundY - this.player.body.h);
         for (const enemy of this.enemies) {
@@ -717,7 +739,7 @@ export class GameScene extends Scene {
     }
 
     private updateHazards(dt: number): void {
-        let needsGroundRedraw = false;
+        let needsHazardRedraw = false;
         let needsSpriteRedraw = false;
         for (const hazard of this.hazards) {
             hazard.phase += dt;
@@ -734,10 +756,12 @@ export class GameScene extends Scene {
                 continue;
             }
             hazard.y = this.groundY - hazard.h;
-            if (wasActive !== hazard.active) needsGroundRedraw = true;
+            if (wasActive !== hazard.active) needsHazardRedraw = true;
         }
-        if (needsGroundRedraw) this.drawGround();
-        else if (needsSpriteRedraw) this.renderObstacleSprites();
+        // Was: drawGround() rebuilt the entire 76,000px level on every toggle.
+        // Now: only the hazard overlay (small) is rebuilt; static ground is untouched.
+        if (needsHazardRedraw) this.drawHazardOverlay();
+        if (needsSpriteRedraw) this.renderObstacleSprites();
     }
 
     private updateLastSafePosition(): void {
@@ -780,6 +804,61 @@ export class GameScene extends Scene {
     private checkLevelCompletion(): void {
         if (this.hasMetLevelGoal()) {
             this.completeLevel();
+            return;
+        }
+        this.preventUnwinnableState();
+    }
+
+    // Failsafe against soft-locks: if the player still owes kills but no enemy
+    // is reachable from BEHIND (legitimately-ahead enemies are fine, they'll
+    // be encountered by forward progress), nudge a stuck enemy toward the
+    // player. Skips flyers — yanking a Ptero or Diver to ground level breaks
+    // their AI and gives the player a free sitting target. Cooldown prevents
+    // per-frame yo-yo on a single enemy.
+    private preventUnwinnableState(): void {
+        if (this.kills >= this.level.targetKills) return;
+        if (this.unwinnableRescueCooldown > 0) {
+            // checkLevelCompletion runs each tick; rough dt is fine here.
+            this.unwinnableRescueCooldown -= 1 / 60;
+            return;
+        }
+        const playerCenterX = this.player.body.x + this.player.body.w * 0.5;
+        const reachable = this.enemies.some((enemy) => {
+            const dx = enemy.body.x + enemy.body.w * 0.5 - playerCenterX;
+            // Anything within 1500 ahead OR up to 1500 behind counts as
+            // reachable; only "stranded" means everyone is far behind.
+            return dx > -1500 && dx < 1500;
+        });
+        if (reachable) return;
+        // Pick the closest BEHIND-the-player non-flyer.
+        const candidates = this.enemies.filter((e) => {
+            if (e.type === 'PTERO' || e.type === 'DIVER') return false;
+            const dx = e.body.x + e.body.w * 0.5 - playerCenterX;
+            return dx <= -1500;
+        });
+        if (candidates.length > 0) {
+            const closest = candidates.reduce((a, b) => {
+                const da = Math.abs(a.body.x + a.body.w * 0.5 - playerCenterX);
+                const db = Math.abs(b.body.x + b.body.w * 0.5 - playerCenterX);
+                return da < db ? a : b;
+            });
+            const targetX = Math.min(this.level.levelLength - 240, this.player.body.x + 520);
+            closest.body.x = targetX;
+            closest.body.y = this.groundY - closest.body.h;
+            closest.body.vx = 0;
+            closest.body.vy = 0;
+            closest.body.onGround = true;
+            closest.body.groundedOn = 'ground';
+            this.unwinnableRescueCooldown = 2.0;
+            return;
+        }
+        // No reachable non-flyer enemies at all — force the spawn gate to
+        // fire next frame so the spawnWave path runs (which uses the
+        // type-correct constructors for any enemy kind including flyers).
+        if (this.enemies.length === 0 || this.enemies.every((e) => e.type === 'PTERO' || e.type === 'DIVER')) {
+            this.spawnTimer = 0;
+            this.nextSpawnX = Math.min(this.nextSpawnX, this.player.body.x + 320);
+            this.unwinnableRescueCooldown = 1.0;
         }
     }
 
@@ -907,8 +986,12 @@ export class GameScene extends Scene {
     }
 
     private updateEnemies(dt: number): void {
+        // Snapshot the player target ONCE per frame instead of allocating a
+        // fresh object per enemy per frame. With 5 enemies at 60fps that was
+        // 300 throwaway objects/sec; now it's 60.
+        const targetSnapshot = this.getEnemyTargetSnapshot();
         for (const enemy of this.enemies) {
-            enemy.update(dt, this.getEnemyTargetSnapshot());
+            enemy.update(dt, targetSnapshot);
             if (enemy.isDead) continue;
             this.avoidEnemyGroundGaps(enemy);
 
@@ -957,7 +1040,11 @@ export class GameScene extends Scene {
             if (this.player.canDealPoundDamage() && this.overlaps(this.player.body, enemy.body, 6) && !this.hitThisAttack.has(enemy)) {
                 this.hitThisAttack.add(enemy);
                 SoundManager.playCue('hit');
-                enemy.takePoundDamage(36, this.player.facingRight ? 1 : -1);
+                // Pound damage scales with the equipped melee weapon so upgrades
+                // like Sky Maul actually matter. Slight bonus over melee for the
+                // commitment of being airborne.
+                const poundDamage = Math.round(this.player.meleeDamage * 1.15);
+                enemy.takePoundDamage(poundDamage, this.player.facingRight ? 1 : -1);
                 this.player.body.vy = -360;
                 this.player.isPounding = false;
                 this.applyShake(14, 0.12);
@@ -1069,6 +1156,7 @@ export class GameScene extends Scene {
 
     private completeLevel(): void {
         this.state = 'LEVEL_COMPLETE';
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         SoundManager.playCue('clear');
         if (this.isEndless) {
@@ -1087,6 +1175,7 @@ export class GameScene extends Scene {
 
     private showDead(): void {
         this.state = 'DEAD';
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         this.drawDeadOverlay();
     }
@@ -1094,6 +1183,8 @@ export class GameScene extends Scene {
     private showPause(): void {
         if (this.state !== 'PLAYING') return;
         this.state = 'PAUSED';
+        this.engine.paused = true;
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         this.drawPauseOverlay();
     }
@@ -1101,6 +1192,8 @@ export class GameScene extends Scene {
     private resumeGame(): void {
         if (this.state !== 'PAUSED') return;
         this.state = 'PLAYING';
+        this.engine.paused = false;
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');
@@ -1271,8 +1364,10 @@ export class GameScene extends Scene {
     private applyRewardedContinue(): void {
         if (this.state !== 'DEAD' || this.adContinueUsed) return;
         this.adContinueUsed = true;
+        this.player.clearHitState();
         this.player.hp = Math.max(55, this.player.hp);
-        this.player.body.x = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
+        const respawnX = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
+        this.player.body.x = respawnX;
         this.player.body.y = this.groundY - this.player.body.h - 2;
         this.player.body.vx = 240;
         this.player.body.vy = 0;
@@ -1283,9 +1378,25 @@ export class GameScene extends Scene {
             this.engine.physics.removeBody(projectile.body);
         });
         this.projectiles = [];
+        this.playerProjectiles.forEach((projectile) => {
+            this.stage.removeChild(projectile.view);
+            this.engine.physics.removeBody(projectile.body);
+        });
+        this.playerProjectiles = [];
         this.bombExplosions.forEach((explosion) => this.stage.removeChild(explosion.view));
         this.bombExplosions = [];
-        this.player.grantInvincibility(1.2);
+        this.particles.clearAll();
+        // Despawn enemies that would re-kill the player as soon as i-frames end.
+        const safeRadius = 320;
+        this.enemies = this.enemies.filter((enemy) => {
+            const dx = enemy.body.x + enemy.body.w * 0.5 - (respawnX + this.player.body.w * 0.5);
+            if (Math.abs(dx) > safeRadius) return true;
+            this.stage.removeChild(enemy.view);
+            this.engine.physics.removeBody(enemy.body);
+            return false;
+        });
+        this.hitThisAttack.clear();
+        this.player.grantInvincibility(1.5);
         this.state = 'PLAYING';
         this.publishNativeUiState();
         this.overlayLayer.removeChildren();

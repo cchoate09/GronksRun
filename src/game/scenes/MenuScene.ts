@@ -52,6 +52,15 @@ export class MenuScene extends Scene {
         this.buttonRegistry = [];
     }
 
+    // Async by design even though the body is empty today: forces every
+    // call site to `await` it, so when a future async persistence layer
+    // (IndexedDB, cloud save) is wired in here, the safeToExit handshake
+    // can't accidentally fire before the write resolves. Type system
+    // enforces the contract.
+    private async flushPersistence(): Promise<void> {
+        // localStorage is synchronous in the WebView, so this is a no-op today.
+    }
+
     private drawBackdrop(): void {
         const bg = new Graphics();
         bg.rect(0, 0, window.innerWidth, window.innerHeight).fill(0x0a1018);
@@ -389,13 +398,16 @@ export class MenuScene extends Scene {
         }
     };
 
-    private handleMessage = (e: any) => {
+    private handleMessage = async (e: any) => {
         try {
             const rawData = e.data || e;
             const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
             if (data.type === 'backButton') {
                 if (this.mode === 'MAIN') {
-                    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'exitApp' }));
+                    // Flush pending writes (await mandatory — see flushPersistence comment)
+                    // before signaling the host that it's safe to exit.
+                    await this.flushPersistence();
+                    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'safeToExit' }));
                 } else {
                     this.drawMainMenu();
                 }

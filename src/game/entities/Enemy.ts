@@ -9,6 +9,8 @@ export class Projectile {
     public isDead: boolean = false;
     public damage: number;
     public highProjectile: boolean;
+    public explosionRadius: number = 0;
+    public hasExploded: boolean = false;
     private maxX: number;
 
     constructor(x: number, y: number, vx: number, vy: number, color: number = 0xffff00, gravityScale: number = 0.2, damage: number = 10, maxX: number = window.innerWidth + 100, highProjectile: boolean = false) {
@@ -120,7 +122,8 @@ export class Enemy {
             this.aiLogic(dt, targetSnapshot);
         }
 
-        this.sprite.update(dt, Math.abs(this.body.vx) / 100 || 1);
+        const believableRunScale = Math.min(1.08, Math.max(0.68, Math.abs(this.body.vx) / 190 || 0.72));
+        this.sprite.update(dt, believableRunScale);
         this.sprite.setFacingRight(this.facingRight, this.body.w);
     }
 

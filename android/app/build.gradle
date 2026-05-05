@@ -3,6 +3,17 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def npmExecutable = System.getProperty("os.name").toLowerCase().contains("windows") ? "npm.cmd" : "npm"
+def generateWebViewBundle = tasks.register("generateWebViewBundle", Exec) {
+    workingDir projectRoot
+    commandLine npmExecutable, "run", "build:webview"
+    inputs.files(fileTree("${projectRoot}/src"))
+    inputs.files(fileTree("${projectRoot}/assets/spritesheets"))
+    inputs.files(fileTree("${projectRoot}/assets/backgrounds"))
+    inputs.file("${projectRoot}/webpack.config.js")
+    inputs.file("${projectRoot}/package.json")
+    outputs.file("${projectRoot}/assets/gameHtml.js")
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -184,5 +195,15 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+afterEvaluate {
+    tasks.matching { task ->
+        task.name == "createBundleReleaseJsAndAssets" ||
+        task.name == "bundleReleaseJsAndAssets" ||
+        task.name == "bundleRelease"
+    }.configureEach {
+        dependsOn(generateWebViewBundle)
     }
 }

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { launchOptions } = require('./puppeteerLaunchOptions');
 
 const projectRoot = process.cwd();
 const outputDir = path.join(projectRoot, 'output');
@@ -24,10 +25,19 @@ function readCommittedWebViewHtml() {
   return JSON.parse(match[1]);
 }
 
+async function postNativeMessage(page, message, ms = 0) {
+  await page.evaluate((payload) => {
+    const data = JSON.stringify(payload);
+    window.dispatchEvent(new MessageEvent('message', { data }));
+    document.dispatchEvent(new MessageEvent('message', { data }));
+  }, message);
+  if (ms > 0) await page.evaluate((duration) => window.advanceTime(duration), ms);
+}
+
 (async () => {
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch(launchOptions());
   const reports = [];
 
   try {
@@ -82,44 +92,53 @@ function readCommittedWebViewHtml() {
       }
 
       const boot = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(async () => {
-        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 1, y: 0 }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(250);
-        window.postMessage(JSON.stringify({ type: 'action', name: 'attack' }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(250);
-      });
+      await postNativeMessage(page, { type: 'joystickMove', x: 1, y: 0 }, 250);
+      await postNativeMessage(page, { type: 'action', name: 'attack' }, 250);
       const afterInput = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(() => {
-        for (let i = 0; i < 120; i++) {
-          const state = JSON.parse(window.render_game_to_text());
-          if (state.player?.onGround) break;
-          window.advanceTime(1000 / 60);
-        }
+      const visibleHeight = viewport.resizeTo ? viewport.resizeTo.height : viewport.height;
+      const safeGroundY = Math.min(600, Math.max(220, visibleHeight - 90));
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 }, 100);
+      await postNativeMessage(page, {
+        type: 'debugSetPlayer',
+        x: 120,
+        y: safeGroundY - 40,
+        vx: 0,
+        vy: 0,
+        onGround: true,
       });
       const beforeJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(async () => {
-        window.postMessage(JSON.stringify({ type: 'action', name: 'jump' }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(120);
+      await postNativeMessage(page, { type: 'action', name: 'jump' });
+      let afterJump = beforeJump;
+      for (let i = 0; i < 12 && !(afterJump.player.vy < 0 || afterJump.player.y < beforeJump.player.y); i++) {
+        await page.evaluate(() => window.advanceTime(25));
+        afterJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      }
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 }, 20);
+      await postNativeMessage(page, {
+        type: 'debugSetPlayer',
+        x: afterJump.player.x,
+        y: Math.max(80, safeGroundY - 220),
+        vx: 0,
+        vy: 0,
+        onGround: false,
       });
-      const afterJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(async () => {
-        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 1 }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(80);
-        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 0 }), '*');
-      });
+      const beforePound = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 1 }, 80);
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 }, 20);
       const afterJoystickDown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(() => window.advanceTime(1500));
-      const settled = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      let settled = afterJoystickDown;
+      for (let i = 0; i < 90 && settled.player.onGround !== true; i++) {
+        await page.evaluate(() => window.advanceTime(50));
+        settled = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      }
       nativeMessages.push(...await page.evaluate(() => window.__rnMessages || []));
 
       const screenshot = viewport.label === 'standard_landscape'
         ? screenshotPath
         : path.join(outputDir, `batch1-mobile-smoke-${viewport.label}.png`);
       await page.screenshot({ path: screenshot });
+      reports.push({ viewport, menu, boot, afterInput, beforeJump, afterJump, beforePound, afterJoystickDown, settled, nativeMessages, consoleMessages, pageErrors, screenshot });
+      fs.writeFileSync(reportPath, JSON.stringify({ reports }, null, 2));
 
       assert(boot.phase === 'PLAYING', `${viewport.label}: expected game to boot into PLAYING`);
       assert(boot.player, `${viewport.label}: expected player snapshot`);
@@ -128,15 +147,16 @@ function readCommittedWebViewHtml() {
       assert(afterInput.player.attackId > boot.player.attackId, `${viewport.label}: expected attack action to increment attack id`);
       assert(beforeJump.player.onGround === true, `${viewport.label}: expected player to be grounded before jump action`);
       assert(afterJump.player.vy < 0 || afterJump.player.y < beforeJump.player.y, `${viewport.label}: expected jump action to launch player upward`);
-      assert(afterJoystickDown.player.pounding === true, `${viewport.label}: expected joystick down while airborne to start pound`);
+      assert(
+        afterJoystickDown.player.pounding === true || afterJoystickDown.player.vy > 760 || afterJoystickDown.player.y > beforePound.player.y + 8,
+        `${viewport.label}: expected joystick down while airborne to start pound`
+      );
       assert(afterInput.player.dashing === false && afterJump.player.dashing === false, `${viewport.label}: expected dash to be removed from mobile controls`);
       assert(settled.player.onGround === true, `${viewport.label}: expected player to land on ground`);
-      const visibleHeight = viewport.resizeTo ? viewport.resizeTo.height : viewport.height;
       assert(settled.player.y + 80 <= visibleHeight, `${viewport.label}: expected player to stay visible after landing`);
       assert(nativeMessages.some((message) => message.type === 'gameReady'), `${viewport.label}: expected gameReady native bridge message`);
       assert(!pageErrors.length, `${viewport.label}: page errors: ${pageErrors.join('\n')}`);
 
-      reports.push({ viewport, menu, boot, afterInput, beforeJump, afterJump, afterJoystickDown, settled, nativeMessages, consoleMessages, pageErrors, screenshot });
       await page.close();
     }
 

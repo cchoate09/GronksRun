@@ -3,6 +3,7 @@ import { Container, Graphics } from 'pixi.js';
 import { InputManager } from '../../engine/input';
 import { SkeletalSprite } from './SkeletalSprite';
 import { HERO_SHEETS } from '../assets/spriteData';
+import { WeaponDefinition } from '../weapons';
 
 export type AttackMode = 'NONE' | 'MELEE' | 'RANGED';
 export type AttackPhase = 'NONE' | 'WINDUP' | 'ACTIVE' | 'RECOVERY';
@@ -31,6 +32,9 @@ export class Player {
     private attackElapsed: number = 0;
     public attackId: number = 0;
     public attackRange: number = 145;
+    public meleeDamage: number = 28;
+    public rangedDamage: number = 22;
+    public rangedProjectileSpeed: number = 680;
     public attackMode: AttackMode = 'NONE';
     public attackPhase: AttackPhase = 'NONE';
     public rangedShotsFired: number = 0;
@@ -42,7 +46,7 @@ export class Player {
     private readonly attackWindup: number = 0.1;
     private readonly attackActive: number = 0.14;
     private readonly attackRecovery: number = 0.16;
-    private readonly rangedCooldown: number = 0.85;
+    private rangedCooldown: number = 0.85;
     private pendingRangedShot: boolean = false;
 
     constructor() {
@@ -65,6 +69,14 @@ export class Player {
         this.worldMaxX = Math.max(window.innerWidth, width);
     }
 
+    public applyWeaponLoadout(melee: WeaponDefinition, ranged: WeaponDefinition): void {
+        this.attackRange = melee.range;
+        this.meleeDamage = melee.damage;
+        this.rangedDamage = ranged.damage;
+        this.rangedCooldown = ranged.cooldown;
+        this.rangedProjectileSpeed = ranged.projectileSpeed;
+    }
+
     public takeDamage(amount: number, knockbackDir: number): void {
         if (this.isHit) return;
         this.hp -= amount;
@@ -75,6 +87,11 @@ export class Player {
         this.body.onGround = false;
 
         if (this.hp < 0) this.hp = 0;
+    }
+
+    public grantInvincibility(seconds: number): void {
+        this.isHit = true;
+        this.hitTimer = Math.max(this.hitTimer, seconds);
     }
 
     public update(dt: number, input: InputManager): void {
@@ -116,7 +133,16 @@ export class Player {
         }
 
         const downHeld = input.isDown('ArrowDown') || input.isDown('KeyS');
-        if ((input.justPressed('ArrowDown') || input.justPressed('KeyS') || input.actionJustPressed('pound')) && !this.body.onGround) {
+        const downJustPressed = input.justPressed('ArrowDown') || input.justPressed('KeyS') || input.actionJustPressed('pound');
+        if (downJustPressed && this.body.onGround && this.body.groundedOn === 'platform') {
+            this.body.dropThroughTimer = 0.26;
+            this.body.y += 10;
+            this.body.vy = Math.max(this.body.vy, 120);
+            this.body.onGround = false;
+            this.body.groundedOn = null;
+            this.isPounding = false;
+            this.isCrouching = true;
+        } else if (downJustPressed && !this.body.onGround) {
             this.body.vy = Math.max(this.body.vy, 980);
             this.isPounding = true;
             this.isCrouching = false;

@@ -5,8 +5,9 @@ import { GameScene, LEVELS } from './GameScene';
 import { readNumber, writeNumber } from '../storage';
 import { SoundManager } from '../audio/SoundManager';
 import { getMainMenuLayout, MainMenuButtonLayout } from './menuLayout';
+import { equipWeapon, getWeaponInventorySnapshot, WeaponDefinition } from '../weapons';
 
-type MenuMode = 'MAIN' | 'LEVEL_SELECT' | 'SETTINGS';
+type MenuMode = 'MAIN' | 'LEVEL_SELECT' | 'SETTINGS' | 'ARMORY';
 
 export class MenuScene extends Scene {
     private stage: Container;
@@ -90,6 +91,8 @@ export class MenuScene extends Scene {
             GameScene.selectLevel(0);
             this.engine.scenes.loadScene(GameScene);
         });
+        const armoryButton = buttonsByLabel.get('ARMORY')!;
+        this.addButton(armoryButton.x, armoryButton.y, armoryButton.w, armoryButton.h, 'ARMORY', 0xfca5a5, () => this.drawArmory());
         const levelButton = buttonsByLabel.get('LEVEL SELECT')!;
         this.addButton(levelButton.x, levelButton.y, levelButton.w, levelButton.h, 'LEVEL SELECT', 0x67e8f9, () => this.drawLevelSelect());
         const settingsButton = buttonsByLabel.get('SETTINGS')!;
@@ -165,6 +168,76 @@ export class MenuScene extends Scene {
         this.addButton(panelX + 32, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
     }
 
+    private drawArmory(): void {
+        this.mode = 'ARMORY';
+        this.clear();
+        this.drawBackdrop();
+
+        const title = new Text({ text: 'ARMORY', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
+        title.anchor.set(0.5);
+        title.position.set(window.innerWidth / 2, 62);
+        this.stage.addChild(title);
+
+        const inventory = getWeaponInventorySnapshot();
+        const panelW = Math.min(860, window.innerWidth - 40);
+        const panelH = Math.max(270, window.innerHeight - 154);
+        const panelX = (window.innerWidth - panelW) / 2;
+        const panelY = 104;
+        const panel = new Graphics();
+        panel.roundRect(panelX, panelY, panelW, panelH, 10).fill(0x101822).stroke({ color: 0xfca5a5, width: 2 });
+        this.stage.addChild(panel);
+
+        const columnGap = 18;
+        const columnW = (panelW - 52 - columnGap) / 2;
+        this.drawWeaponColumn('MELEE', inventory.melee, inventory.ownedMelee, inventory.equippedMelee, panelX + 22, panelY + 28, columnW);
+        this.drawWeaponColumn('RANGED', inventory.ranged, inventory.ownedRanged, inventory.equippedRanged, panelX + 30 + columnW + columnGap, panelY + 28, columnW);
+
+        this.addButton(panelX + 22, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
+    }
+
+    private drawWeaponColumn(title: string, weapons: WeaponDefinition[], owned: string[], equipped: string, x: number, y: number, w: number): void {
+        const titleText = new Text({ text: title, style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold' }) });
+        titleText.position.set(x, y);
+        this.stage.addChild(titleText);
+
+        weapons.forEach((weapon, index) => {
+            const itemY = y + 34 + index * 54;
+            const isOwned = owned.includes(weapon.id);
+            const isEquipped = equipped === weapon.id;
+            const color = isEquipped ? 0x44ff88 : isOwned ? 0x67e8f9 : 0x334155;
+            const button = new Container();
+            const bg = new Graphics();
+            bg.roundRect(0, 0, w, 46, 8).fill(color).stroke({ color: 0xffffff, width: 1, alpha: isOwned ? 0.25 : 0.08 });
+            button.addChild(bg);
+
+            const label = isEquipped ? `${weapon.name.toUpperCase()}  EQUIPPED` : isOwned ? weapon.name.toUpperCase() : `${weapon.name.toUpperCase()}  LV ${weapon.unlockLevel}`;
+            const nameText = new Text({ text: label, style: new TextStyle({ fill: isOwned ? 0x07110b : 0xcbd5e1, fontSize: 13, fontWeight: 'bold' }) });
+            nameText.position.set(12, 7);
+            button.addChild(nameText);
+
+            const statText = new Text({
+                text: title === 'MELEE'
+                    ? `DMG ${weapon.damage}  RANGE ${weapon.range}`
+                    : `DMG ${weapon.damage}  CD ${weapon.cooldown.toFixed(2)}  SPD ${weapon.projectileSpeed}`,
+                style: new TextStyle({ fill: isOwned ? 0x172033 : 0x94a3b8, fontSize: 11, fontWeight: 'bold' }),
+            });
+            statText.position.set(12, 26);
+            button.addChild(statText);
+
+            button.position.set(x, itemY);
+            button.eventMode = isOwned ? 'static' : 'none';
+            button.cursor = isOwned ? 'pointer' : 'default';
+            if (isOwned) {
+                button.on('pointerdown', () => {
+                    SoundManager.playCue('select');
+                    equipWeapon(weapon.id);
+                    this.drawArmory();
+                });
+            }
+            this.stage.addChild(button);
+        });
+    }
+
     private addSettingLabel(x: number, y: number, label: string): void {
         const text = new Text({ text: label, style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold' }) });
         text.position.set(x, y);
@@ -223,7 +296,7 @@ export class MenuScene extends Scene {
             this.engine.input.clearActions();
             GameScene.selectLevel(this.unlockedLevel);
             this.engine.scenes.loadScene(GameScene);
-        } else if ((this.mode === 'LEVEL_SELECT' || this.mode === 'SETTINGS') && e.code === 'Escape') {
+        } else if ((this.mode === 'LEVEL_SELECT' || this.mode === 'SETTINGS' || this.mode === 'ARMORY') && e.code === 'Escape') {
             this.drawMainMenu();
         }
     };
@@ -232,7 +305,7 @@ export class MenuScene extends Scene {
         try {
             const rawData = e.data || e;
             const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-            if (data.type === 'action' && (data.name === 'jump' || data.name === 'attack')) {
+            if (this.mode === 'MAIN' && data.type === 'action' && (data.name === 'jump' || data.name === 'attack')) {
                 this.engine.input.clearActions();
                 GameScene.selectLevel(this.unlockedLevel);
                 this.engine.scenes.loadScene(GameScene);
@@ -269,6 +342,7 @@ export class MenuScene extends Scene {
                 difficulty: this.difficulty,
                 sound_enabled: this.soundEnabled === 1,
             },
+            armory: getWeaponInventorySnapshot(),
             unlocked_level: this.unlockedLevel,
             levels: LEVELS.map((level) => ({
                 id: level.id,

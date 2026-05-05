@@ -124,16 +124,21 @@ async function postNativeMessage(page, message, ms = 0) {
       });
       const beforePound = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 1 }, 80);
-      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 });
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 }, 20);
       const afterJoystickDown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(() => window.advanceTime(1500));
-      const settled = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      let settled = afterJoystickDown;
+      for (let i = 0; i < 90 && settled.player.onGround !== true; i++) {
+        await page.evaluate(() => window.advanceTime(50));
+        settled = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      }
       nativeMessages.push(...await page.evaluate(() => window.__rnMessages || []));
 
       const screenshot = viewport.label === 'standard_landscape'
         ? screenshotPath
         : path.join(outputDir, `batch1-mobile-smoke-${viewport.label}.png`);
       await page.screenshot({ path: screenshot });
+      reports.push({ viewport, menu, boot, afterInput, beforeJump, afterJump, beforePound, afterJoystickDown, settled, nativeMessages, consoleMessages, pageErrors, screenshot });
+      fs.writeFileSync(reportPath, JSON.stringify({ reports }, null, 2));
 
       assert(boot.phase === 'PLAYING', `${viewport.label}: expected game to boot into PLAYING`);
       assert(boot.player, `${viewport.label}: expected player snapshot`);
@@ -152,7 +157,6 @@ async function postNativeMessage(page, message, ms = 0) {
       assert(nativeMessages.some((message) => message.type === 'gameReady'), `${viewport.label}: expected gameReady native bridge message`);
       assert(!pageErrors.length, `${viewport.label}: page errors: ${pageErrors.join('\n')}`);
 
-      reports.push({ viewport, menu, boot, afterInput, beforeJump, afterJump, beforePound, afterJoystickDown, settled, nativeMessages, consoleMessages, pageErrors, screenshot });
       await page.close();
     }
 

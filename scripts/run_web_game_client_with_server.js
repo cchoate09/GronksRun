@@ -3,6 +3,8 @@ const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 const sharp = require('sharp');
+const puppeteer = require('puppeteer');
+const { launchOptions } = require('./puppeteerLaunchOptions');
 
 const projectRoot = process.cwd();
 const distDir = path.join(projectRoot, 'dist');
@@ -24,6 +26,17 @@ const mimeTypes = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
+};
+
+const fallbackButtonNameToKey = {
+  up: 'ArrowUp',
+  down: 'ArrowDown',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
+  enter: 'Enter',
+  space: 'Space',
+  a: 'KeyA',
+  b: 'KeyB',
 };
 
 function writeActionsFile() {
@@ -90,6 +103,64 @@ async function imageHasSignal(filePath) {
   return nonBlackPixels / pixelCount > 0.01;
 }
 
+function readActionsFile() {
+  return JSON.parse(fs.readFileSync(actionsPath, 'utf8'));
+}
+
+async function snapshot(page) {
+  return page.evaluate(() => JSON.parse(window.render_game_to_text()));
+}
+
+async function advance(page, ms) {
+  await page.evaluate((duration) => window.advanceTime(duration), ms);
+}
+
+async function pressFallbackButtons(page, buttons, frames) {
+  const keys = [...new Set((buttons || []).map((button) => fallbackButtonNameToKey[button]).filter(Boolean))];
+  for (const key of keys) {
+    await page.keyboard.down(key);
+  }
+  await advance(page, Math.max(16, Math.round((frames || 1) * (1000 / 60))));
+  for (const key of keys.reverse()) {
+    await page.keyboard.up(key);
+  }
+  await advance(page, 16);
+}
+
+async function runFallbackWebGameClient(port) {
+  const browser = await puppeteer.launch(launchOptions({
+    defaultViewport: { width: 960, height: 540, deviceScaleFactor: 1 },
+  }));
+  const page = await browser.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.stack || error.message || String(error)));
+  page.on('console', (message) => {
+    if (message.type() === 'error') pageErrors.push(message.text());
+  });
+
+  try {
+    await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load', timeout: 30000 });
+    await page.waitForFunction(() => typeof window.render_game_to_text === 'function', { timeout: 10000 });
+    const actions = readActionsFile();
+
+    for (let iteration = 0; iteration < 3; iteration++) {
+      for (const step of actions.steps || []) {
+        await pressFallbackButtons(page, step.buttons, step.frames);
+      }
+      const state = await snapshot(page);
+      fs.writeFileSync(path.join(outputDir, `state-${iteration + 1}.json`), JSON.stringify(state, null, 2));
+      await page.screenshot({ path: path.join(outputDir, `shot-${iteration + 1}.png`) });
+    }
+
+    if (pageErrors.length) {
+      throw new Error(`Repo fallback web game client saw page errors:\n${pageErrors.join('\n')}`);
+    }
+    console.log('Repo fallback web game client completed with screenshots.');
+  } finally {
+    await browser.close();
+  }
+}
+
 async function runWebGameClient(port) {
   const child = spawn(process.execPath, [
     webGameClientPath,
@@ -122,16 +193,18 @@ async function runWebGameClient(port) {
 }
 
 (async () => {
-  if (!fs.existsSync(webGameClientPath)) {
-    throw new Error(`Missing develop-web-game client at ${webGameClientPath}`);
-  }
   writeActionsFile();
   fs.mkdirSync(outputDir, { recursive: true });
 
   const server = createServer();
   const port = await listen(server);
   try {
-    await runWebGameClient(port);
+    if (fs.existsSync(webGameClientPath)) {
+      await runWebGameClient(port);
+    } else {
+      console.warn(`Missing develop-web-game client at ${webGameClientPath}; using repo-owned Puppeteer fallback.`);
+      await runFallbackWebGameClient(port);
+    }
 
     const screenshots = fs.readdirSync(outputDir)
       .filter((name) => /^shot-\d+\.png$/.test(name))

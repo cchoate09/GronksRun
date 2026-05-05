@@ -20,6 +20,7 @@ const menuSource = read('src/game/scenes/MenuScene.ts');
 const androidBuildSource = read('android/app/build.gradle');
 const preflightSource = read('scripts/qa_environment_preflight.js');
 const puppeteerLaunchOptionsSource = read('scripts/puppeteerLaunchOptions.js');
+const webGameClientRunnerSource = read('scripts/run_web_game_client_with_server.js');
 
 assert(appSource.includes('topControlsContainer'), 'mobile controls: pause button should live in a top controls container');
 assert(/pauseButton:\s*\{[^}]*width:\s*4[0-9][^}]*height:\s*4[0-9]/s.test(appSource), 'mobile controls: pause button should be smaller than combat buttons');
@@ -69,5 +70,7 @@ assert(fs.existsSync(path.join(projectRoot, '.github', 'workflows', 'android-com
 const workflowSource = read('.github/workflows/android-competitiveness.yml');
 assert(workflowSource.includes('npm run qa:visual'), 'visual QA: workflow should run the visual QA gate');
 assert(workflowSource.includes('npx puppeteer browsers install'), 'visual QA: workflow should install a Puppeteer-managed browser');
+assert(webGameClientRunnerSource.includes('runFallbackWebGameClient'), 'visual QA: web game client should have a repo-owned fallback for CI');
+assert(!webGameClientRunnerSource.includes('throw new Error(`Missing develop-web-game client'), 'visual QA: missing agent-local web game client should not fail CI before repo-owned smokes run');
 
 console.log('Android competitiveness contract passed.');

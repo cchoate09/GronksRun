@@ -225,6 +225,12 @@ function GameApp() {
 
       {webViewLoaded && (
         <View style={styles.controlsLayer} pointerEvents="box-none">
+            <View style={styles.topControlsContainer}>
+                <View onTouchStart={() => handleAction('pause')} style={[styles.actionButton, styles.pauseButton]}>
+                    <Text style={styles.pauseText}>II</Text>
+                </View>
+            </View>
+
             <View style={styles.joystickContainer} {...panResponder.panHandlers}>
                 <View style={styles.joystickBase}>
                     <View style={[styles.joystickStick, { transform: [{ translateX: joystick.x }, { translateY: joystick.y }] }]} />
@@ -235,14 +241,13 @@ function GameApp() {
                 <View onTouchStart={() => handleAction('jump')} style={[styles.actionButton, styles.jumpButton]}>
                     <Text style={styles.jumpText}>JUMP</Text>
                 </View>
-                <View onTouchStart={() => handleAction('pause')} style={[styles.actionButton, styles.pauseButton]}>
-                    <Text style={styles.pauseText}>II</Text>
-                </View>
-                <View onTouchStart={() => handleAction('ranged')} style={[styles.actionButton, styles.rangedButton]}>
-                    <Text style={styles.rangedText}>RANGED</Text>
-                </View>
-                <View onTouchStart={() => handleAction('attack')} style={[styles.actionButton, styles.attackButton]}>
-                    <Text style={styles.attackText}>MELEE</Text>
+                <View style={styles.combatButtonsRow}>
+                    <View onTouchStart={() => handleAction('ranged')} style={[styles.actionButton, styles.rangedButton]}>
+                        <Text style={styles.rangedText}>RANGED</Text>
+                    </View>
+                    <View onTouchStart={() => handleAction('attack')} style={[styles.actionButton, styles.attackButton]}>
+                        <Text style={styles.attackText}>MELEE</Text>
+                    </View>
                 </View>
             </View>
         </View>
@@ -268,15 +273,17 @@ const styles = StyleSheet.create({
   loadingSubtext: { color: '#667788', fontSize: 12, marginTop: 8 },
   webview: { flex: 1, backgroundColor: 'transparent' },
   controlsLayer: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 },
+  topControlsContainer: { position: 'absolute', top: 12, right: 18, width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
   joystickContainer: { position: 'absolute', left: 28, bottom: 34, width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
   joystickBase: { width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   joystickStick: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.4)' },
-  actionButtonsContainer: { position: 'absolute', right: 30, bottom: 38, alignItems: 'center', flexDirection: 'row', gap: 10 },
+  actionButtonsContainer: { position: 'absolute', right: 26, bottom: 32, alignItems: 'center', gap: 8 },
+  combatButtonsRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
   actionButton: { borderRadius: 40, justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
   attackButton: { width: 88, height: 88, backgroundColor: 'rgba(255,85,85,0.4)', borderColor: '#ff5555' },
   rangedButton: { width: 76, height: 76, backgroundColor: 'rgba(103,232,249,0.32)', borderColor: '#67e8f9' },
-  jumpButton: { width: 76, height: 76, backgroundColor: 'rgba(68,255,136,0.32)', borderColor: '#44ff88' },
-  pauseButton: { width: 54, height: 54, backgroundColor: 'rgba(196,181,253,0.3)', borderColor: '#c4b5fd' },
+  jumpButton: { width: 72, height: 72, backgroundColor: 'rgba(68,255,136,0.32)', borderColor: '#44ff88' },
+  pauseButton: { width: 44, height: 44, backgroundColor: 'rgba(196,181,253,0.3)', borderColor: '#c4b5fd' },
   buttonText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   attackText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   rangedText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },

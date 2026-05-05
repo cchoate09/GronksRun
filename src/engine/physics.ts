@@ -21,6 +21,8 @@ export class Body implements AABB {
     public vx: number = 0;
     public vy: number = 0;
     public previousBottom: number = 0;
+    public groundedOn: 'ground' | 'platform' | null = null;
+    public dropThroughTimer: number = 0;
 
     public isStatic: boolean = false;
     public onGround: boolean = false;
@@ -78,6 +80,7 @@ export class PhysicsEngine {
 
             // Apply gravity
             body.vy += this.gravity * body.gravityScale * dt;
+            body.dropThroughTimer = Math.max(0, body.dropThroughTimer - dt);
 
             // Apply terminal velocity
             if (body.vy > 1200) body.vy = 1200;
@@ -102,16 +105,20 @@ export class PhysicsEngine {
             if (body.isStatic) continue;
 
             body.onGround = false;
+            body.groundedOn = null;
 
-            for (const platform of this.platforms) {
-                const nextBottom = body.y + body.h;
-                const overlapsX = body.x + body.w > platform.x && body.x < platform.x + platform.w;
-                const fallingOntoTop = body.vy >= 0 && body.previousBottom <= platform.y + 8 && nextBottom >= platform.y;
-                if (overlapsX && fallingOntoTop) {
-                    body.y = platform.y - body.h;
-                    body.vy = 0;
-                    body.onGround = true;
-                    break;
+            if (body.dropThroughTimer <= 0) {
+                for (const platform of this.platforms) {
+                    const nextBottom = body.y + body.h;
+                    const overlapsX = body.x + body.w > platform.x && body.x < platform.x + platform.w;
+                    const fallingOntoTop = body.vy >= 0 && body.previousBottom <= platform.y + 8 && nextBottom >= platform.y;
+                    if (overlapsX && fallingOntoTop) {
+                        body.y = platform.y - body.h;
+                        body.vy = 0;
+                        body.onGround = true;
+                        body.groundedOn = 'platform';
+                        break;
+                    }
                 }
             }
 
@@ -119,6 +126,7 @@ export class PhysicsEngine {
                 body.y = this.groundY - body.h;
                 body.vy = 0;
                 body.onGround = true;
+                body.groundedOn = 'ground';
             }
         }
     }

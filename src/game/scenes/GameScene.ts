@@ -10,6 +10,7 @@ import { MenuScene } from './MenuScene';
 import { readNumber, writeNumber } from '../storage';
 import { SoundManager } from '../audio/SoundManager';
 import { OBSTACLE_SHEET } from '../assets/spriteData';
+import { getEquippedWeapon, grantWeaponsForLevel, WeaponDefinition } from '../weapons';
 
 export type EnemyKind = 'CHASER' | 'RANGED' | 'HEAVY' | 'SERPENT' | 'BOMBER' | 'DIVER' | 'PTERO' | 'GUARDIAN';
 export type TerrainProfile = 'shore-sprint' | 'broken-steps' | 'witchline-crossfire' | 'serpent-lanes' | 'stone-guard' | 'crossfire-ridge' | 'golem-bridge' | 'night-ambush' | 'iron-rush' | 'sky-gauntlet';
@@ -63,6 +64,15 @@ interface Hazard {
     phase: number;
 }
 
+interface BombExplosion {
+    x: number;
+    y: number;
+    radius: number;
+    life: number;
+    maxLife: number;
+    view: Graphics;
+}
+
 export const LEVELS: LevelDefinition[] = [
     { id: 1, name: 'Blue Gate', biome: 'Ruined Coast', targetKills: 18, maxActive: 2, enemyKinds: ['CHASER'], spawnGap: 1.0, runUpDistance: 760, encounterSpacing: 680, levelLength: 26000, reward: 20, terrainProfile: 'shore-sprint', spawnPattern: ['CHASER', 'CHASER', 'CHASER'], levelModifiers: { routeStyle: 'flat-pressure', hazardDensity: 0.08, verticality: 0.15, pressureBias: 'steady' } },
     { id: 2, name: 'Broken Steps', biome: 'Ruined Coast', targetKills: 20, maxActive: 2, enemyKinds: ['CHASER'], spawnGap: 0.95, runUpDistance: 820, encounterSpacing: 650, levelLength: 30000, reward: 25, terrainProfile: 'broken-steps', spawnPattern: ['CHASER', 'CHASER', 'CHASER'], levelModifiers: { routeStyle: 'broken-climb', hazardDensity: 0.16, verticality: 0.34, pressureBias: 'steady' } },
@@ -91,6 +101,7 @@ export class GameScene extends Scene {
     private enemies: Enemy[] = [];
     private projectiles: Projectile[] = [];
     private playerProjectiles: Projectile[] = [];
+    private bombExplosions: BombExplosion[] = [];
     private background: BackgroundManager;
     private hud: HUD;
     private particles: ParticleSystem;
@@ -117,6 +128,11 @@ export class GameScene extends Scene {
     private hitThisAttack: Set<Enemy> = new Set();
     private state: 'PLAYING' | 'PAUSED' | 'LEVEL_COMPLETE' | 'DEAD' = 'PLAYING';
     private lastSafeX: number = 100;
+    private adReady: boolean = false;
+    private adContinueUsed: boolean = false;
+    private meleeWeapon: WeaponDefinition;
+    private rangedWeapon: WeaponDefinition;
+    private lastWeaponUnlocks: WeaponDefinition[] = [];
     
     private shakeTimer: number = 0;
     private shakeIntensity: number = 0;
@@ -150,6 +166,9 @@ export class GameScene extends Scene {
         this.stage.addChild(this.obstacleLayer);
 
         this.player = new Player();
+        this.meleeWeapon = getEquippedWeapon('melee');
+        this.rangedWeapon = getEquippedWeapon('ranged');
+        this.player.applyWeaponLoadout(this.meleeWeapon, this.rangedWeapon);
         this.player.setWorldBounds(this.level.levelLength);
         this.hud = new HUD();
         this.particles = new ParticleSystem();
@@ -246,6 +265,23 @@ export class GameScene extends Scene {
             if (data.type === 'action' && data.name === 'pause') {
                 if (this.state === 'PAUSED') this.resumeGame();
                 else if (this.state === 'PLAYING') this.showPause();
+                return;
+            }
+            if (data.type === 'adReady') {
+                this.adReady = data.ready !== false;
+                if (this.state === 'DEAD') this.drawDeadOverlay();
+                return;
+            }
+            if (data.type === 'adNotReady' || data.type === 'adError') {
+                this.adReady = false;
+                if (this.state === 'DEAD') this.drawDeadOverlay();
+                return;
+            }
+            if (data.type === 'adRewarded') {
+                if (data.rewardType === 'continue') this.applyRewardedContinue();
+                return;
+            }
+            if (data.type === 'adClosed') {
                 return;
             }
             if (data.type === 'debugSetKills') {
@@ -615,6 +651,7 @@ export class GameScene extends Scene {
 
         this.updateProjectiles(dt);
         this.updatePlayerProjectiles(dt);
+        this.updateBombExplosions(dt);
         this.updateEnemies(dt);
 
         this.spawnTimer -= dt;
@@ -704,6 +741,7 @@ export class GameScene extends Scene {
             const p = this.projectiles[i];
             p.update(dt);
             if (p.isDead) {
+                if (p.explosionRadius > 0 && !p.hasExploded) this.detonateBomb(p);
                 this.stage.removeChild(p.view);
                 this.engine.physics.removeBody(p.body);
                 this.projectiles.splice(i, 1);
@@ -715,9 +753,55 @@ export class GameScene extends Scene {
             }
 
             if (!this.player.isHit && this.overlaps(this.player.body, p.body, 8)) {
-                this.player.takeDamage(p.damage, Math.sign(this.player.body.x - p.body.x) || -1);
-                this.applyShake(15, 0.2);
+                if (p.explosionRadius > 0) {
+                    this.detonateBomb(p);
+                } else {
+                    this.player.takeDamage(p.damage, Math.sign(this.player.body.x - p.body.x) || -1);
+                    this.applyShake(15, 0.2);
+                }
                 p.isDead = true;
+            }
+        }
+    }
+
+    private detonateBomb(projectile: Projectile): void {
+        if (projectile.hasExploded) return;
+        projectile.hasExploded = true;
+        const radius = Math.max(70, projectile.explosionRadius);
+        const x = projectile.body.x + projectile.body.w * 0.5;
+        const y = projectile.body.y + projectile.body.h * 0.5;
+        const view = new Graphics();
+        view.circle(0, 0, radius).fill({ color: 0xff7a3d, alpha: 0.22 }).stroke({ color: 0xffd166, width: 4, alpha: 0.72 });
+        view.circle(0, 0, radius * 0.46).fill({ color: 0xfff1a8, alpha: 0.28 });
+        view.position.set(x, y);
+        this.stage.addChild(view);
+        this.bombExplosions.push({ x, y, radius, life: 0.32, maxLife: 0.32, view });
+        this.particles.spawn(x, y, 0xffa05a, 18);
+
+        const playerCenterX = this.player.body.x + this.player.body.w * 0.5;
+        const playerCenterY = this.player.body.y + this.player.body.h * 0.5;
+        const distance = Math.hypot(playerCenterX - x, playerCenterY - y);
+        if (!this.player.isHit && distance <= radius) {
+            const falloff = 1 - Math.min(0.55, distance / Math.max(1, radius) * 0.45);
+            this.player.takeDamage(Math.round(projectile.damage * falloff), playerCenterX < x ? -1 : 1);
+            SoundManager.playCue('damage');
+            this.applyShake(20, 0.24);
+            this.updateHUD();
+        } else {
+            this.applyShake(9, 0.12);
+        }
+    }
+
+    private updateBombExplosions(dt: number): void {
+        for (let i = this.bombExplosions.length - 1; i >= 0; i--) {
+            const explosion = this.bombExplosions[i];
+            explosion.life -= dt;
+            const pct = Math.max(0, explosion.life / explosion.maxLife);
+            explosion.view.alpha = pct;
+            explosion.view.scale.set(1 + (1 - pct) * 0.38);
+            if (explosion.life <= 0) {
+                this.stage.removeChild(explosion.view);
+                this.bombExplosions.splice(i, 1);
             }
         }
     }
@@ -728,7 +812,7 @@ export class GameScene extends Scene {
             const dir = this.player.facingRight ? 1 : -1;
             const x = this.player.facingRight ? this.player.body.x + this.player.body.w + 10 : this.player.body.x - 20;
             const y = this.player.body.y + 31;
-            const p = new Projectile(x, y, dir * 680, 0, 0x91e5ff, 0, 22, this.level.levelLength + window.innerWidth);
+            const p = new Projectile(x, y, dir * this.player.rangedProjectileSpeed, 0, 0x91e5ff, 0, this.player.rangedDamage, this.level.levelLength + window.innerWidth);
             p.body.w = 18;
             p.body.h = 8;
             p.view.clear();
@@ -767,6 +851,7 @@ export class GameScene extends Scene {
         for (const enemy of this.enemies) {
             enemy.update(dt, this.getEnemyTargetSnapshot());
             if (enemy.isDead) continue;
+            this.avoidEnemyGroundGaps(enemy);
 
             if ((enemy as any).pendingShot) {
                 (enemy as any).pendingShot = false;
@@ -788,6 +873,7 @@ export class GameScene extends Scene {
                 const p = new Projectile(enemy.body.x + enemy.body.w * 0.5, enemy.body.y + 18, dir * 255, -430, 0x171923, 0.78, 16, this.level.levelLength + window.innerWidth, false);
                 p.body.w = 24;
                 p.body.h = 24;
+                p.explosionRadius = 122;
                 p.view.clear();
                 p.view.circle(12, 12, 12).fill(0x171923).stroke({ color: 0xffd166, width: 3, alpha: 0.95 });
                 p.view.circle(17, 7, 3).fill(0xff7a3d);
@@ -800,7 +886,7 @@ export class GameScene extends Scene {
             if (playerCanHurt && this.attackOverlaps(enemy) && !this.hitThisAttack.has(enemy)) {
                 this.hitThisAttack.add(enemy);
                 SoundManager.playCue('melee');
-                enemy.takeDamage(28, this.player.facingRight ? 1 : -1);
+                enemy.takeDamage(this.player.meleeDamage, this.player.facingRight ? 1 : -1);
                 SoundManager.playCue('hit');
                 this.applyShake(10, 0.1);
                 this.particles.spawn(enemy.body.x + enemy.body.w / 2, enemy.body.y + enemy.body.h / 2, 0xfff1a8, 12);
@@ -850,6 +936,44 @@ export class GameScene extends Scene {
         };
     }
 
+    private avoidEnemyGroundGaps(enemy: Enemy): void {
+        if (enemy.body.gravityScale === 0) return;
+        const vx = enemy.body.vx;
+        if (Math.abs(vx) < 20) return;
+        const dir = Math.sign(vx);
+        const currentGap = this.findGroundGapAt(enemy.body.x + enemy.body.w * 0.5);
+        if (currentGap && enemy.body.y + enemy.body.h >= this.groundY - 18) {
+            const gapCenter = currentGap.x + currentGap.w * 0.5;
+            const retreatDir = enemy.body.x + enemy.body.w * 0.5 < gapCenter ? -1 : 1;
+            enemy.body.x = retreatDir < 0 ? currentGap.x - enemy.body.w - 8 : currentGap.x + currentGap.w + 8;
+            enemy.body.y = this.groundY - enemy.body.h;
+            enemy.body.vx = retreatDir * Math.max(110, Math.abs(vx));
+            enemy.body.vy = 0;
+            enemy.body.onGround = true;
+            enemy.body.groundedOn = 'ground';
+            return;
+        }
+
+        const lookAhead = enemy.body.w * 0.5 + Math.min(92, Math.max(42, Math.abs(vx) * 0.16));
+        const frontX = dir > 0 ? enemy.body.x + enemy.body.w + lookAhead : enemy.body.x - lookAhead;
+        const upcomingGap = this.findGroundGapAt(frontX);
+        if (!upcomingGap) return;
+
+        if (enemy.body.onGround && upcomingGap.w <= 238) {
+            enemy.body.vx = dir * Math.max(290, Math.abs(vx));
+            enemy.body.vy = -520;
+            enemy.body.onGround = false;
+            enemy.body.groundedOn = null;
+            return;
+        }
+
+        enemy.body.vx = -dir * Math.max(120, Math.abs(vx) * 0.72);
+    }
+
+    private findGroundGapAt(x: number): TerrainGap | null {
+        return this.terrainGaps.find((gap) => x >= gap.x - 16 && x <= gap.x + gap.w + 16) || null;
+    }
+
     private registerKill(enemy: Enemy): void {
         this.kills++;
         this.gems += 5;
@@ -886,13 +1010,15 @@ export class GameScene extends Scene {
         }
         this.gems += this.level.reward;
         writeNumber('gronk_gems', this.gems);
+        this.lastWeaponUnlocks = this.isEndless ? [] : grantWeaponsForLevel(this.level.id);
         this.updateHUD();
-        this.drawResultOverlay(this.isEndless ? 'RIFT CLEAR' : 'LEVEL CLEAR', `${this.level.name} complete`, this.isEndless ? 'ENTER / TAP: NEXT RIFT' : 'ENTER / TAP: NEXT LEVEL');
+        const unlockText = this.lastWeaponUnlocks.length ? `UNLOCKED ${this.lastWeaponUnlocks.map((weapon) => weapon.name).join(' + ')}` : '';
+        this.drawResultOverlay(this.isEndless ? 'RIFT CLEAR' : 'LEVEL CLEAR', `${this.level.name} complete`, this.isEndless ? 'ENTER / TAP: NEXT RIFT' : 'ENTER / TAP: NEXT LEVEL', unlockText);
     }
 
     private showDead(): void {
         this.state = 'DEAD';
-        this.drawResultOverlay('RUN ENDED', 'Try the attack before contact', 'ENTER / TAP: RETRY');
+        this.drawDeadOverlay();
     }
 
     private showPause(): void {
@@ -958,14 +1084,14 @@ export class GameScene extends Scene {
         this.overlayLayer.addChild(button);
     }
 
-    private drawResultOverlay(title: string, subtitle: string, cta: string): void {
+    private drawResultOverlay(title: string, subtitle: string, cta: string, extraLine: string = ''): void {
         this.overlayLayer.removeChildren();
         const shade = new Graphics();
         shade.rect(0, 0, window.innerWidth, window.innerHeight).fill({ color: 0x05070b, alpha: 0.68 });
         this.overlayLayer.addChild(shade);
 
         const panelW = Math.min(520, window.innerWidth - 48);
-        const panelH = 260;
+        const panelH = extraLine ? 296 : 260;
         const panelX = (window.innerWidth - panelW) / 2;
         const panelY = Math.max(40, (window.innerHeight - panelH) / 2);
         const panel = new Graphics();
@@ -987,13 +1113,21 @@ export class GameScene extends Scene {
         rewardText.position.set(window.innerWidth / 2, panelY + 158);
         this.overlayLayer.addChild(rewardText);
 
+        if (extraLine) {
+            const extraText = new Text({ text: extraLine, style: new TextStyle({ fill: 0xfca5a5, fontSize: 17, fontWeight: 'bold' }) });
+            extraText.anchor.set(0.5);
+            extraText.position.set(window.innerWidth / 2, panelY + 188);
+            this.overlayLayer.addChild(extraText);
+        }
+
         const button = new Graphics();
-        button.roundRect(panelX + 70, panelY + 190, panelW - 140, 48, 10).fill(0x44ff88);
+        const buttonY = panelY + (extraLine ? 226 : 190);
+        button.roundRect(panelX + 70, buttonY, panelW - 140, 48, 10).fill(0x44ff88);
         this.overlayLayer.addChild(button);
 
         const buttonText = new Text({ text: cta, style: new TextStyle({ fill: 0x07110b, fontSize: 18, fontWeight: 'bold' }) });
         buttonText.anchor.set(0.5);
-        buttonText.position.set(window.innerWidth / 2, panelY + 214);
+        buttonText.position.set(window.innerWidth / 2, buttonY + 24);
         this.overlayLayer.addChild(buttonText);
 
         this.overlayLayer.eventMode = 'static';
@@ -1003,6 +1137,78 @@ export class GameScene extends Scene {
             if (this.state === 'LEVEL_COMPLETE') this.goToNextLevel();
             if (this.state === 'DEAD') this.restartLevel();
         });
+    }
+
+    private drawDeadOverlay(): void {
+        this.overlayLayer.removeChildren();
+        this.overlayLayer.removeAllListeners('pointerdown');
+        const shade = new Graphics();
+        shade.rect(0, 0, window.innerWidth, window.innerHeight).fill({ color: 0x05070b, alpha: 0.68 });
+        this.overlayLayer.addChild(shade);
+
+        const panelW = Math.min(540, window.innerWidth - 48);
+        const panelH = this.canOfferRewardedContinue() ? 320 : 268;
+        const panelX = (window.innerWidth - panelW) / 2;
+        const panelY = Math.max(36, (window.innerHeight - panelH) / 2);
+        const panel = new Graphics();
+        panel.roundRect(panelX, panelY, panelW, panelH, 12).fill(0x101822).stroke({ color: 0xfca5a5, width: 2 });
+        this.overlayLayer.addChild(panel);
+
+        const titleText = new Text({ text: 'RUN ENDED', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
+        titleText.anchor.set(0.5);
+        titleText.position.set(window.innerWidth / 2, panelY + 58);
+        this.overlayLayer.addChild(titleText);
+
+        const subText = new Text({ text: 'Continue once with a rewarded ad or retry the route', style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold', wordWrap: true, wordWrapWidth: panelW - 60 }) });
+        subText.anchor.set(0.5);
+        subText.position.set(window.innerWidth / 2, panelY + 110);
+        this.overlayLayer.addChild(subText);
+
+        const rewardText = new Text({ text: `GEMS ${this.gems}`, style: new TextStyle({ fill: 0xffd166, fontSize: 24, fontWeight: 'bold' }) });
+        rewardText.anchor.set(0.5);
+        rewardText.position.set(window.innerWidth / 2, panelY + 154);
+        this.overlayLayer.addChild(rewardText);
+
+        let y = panelY + 188;
+        if (this.canOfferRewardedContinue()) {
+            this.addPauseButton(panelX + 70, y, panelW - 140, 46, 'WATCH AD: CONTINUE', 0xa879ff, () => this.requestRewardedContinue());
+            y += 56;
+        }
+        this.addPauseButton(panelX + 70, y, panelW - 140, 46, 'RETRY LEVEL', 0x44ff88, () => this.restartLevel());
+    }
+
+    private canOfferRewardedContinue(): boolean {
+        return this.adReady && !this.adContinueUsed && !this.isEndless;
+    }
+
+    private requestRewardedContinue(): void {
+        if (!this.canOfferRewardedContinue()) return;
+        this.adReady = false;
+        window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'showAd', rewardType: 'continue' }));
+        this.drawDeadOverlay();
+    }
+
+    private applyRewardedContinue(): void {
+        if (this.state !== 'DEAD' || this.adContinueUsed) return;
+        this.adContinueUsed = true;
+        this.player.hp = Math.max(55, this.player.hp);
+        this.player.isHit = false;
+        this.player.body.x = Math.min(this.level.levelLength - this.player.body.w - 80, Math.max(80, this.lastSafeX));
+        this.player.body.y = this.groundY - this.player.body.h - 2;
+        this.player.body.vx = 240;
+        this.player.body.vy = 0;
+        this.player.body.onGround = true;
+        this.player.body.groundedOn = 'ground';
+        this.projectiles.forEach((projectile) => {
+            this.stage.removeChild(projectile.view);
+            this.engine.physics.removeBody(projectile.body);
+        });
+        this.projectiles = [];
+        this.state = 'PLAYING';
+        this.overlayLayer.removeChildren();
+        this.overlayLayer.removeAllListeners('pointerdown');
+        SoundManager.playCue('clear');
+        this.updateHUD();
     }
 
     private goToNextLevel(): void {
@@ -1068,13 +1274,31 @@ export class GameScene extends Scene {
                 crouching: this.player.isCrouching,
                 pounding: this.player.isPounding,
                 facingRight: this.player.facingRight,
+                groundedOn: this.player.body.groundedOn,
+                dropThroughTimer: Number(this.player.body.dropThroughTimer.toFixed(3)),
                 attackId: this.player.attackId,
                 attackMode: this.player.attackMode,
                 attackPhase: this.player.attackPhase,
+                attackRange: this.player.attackRange,
+                meleeDamage: this.player.meleeDamage,
+                rangedDamage: this.player.rangedDamage,
+                rangedProjectileSpeed: this.player.rangedProjectileSpeed,
                 slashVisible: this.player.isSlashVisible(),
                 rangedShotsFired: this.player.rangedShotsFired,
                 rangedCooldownReady: this.player.rangedCooldownReady(),
                 rangedCooldownRemaining: Number(this.player.rangedCooldownRemaining.toFixed(2)),
+            },
+            weapons: {
+                equipped_melee: this.meleeWeapon.id,
+                equipped_ranged: this.rangedWeapon.id,
+                melee_name: this.meleeWeapon.name,
+                ranged_name: this.rangedWeapon.name,
+                last_unlocks: this.lastWeaponUnlocks.map((weapon) => weapon.id),
+            },
+            ads: {
+                ready: this.adReady,
+                rewarded_continue_used: this.adContinueUsed,
+                continue_offer: this.state === 'DEAD' && this.canOfferRewardedContinue(),
             },
             camera: { x: Math.round(this.cameraX) },
             pacing: {
@@ -1125,12 +1349,20 @@ export class GameScene extends Scene {
                 dead: enemy.isDead,
                 attacking: enemy.isAttacking,
                 mechanic: enemy.mechanic,
+                enemy_gap_aware: enemy.body.gravityScale !== 0,
             })),
             player_projectiles: this.playerProjectiles.map((projectile) => ({
                 x: Math.round(projectile.body.x),
                 screenX: Math.round(projectile.body.x - this.cameraX),
                 y: Math.round(projectile.body.y),
                 vx: Math.round(projectile.body.vx),
+            })),
+            bomb_explosions: this.bombExplosions.map((explosion) => ({
+                x: Math.round(explosion.x),
+                screenX: Math.round(explosion.x - this.cameraX),
+                y: Math.round(explosion.y),
+                radius: Math.round(explosion.radius),
+                life: Number(explosion.life.toFixed(2)),
             })),
             projectiles: this.projectiles.length,
         };

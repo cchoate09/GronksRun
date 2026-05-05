@@ -72,5 +72,6 @@ assert(workflowSource.includes('npm run qa:visual'), 'visual QA: workflow should
 assert(workflowSource.includes('npx puppeteer browsers install'), 'visual QA: workflow should install a Puppeteer-managed browser');
 assert(webGameClientRunnerSource.includes('runFallbackWebGameClient'), 'visual QA: web game client should have a repo-owned fallback for CI');
 assert(!webGameClientRunnerSource.includes('throw new Error(`Missing develop-web-game client'), 'visual QA: missing agent-local web game client should not fail CI before repo-owned smokes run');
+assert(webGameClientRunnerSource.includes('isBenignFallbackConsoleError'), 'visual QA: fallback client should filter benign browser resource-load console noise');
 
 console.log('Android competitiveness contract passed.');

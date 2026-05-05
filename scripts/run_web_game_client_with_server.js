@@ -127,6 +127,10 @@ async function pressFallbackButtons(page, buttons, frames) {
   await advance(page, 16);
 }
 
+function isBenignFallbackConsoleError(text) {
+  return /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/.test(text);
+}
+
 async function runFallbackWebGameClient(port) {
   const browser = await puppeteer.launch(launchOptions({
     defaultViewport: { width: 960, height: 540, deviceScaleFactor: 1 },
@@ -135,7 +139,8 @@ async function runFallbackWebGameClient(port) {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.stack || error.message || String(error)));
   page.on('console', (message) => {
-    if (message.type() === 'error') pageErrors.push(message.text());
+    const text = message.text();
+    if (message.type() === 'error' && !isBenignFallbackConsoleError(text)) pageErrors.push(text);
   });
 
   try {

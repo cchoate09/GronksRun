@@ -117,11 +117,11 @@ async function postNativeMessage(page, message, ms = 0) {
       await postNativeMessage(page, {
         type: 'debugSetPlayer',
         x: afterJump.player.x,
-        y: Math.max(80, beforeJump.player.y - 96),
+        y: Math.max(80, safeGroundY - 220),
         vx: 0,
-        vy: -120,
+        vy: 0,
         onGround: false,
-      }, 20);
+      });
       const beforePound = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 1 }, 80);
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 });

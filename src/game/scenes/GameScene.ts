@@ -1069,6 +1069,7 @@ export class GameScene extends Scene {
 
     private completeLevel(): void {
         this.state = 'LEVEL_COMPLETE';
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         SoundManager.playCue('clear');
         if (this.isEndless) {
@@ -1087,6 +1088,7 @@ export class GameScene extends Scene {
 
     private showDead(): void {
         this.state = 'DEAD';
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         this.drawDeadOverlay();
     }
@@ -1094,6 +1096,8 @@ export class GameScene extends Scene {
     private showPause(): void {
         if (this.state !== 'PLAYING') return;
         this.state = 'PAUSED';
+        this.engine.paused = true;
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         this.drawPauseOverlay();
     }
@@ -1101,6 +1105,8 @@ export class GameScene extends Scene {
     private resumeGame(): void {
         if (this.state !== 'PAUSED') return;
         this.state = 'PLAYING';
+        this.engine.paused = false;
+        this.engine.input.clearActions();
         this.publishNativeUiState();
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');

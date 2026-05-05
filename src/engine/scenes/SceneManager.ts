@@ -27,6 +27,11 @@ export class SceneManager {
             this.currentScene.destroy();
         }
 
+        // Stale taps from the outgoing scene must not leak into the incoming
+        // one (e.g. menu's confirm-press triggering a player jump on level 1).
+        this.engine.input.clearActions();
+        this.engine.paused = false;
+
         this.currentScene = new sceneClass(this.engine);
         this.currentScene.init();
     }

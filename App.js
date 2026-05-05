@@ -89,6 +89,9 @@ function GameApp() {
       rewardedInterstitial.load();
     } catch (e) {
       console.log('Ad load error:', e);
+      void captureError(e instanceof Error ? e : new Error(String(e)), {
+        source: 'rewarded_ad_load_throw',
+      });
     }
   }, []);
 
@@ -150,7 +153,18 @@ function GameApp() {
       // single view. Capture and null pendingRewardType atomically so a
       // duplicate fire is silently dropped instead of granting a 2x reward.
       const rewardType = pendingRewardType.current;
-      if (!rewardType) return;
+      if (!rewardType) {
+        // Fires arriving WITHOUT a pending request are either a duplicate
+        // (the second one we want to drop) or a spurious-first-fire bug from
+        // AdMob mediation. We can't tell which from here, so log it; if
+        // Sentry shows them clustering before showAd was ever sent, players
+        // are losing legitimate rewards and we need a different guard.
+        void captureError(new Error('EARNED_REWARD with no pending reward'), {
+          source: 'rewarded_ad_unexpected_fire',
+          amount: String(reward?.amount ?? 'unknown'),
+        });
+        return;
+      }
       pendingRewardType.current = null;
       sendToGame('adRewarded', { rewardType, amount: reward.amount });
     });
@@ -206,7 +220,13 @@ function GameApp() {
         }
       } else if (msg.type === 'gameUiState') {
         setShowGameControls(msg.controlsVisible === true);
-      } else if (msg.type === 'exitApp' || msg.type === 'safeToExit') BackHandler.exitApp();
+      } else if (msg.type === 'safeToExit') {
+        // Real handshake: the WebView must explicitly tell us it's safe to
+        // exit (i.e. it has flushed any pending persistence writes). The
+        // legacy 'exitApp' message is intentionally NOT honored here so a
+        // future contributor can't bypass the flush by posting it directly.
+        BackHandler.exitApp();
+      }
       else if (msg.type === 'haptic') {
         const p = msg.pattern;
         if (Array.isArray(p)) Vibration.vibrate(p);
@@ -214,7 +234,17 @@ function GameApp() {
         else if (p === 'medium') Vibration.vibrate(25);
         else if (p === 'heavy') Vibration.vibrate(50);
       }
-    } catch (e) {}
+    } catch (e) {
+      // A malformed bridge message used to be silently swallowed, which made
+      // it impossible to debug renamed message types or truncated postMessage.
+      // Log to Sentry instead so it surfaces.
+      void captureError(e instanceof Error ? e : new Error(String(e)), {
+        source: 'webview_bridge_parse_failure',
+        raw: typeof event?.nativeEvent?.data === 'string'
+          ? event.nativeEvent.data.slice(0, 200)
+          : 'non-string',
+      });
+    }
   }, [sendToGame, loadAd]);
 
   return (

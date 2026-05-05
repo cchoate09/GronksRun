@@ -159,6 +159,9 @@ export class GameScene extends Scene {
     private hitThisAttack: Set<Enemy> = new Set();
     private state: 'PLAYING' | 'PAUSED' | 'LEVEL_COMPLETE' | 'DEAD' = 'PLAYING';
     private lastSafeX: number = 100;
+    // Cooldown for the unwinnable-state failsafe so it doesn't yo-yo a
+    // single enemy every frame.
+    private unwinnableRescueCooldown: number = 0;
     private adReady: boolean = false;
     private adContinueUsed: boolean = false;
     private meleeWeapon: WeaponDefinition;
@@ -807,21 +810,34 @@ export class GameScene extends Scene {
     }
 
     // Failsafe against soft-locks: if the player still owes kills but no enemy
-    // can reach them (zero alive, OR all surviving enemies are far behind /
-    // stuck across a gap they can't cross), force a fresh spawn near the
-    // player so the level remains beatable.
+    // is reachable from BEHIND (legitimately-ahead enemies are fine, they'll
+    // be encountered by forward progress), nudge a stuck enemy toward the
+    // player. Skips flyers — yanking a Ptero or Diver to ground level breaks
+    // their AI and gives the player a free sitting target. Cooldown prevents
+    // per-frame yo-yo on a single enemy.
     private preventUnwinnableState(): void {
         if (this.kills >= this.level.targetKills) return;
+        if (this.unwinnableRescueCooldown > 0) {
+            // checkLevelCompletion runs each tick; rough dt is fine here.
+            this.unwinnableRescueCooldown -= 1 / 60;
+            return;
+        }
         const playerCenterX = this.player.body.x + this.player.body.w * 0.5;
         const reachable = this.enemies.some((enemy) => {
             const dx = enemy.body.x + enemy.body.w * 0.5 - playerCenterX;
-            return Math.abs(dx) < 1500;
+            // Anything within 1500 ahead OR up to 1500 behind counts as
+            // reachable; only "stranded" means everyone is far behind.
+            return dx > -1500 && dx < 1500;
         });
         if (reachable) return;
-        // Bring the closest stuck enemy to the player rather than spawning a
-        // brand-new one — preserves the wave/encounter feel.
-        if (this.enemies.length > 0) {
-            const closest = this.enemies.reduce((a, b) => {
+        // Pick the closest BEHIND-the-player non-flyer.
+        const candidates = this.enemies.filter((e) => {
+            if (e.type === 'PTERO' || e.type === 'DIVER') return false;
+            const dx = e.body.x + e.body.w * 0.5 - playerCenterX;
+            return dx <= -1500;
+        });
+        if (candidates.length > 0) {
+            const closest = candidates.reduce((a, b) => {
                 const da = Math.abs(a.body.x + a.body.w * 0.5 - playerCenterX);
                 const db = Math.abs(b.body.x + b.body.w * 0.5 - playerCenterX);
                 return da < db ? a : b;
@@ -833,11 +849,17 @@ export class GameScene extends Scene {
             closest.body.vy = 0;
             closest.body.onGround = true;
             closest.body.groundedOn = 'ground';
+            this.unwinnableRescueCooldown = 2.0;
             return;
         }
-        // No alive enemies at all — force the spawn gate to fire next frame.
-        this.spawnTimer = 0;
-        this.nextSpawnX = Math.min(this.nextSpawnX, this.player.body.x + 320);
+        // No reachable non-flyer enemies at all — force the spawn gate to
+        // fire next frame so the spawnWave path runs (which uses the
+        // type-correct constructors for any enemy kind including flyers).
+        if (this.enemies.length === 0 || this.enemies.every((e) => e.type === 'PTERO' || e.type === 'DIVER')) {
+            this.spawnTimer = 0;
+            this.nextSpawnX = Math.min(this.nextSpawnX, this.player.body.x + 320);
+            this.unwinnableRescueCooldown = 1.0;
+        }
     }
 
     private hasMetLevelGoal(): boolean {
@@ -1356,8 +1378,14 @@ export class GameScene extends Scene {
             this.engine.physics.removeBody(projectile.body);
         });
         this.projectiles = [];
+        this.playerProjectiles.forEach((projectile) => {
+            this.stage.removeChild(projectile.view);
+            this.engine.physics.removeBody(projectile.body);
+        });
+        this.playerProjectiles = [];
         this.bombExplosions.forEach((explosion) => this.stage.removeChild(explosion.view));
         this.bombExplosions = [];
+        this.particles.clearAll();
         // Despawn enemies that would re-kill the player as soon as i-frames end.
         const safeRadius = 320;
         this.enemies = this.enemies.filter((enemy) => {

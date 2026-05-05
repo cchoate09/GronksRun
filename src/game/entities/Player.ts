@@ -170,10 +170,14 @@ export class Player {
             this.body.groundedOn = null;
             this.isPounding = true;
             this.isCrouching = false;
+            // Each pound is a distinct attack instance — increment so
+            // hitThisAttack can re-hit a previously-hit enemy on the next pound.
+            this.attackId++;
         } else if (downJustPressed && !this.body.onGround) {
             this.body.vy = Math.max(this.body.vy, 980);
             this.isPounding = true;
             this.isCrouching = false;
+            this.attackId++;
         } else if (this.body.onGround) {
             this.isPounding = false;
             this.isCrouching = downHeld;

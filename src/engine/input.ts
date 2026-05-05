@@ -5,12 +5,21 @@ export class InputManager {
     public joystick: { x: number, y: number } = { x: 0, y: 0 };
     public previousJoystick: { x: number, y: number } = { x: 0, y: 0 };
 
-    // Inbox: actions arriving from the WebView bridge between frames. Preserves
-    // ordering and multiplicity so two rapid melee taps stay as two taps.
+    // Inbox: actions arriving from the WebView bridge between frames.
+    // The inbox itself preserves order and multiplicity, but consumers query
+    // via actionJustPressed(name) which is membership-only. Net semantics:
+    // "for each unique action name received this frame, fire at most once."
+    // That matches every current consumer (Player guards every action with
+    // its own state machine: !isAttacking, onGround, cooldown, etc.) so a
+    // second tap of the same action within one outer frame would be ignored
+    // anyway. If a future consumer needs true multi-fire, change this field
+    // to a Map<string, number> and expose consumeAction(name): number.
     private inbox: string[] = [];
     // Drained on the first sub-step of each outer update() and held for the
     // entire frame, so consumers in render or post-substep logic still see
-    // actionJustPressed() as true.
+    // actionJustPressed() as true. NB: it's intentional that inbox can be
+    // non-empty later in the frame (messages arriving between sub-steps);
+    // those wait until the next frame's first sub-step.
     private processedActions: string[] = [];
     private firstSubStepThisFrame: boolean = true;
 

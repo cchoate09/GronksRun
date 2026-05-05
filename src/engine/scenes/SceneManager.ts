@@ -30,10 +30,12 @@ export class SceneManager {
         // Stale taps from the outgoing scene must not leak into the incoming
         // one (e.g. menu's confirm-press triggering a player jump on level 1).
         this.engine.input.clearActions();
-        this.engine.paused = false;
-
+        // Construct + init the new scene BEFORE unpausing the engine, so the
+        // ticker can never observe a half-built stage between init() returning
+        // and the scene's listeners binding.
         this.currentScene = new sceneClass(this.engine);
         this.currentScene.init();
+        this.engine.paused = false;
     }
 
     public updateLogic(dt: number): void {

@@ -186,6 +186,8 @@ export class Player {
         this.runningAttackBlend = moving && (this.isAttacking || rangedPoseVisible);
         if (this.isHit) {
             this.animationState = 'HIT';
+        } else if (!this.body.onGround && !this.isAttacking && !rangedPoseVisible) {
+            this.animationState = this.body.vy < 0 ? 'JUMP' : 'FALL';
         } else if (moving) {
             this.animationState = 'RUN';
         } else if (this.isAttacking) {

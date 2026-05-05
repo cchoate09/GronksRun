@@ -21,6 +21,7 @@ export class SkeletalSprite extends Container {
     private rangedCueProgress: number = 0;
     private frames: Texture[] = [];
     private frameIndex: number = 0;
+    private currentFrame: number = 0;
     private baseSpriteX: number = 20;
     private baseSpriteY: number = 82;
 
@@ -92,6 +93,14 @@ export class SkeletalSprite extends Container {
         this.armR.tint = value;
     }
 
+    public get animationState(): SpriteState {
+        return this.state;
+    }
+
+    public get animationFrame(): number {
+        return this.currentFrame;
+    }
+
     private createPart(x: number, y: number, w: number, h: number, color: number): Graphics {
         const g = new Graphics();
         g.rect(0, 0, w, h).fill(color);
@@ -119,32 +128,42 @@ export class SkeletalSprite extends Container {
     }
 
     public update(dt: number, speedScale: number = 1): void {
-        this.time += dt * speedScale;
+        this.time += dt;
+        const animationRateScale = Math.min(1.55, Math.max(0.72, Number.isFinite(speedScale) ? speedScale : 1));
 
         if (this.sheet && this.sheetSprite) {
             const animation = this.sheet.animations[this.state] || this.sheet.animations.IDLE;
-            const fps = Math.max(1, this.sheet.fps * Math.max(0.7, speedScale));
+            const fps = Math.max(1, this.sheet.fps * animationRateScale);
             this.frameIndex = Math.floor(this.time * fps) % animation.length;
-            this.sheetSprite.texture = this.frames[animation[this.frameIndex]] || this.frames[0];
+            this.currentFrame = animation[this.frameIndex] ?? 0;
+            this.sheetSprite.texture = this.frames[this.currentFrame] || this.frames[0];
 
             if (this.state === 'RUN') {
-                const phase = this.time * 15;
-                const bounce = Math.abs(Math.sin(phase)) * 4;
-                const stride = Math.sin(phase) * 1.8;
-                this.sheetSprite.position.set(this.baseSpriteX + stride, this.baseSpriteY - bounce);
-                this.sheetSprite.rotation = Math.sin(phase) * 0.035;
+                const phase = this.time * fps * Math.PI * 2 / Math.max(1, animation.length);
+                const bounce = Math.abs(Math.sin(phase)) * 1.25;
+                const stride = Math.sin(phase) * 1.1;
+                this.applyFrameOffset(this.baseSpriteX + stride, this.baseSpriteY - bounce);
+                this.sheetSprite.rotation = Math.sin(phase) * 0.025;
                 this.drawRunStrideCues(true, phase);
             } else if (this.state === 'ATTACK') {
-                this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY);
+                this.applyFrameOffset(this.baseSpriteX, this.baseSpriteY);
                 this.sheetSprite.rotation = Math.sin(this.time * 28) * 0.04;
                 this.drawRunStrideCues(false, 0);
             } else if (this.state === 'RANGED_ATTACK') {
-                this.sheetSprite.position.set(this.baseSpriteX + 2, this.baseSpriteY - 1);
+                this.applyFrameOffset(this.baseSpriteX + 2, this.baseSpriteY - 1);
                 this.sheetSprite.rotation = -0.035 + Math.sin(this.time * 20) * 0.025;
+                this.drawRunStrideCues(false, 0);
+            } else if (this.state === 'JUMP') {
+                this.applyFrameOffset(this.baseSpriteX, this.baseSpriteY - 3);
+                this.sheetSprite.rotation = -0.035;
+                this.drawRunStrideCues(false, 0);
+            } else if (this.state === 'FALL') {
+                this.applyFrameOffset(this.baseSpriteX, this.baseSpriteY + 1);
+                this.sheetSprite.rotation = 0.03;
                 this.drawRunStrideCues(false, 0);
             } else {
                 const breath = this.state === 'IDLE' ? Math.sin(this.time * 4) * 1.2 : 0;
-                this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY + breath);
+                this.applyFrameOffset(this.baseSpriteX, this.baseSpriteY + breath);
                 this.sheetSprite.rotation = 0;
                 this.drawRunStrideCues(false, 0);
             }
@@ -153,16 +172,17 @@ export class SkeletalSprite extends Container {
         }
 
         if (this.state === 'RUN') {
-            const bounce = Math.abs(Math.sin(this.time * 15)) * 5;
+            const phase = this.time * 15 * animationRateScale;
+            const bounce = Math.abs(Math.sin(phase)) * 5;
             this.torso.y = -bounce;
             this.head.y = -25 - bounce * 1.2;
             
-            this.legL.rotation = Math.sin(this.time * 15) * 0.8;
-            this.legR.rotation = Math.sin(this.time * 15 + Math.PI) * 0.8;
+            this.legL.rotation = Math.sin(phase) * 0.8;
+            this.legR.rotation = Math.sin(phase + Math.PI) * 0.8;
             
-            this.armL.rotation = Math.sin(this.time * 15 + Math.PI) * 0.5;
-            this.armR.rotation = Math.sin(this.time * 15) * 0.5;
-            this.drawRunStrideCues(true, this.time * 15);
+            this.armL.rotation = Math.sin(phase + Math.PI) * 0.5;
+            this.armR.rotation = Math.sin(phase) * 0.5;
+            this.drawRunStrideCues(true, phase);
         } else if (this.state === 'IDLE') {
             const breath = Math.sin(this.time * 4) * 2;
             this.torso.scale.y = 1 + breath * 0.02;
@@ -181,8 +201,30 @@ export class SkeletalSprite extends Container {
             this.armR.rotation = -0.85;
             this.armL.rotation = -0.35;
             this.drawRunStrideCues(false, 0);
+        } else if (this.state === 'JUMP') {
+            this.torso.y = -3;
+            this.head.y = -30;
+            this.legL.rotation = -0.25;
+            this.legR.rotation = 0.25;
+            this.armL.rotation = -0.2;
+            this.armR.rotation = 0.35;
+            this.drawRunStrideCues(false, 0);
+        } else if (this.state === 'FALL') {
+            this.torso.y = 1;
+            this.head.y = -23;
+            this.legL.rotation = 0.2;
+            this.legR.rotation = -0.2;
+            this.armL.rotation = 0.35;
+            this.armR.rotation = -0.25;
+            this.drawRunStrideCues(false, 0);
         }
         this.drawRangedAttackCue(this.rangedCueVisible, this.rangedCueProgress);
+    }
+
+    private applyFrameOffset(x: number, y: number): void {
+        if (!this.sheetSprite) return;
+        const offset = this.sheet?.frameOffsets?.[this.currentFrame];
+        this.sheetSprite.position.set(x + (offset?.x ?? 0), y + (offset?.y ?? 0));
     }
 
     private drawRunStrideCues(visible: boolean, phase: number): void {

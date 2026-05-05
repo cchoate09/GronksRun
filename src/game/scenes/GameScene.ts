@@ -1422,6 +1422,8 @@ export class GameScene extends Scene {
                 hp: enemy.hp,
                 dead: enemy.isDead,
                 attacking: enemy.isAttacking,
+                animation_state: enemy.sprite.animationState,
+                animation_frame: enemy.sprite.animationFrame,
                 mechanic: enemy.mechanic,
                 enemy_gap_aware: this.isEnemyNearGroundGap(enemy),
             })),

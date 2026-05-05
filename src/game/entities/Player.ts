@@ -2,7 +2,7 @@ import { Body } from '../../engine/physics';
 import { Container, Graphics } from 'pixi.js';
 import { InputManager } from '../../engine/input';
 import { SkeletalSprite } from './SkeletalSprite';
-import { HERO_SHEETS } from '../assets/spriteData';
+import { HERO_SHEETS, SpriteState } from '../assets/spriteData';
 import { WeaponDefinition } from '../weapons';
 
 export type AttackMode = 'NONE' | 'MELEE' | 'RANGED';
@@ -37,6 +37,8 @@ export class Player {
     public rangedProjectileSpeed: number = 680;
     public attackMode: AttackMode = 'NONE';
     public attackPhase: AttackPhase = 'NONE';
+    public animationState: SpriteState = 'IDLE';
+    public runningAttackBlend: boolean = false;
     public rangedShotsFired: number = 0;
     public rangedCooldownRemaining: number = 0;
     private worldMaxX: number = window.innerWidth;
@@ -48,6 +50,8 @@ export class Player {
     private readonly attackRecovery: number = 0.16;
     private rangedCooldown: number = 0.85;
     private pendingRangedShot: boolean = false;
+    private rangedAttackTimer: number = 0;
+    private readonly rangedAttackDuration: number = 0.28;
 
     constructor() {
         this.body = new Body();
@@ -108,6 +112,7 @@ export class Player {
         this.isDashing = false;
 
         this.rangedCooldownRemaining = Math.max(0, this.rangedCooldownRemaining - dt);
+        this.rangedAttackTimer = Math.max(0, this.rangedAttackTimer - dt);
         this.updateAttackState(dt);
 
         const targetSpeed = this.body.onGround ? this.speed : this.speed * this.airSpeedMultiplier;
@@ -171,20 +176,28 @@ export class Player {
                 this.rangedCooldownRemaining = this.rangedCooldown;
                 this.rangedShotsFired++;
                 this.pendingRangedShot = true;
+                this.rangedAttackTimer = this.rangedAttackDuration;
             }
         }
 
         // State update for animation
-        if (this.isAttacking) {
-            this.sprite.setState('ATTACK');
-        } else if (this.isHit) {
-            this.sprite.setState('HIT');
-        } else if (Math.abs(this.body.vx) > 10) {
-            this.sprite.setState('RUN');
+        const moving = Math.abs(this.body.vx) > 10;
+        const rangedPoseVisible = this.isRangedPoseVisible();
+        this.runningAttackBlend = moving && (this.isAttacking || rangedPoseVisible);
+        if (this.isHit) {
+            this.animationState = 'HIT';
+        } else if (moving) {
+            this.animationState = 'RUN';
+        } else if (this.isAttacking) {
+            this.animationState = 'ATTACK';
+        } else if (rangedPoseVisible) {
+            this.animationState = 'RANGED_ATTACK';
         } else {
-            this.sprite.setState('IDLE');
+            this.animationState = 'IDLE';
         }
 
+        this.sprite.setState(this.animationState);
+        this.sprite.setRangedAttackCue(rangedPoseVisible, this.rangedAttackProgress());
         this.sprite.update(dt, Math.abs(this.body.vx) / 220 || 1);
         this.sprite.setFacingRight(this.facingRight, this.body.w);
         this.sprite.scale.y = this.isCrouching ? 0.72 : this.isPounding ? 0.86 : 1;
@@ -250,6 +263,14 @@ export class Player {
 
     public rangedCooldownReady(): boolean {
         return this.rangedCooldownRemaining <= 0;
+    }
+
+    public isRangedPoseVisible(): boolean {
+        return this.rangedAttackTimer > 0;
+    }
+
+    public rangedAttackProgress(): number {
+        return 1 - this.rangedAttackTimer / this.rangedAttackDuration;
     }
 
     private updateSlash(): void {

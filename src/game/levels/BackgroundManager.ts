@@ -49,6 +49,12 @@ export class BackgroundManager {
         this.layers.push(artLayer);
         this.view.addChildAt(artLayer, 0);
 
+        const terrainEchoLayer = new Container();
+        this.drawPlatformBackdropBands(terrainEchoLayer, palette);
+        (terrainEchoLayer as any).parallaxScale = 0.11;
+        this.layers.push(terrainEchoLayer);
+        this.view.addChildAt(terrainEchoLayer, Math.min(1, this.view.children.length));
+
         const parallaxScales = [0.06, 0.16, 0.34];
 
         for (let i = 0; i < 3; i++) {
@@ -95,6 +101,49 @@ export class BackgroundManager {
             this.layers.push(layer);
             this.view.addChildAt(layer, Math.min(i + 1, this.view.children.length));
         }
+    }
+
+    private drawPlatformBackdropBands(terrainEchoLayer: Container, palette: { layers: number[]; detail: number; shape: 'blocks' | 'canopy' | 'spires' | 'clouds' }): void {
+        const g = new Graphics();
+        const horizon = this.height * 0.66;
+        const platformBandY = this.height * 0.74;
+        const bandColor = palette.layers[2];
+        const accent = palette.detail;
+        const layerWidth = this.width * 2.4;
+
+        g.rect(0, horizon, layerWidth, Math.max(90, this.height - horizon)).fill({ color: 0x05070b, alpha: 0.26 });
+        g.rect(0, platformBandY, layerWidth, 7).fill({ color: accent, alpha: 0.22 });
+        g.rect(0, platformBandY + 12, layerWidth, 4).fill({ color: 0xffffff, alpha: 0.08 });
+
+        for (let x = -120; x < layerWidth; x += 190) {
+            const rise = 34 + ((Math.abs(Math.floor(x)) / 19) % 64);
+            if (palette.shape === 'clouds') {
+                g.ellipse(x + 78, platformBandY - rise * 0.4, 96, 18).fill({ color: bandColor, alpha: 0.24 });
+                g.circle(x + 22, platformBandY - rise * 0.44, 24).fill({ color: bandColor, alpha: 0.2 });
+            } else if (palette.shape === 'canopy') {
+                g.rect(x + 82, platformBandY - rise * 0.72, 18, rise * 0.72).fill({ color: bandColor, alpha: 0.24 });
+                g.circle(x + 90, platformBandY - rise * 0.84, 46).fill({ color: bandColor, alpha: 0.22 });
+            } else if (palette.shape === 'spires') {
+                g.moveTo(x, platformBandY + 32)
+                    .lineTo(x + 82, platformBandY - rise)
+                    .lineTo(x + 164, platformBandY + 32)
+                    .closePath()
+                    .fill({ color: bandColor, alpha: 0.22 });
+            } else {
+                g.roundRect(x, platformBandY - rise, 124, rise + 32, 8).fill({ color: bandColor, alpha: 0.22 });
+                g.rect(x + 22, platformBandY - rise + 18, 12, 18).fill({ color: accent, alpha: 0.18 });
+                g.rect(x + 72, platformBandY - rise + 46, 12, 18).fill({ color: accent, alpha: 0.14 });
+            }
+        }
+
+        for (let x = 40; x < layerWidth; x += 260) {
+            g.moveTo(x, platformBandY + 28)
+                .lineTo(x + 92, platformBandY + 10)
+                .lineTo(x + 184, platformBandY + 28)
+                .stroke({ color: accent, width: 2, alpha: 0.12 });
+        }
+
+        terrainEchoLayer.addChild(g);
     }
 
     private getBiomeIndex(biome: string): number {

@@ -15,6 +15,10 @@ export class SkeletalSprite extends Container {
     private _tint: number = 0xffffff;
     private sheet?: SpriteSheetDefinition;
     private sheetSprite?: Sprite;
+    private runStrideCue: Graphics;
+    private rangedAttackCue: Graphics;
+    private rangedCueVisible: boolean = false;
+    private rangedCueProgress: number = 0;
     private frames: Texture[] = [];
     private frameIndex: number = 0;
     private baseSpriteX: number = 20;
@@ -23,6 +27,10 @@ export class SkeletalSprite extends Container {
     constructor(color: number = 0x4488ff, sheet?: SpriteSheetDefinition) {
         super();
         this.sheet = sheet;
+        this.runStrideCue = new Graphics();
+        this.rangedAttackCue = new Graphics();
+        this.runStrideCue.visible = false;
+        this.rangedAttackCue.visible = false;
 
         if (sheet) {
             const base = Texture.from(sheet.image);
@@ -44,7 +52,7 @@ export class SkeletalSprite extends Container {
             this.baseSpriteY = sheet.spriteOffsetY ?? 82;
             this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY);
             this.sheetSprite.scale.set(sheet.scale);
-            this.addChild(this.sheetSprite);
+            this.addChild(this.runStrideCue, this.sheetSprite, this.rangedAttackCue);
             return;
         }
 
@@ -66,7 +74,7 @@ export class SkeletalSprite extends Container {
         this.weapon.pivot.set(5, 50);
         this.weapon.visible = false;
 
-        this.addChild(this.legL, this.legR, this.torso, this.head, this.armL, this.armR, this.weapon);
+        this.addChild(this.runStrideCue, this.legL, this.legR, this.torso, this.head, this.armL, this.armR, this.weapon, this.rangedAttackCue);
     }
 
     public get tint(): number { return this._tint; }
@@ -98,6 +106,11 @@ export class SkeletalSprite extends Container {
         if (this.weapon) this.weapon.visible = state === 'ATTACK';
     }
 
+    public setRangedAttackCue(visible: boolean, progress: number = 0): void {
+        this.rangedCueVisible = visible;
+        this.rangedCueProgress = Math.max(0, Math.min(1, progress));
+    }
+
     public setFacingRight(facingRight: boolean, bodyWidth: number): void {
         const sourceFacesRight = this.sheet?.facesRight ?? true;
         const shouldFlip = facingRight !== sourceFacesRight;
@@ -120,14 +133,22 @@ export class SkeletalSprite extends Container {
                 const stride = Math.sin(phase) * 1.8;
                 this.sheetSprite.position.set(this.baseSpriteX + stride, this.baseSpriteY - bounce);
                 this.sheetSprite.rotation = Math.sin(phase) * 0.035;
+                this.drawRunStrideCues(true, phase);
             } else if (this.state === 'ATTACK') {
                 this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY);
                 this.sheetSprite.rotation = Math.sin(this.time * 28) * 0.04;
+                this.drawRunStrideCues(false, 0);
+            } else if (this.state === 'RANGED_ATTACK') {
+                this.sheetSprite.position.set(this.baseSpriteX + 2, this.baseSpriteY - 1);
+                this.sheetSprite.rotation = -0.035 + Math.sin(this.time * 20) * 0.025;
+                this.drawRunStrideCues(false, 0);
             } else {
                 const breath = this.state === 'IDLE' ? Math.sin(this.time * 4) * 1.2 : 0;
                 this.sheetSprite.position.set(this.baseSpriteX, this.baseSpriteY + breath);
                 this.sheetSprite.rotation = 0;
+                this.drawRunStrideCues(false, 0);
             }
+            this.drawRangedAttackCue(this.rangedCueVisible, this.rangedCueProgress);
             return;
         }
 
@@ -141,6 +162,7 @@ export class SkeletalSprite extends Container {
             
             this.armL.rotation = Math.sin(this.time * 15 + Math.PI) * 0.5;
             this.armR.rotation = Math.sin(this.time * 15) * 0.5;
+            this.drawRunStrideCues(true, this.time * 15);
         } else if (this.state === 'IDLE') {
             const breath = Math.sin(this.time * 4) * 2;
             this.torso.scale.y = 1 + breath * 0.02;
@@ -150,9 +172,59 @@ export class SkeletalSprite extends Container {
             this.legR.rotation = 0;
             this.armL.rotation = breath * 0.05;
             this.armR.rotation = -breath * 0.05;
+            this.drawRunStrideCues(false, 0);
         } else if (this.state === 'ATTACK') {
             this.armR.rotation = -Math.PI / 2;
             this.weapon.rotation = Math.sin(this.time * 20) * 0.2;
+            this.drawRunStrideCues(false, 0);
+        } else if (this.state === 'RANGED_ATTACK') {
+            this.armR.rotation = -0.85;
+            this.armL.rotation = -0.35;
+            this.drawRunStrideCues(false, 0);
         }
+        this.drawRangedAttackCue(this.rangedCueVisible, this.rangedCueProgress);
+    }
+
+    private drawRunStrideCues(visible: boolean, phase: number): void {
+        this.runStrideCue.clear();
+        this.runStrideCue.visible = visible;
+        if (!visible) return;
+
+        const stride = Math.sin(phase);
+        const backStride = Math.sin(phase + Math.PI);
+        const hipX = this.baseSpriteX;
+        const hipY = this.baseSpriteY - 42;
+        const footY = this.baseSpriteY - 3;
+        const frontFootX = hipX + 13 + stride * 14;
+        const rearFootX = hipX - 9 + backStride * 13;
+
+        this.runStrideCue.moveTo(hipX - 4, hipY)
+            .quadraticCurveTo(hipX - 11 + stride * 5, hipY + 22, frontFootX, footY)
+            .stroke({ color: 0x07110b, width: 6, alpha: 0.62 });
+        this.runStrideCue.moveTo(hipX + 6, hipY + 2)
+            .quadraticCurveTo(hipX + 13 + backStride * 5, hipY + 24, rearFootX, footY)
+            .stroke({ color: 0x1f2937, width: 5, alpha: 0.58 });
+        this.runStrideCue.ellipse(frontFootX + 4, footY + 2, 12, 4).fill({ color: 0xffd166, alpha: 0.74 });
+        this.runStrideCue.ellipse(rearFootX - 3, footY + 4, 10, 3).fill({ color: 0x67e8f9, alpha: 0.48 });
+    }
+
+    private drawRangedAttackCue(visible: boolean, progress: number): void {
+        this.rangedAttackCue.clear();
+        this.rangedAttackCue.visible = visible;
+        if (!visible) return;
+
+        const pulse = Math.sin(progress * Math.PI);
+        const handX = this.baseSpriteX + 28;
+        const handY = this.baseSpriteY - 48;
+        const reach = 34 + pulse * 10;
+
+        this.rangedAttackCue.moveTo(handX - 6, handY - 12)
+            .quadraticCurveTo(handX + 13, handY - 28, handX + 26, handY - 5)
+            .stroke({ color: 0x91e5ff, width: 4, alpha: 0.82 });
+        this.rangedAttackCue.moveTo(handX, handY)
+            .lineTo(handX + reach, handY - 2)
+            .stroke({ color: 0xffffff, width: 3, alpha: 0.9 });
+        this.rangedAttackCue.circle(handX + reach + 3, handY - 2, 5 + pulse * 5).fill({ color: 0x67e8f9, alpha: 0.62 });
+        this.rangedAttackCue.circle(handX + reach + 3, handY - 2, 2 + pulse * 2).fill({ color: 0xffffff, alpha: 0.86 });
     }
 }

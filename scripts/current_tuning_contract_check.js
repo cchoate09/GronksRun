@@ -75,6 +75,7 @@ class Body {
 class SkeletalSprite extends Container {
   setState() {}
   setFacingRight() {}
+  setRangedAttackCue() {}
   update() {}
 }
 

@@ -5,9 +5,19 @@ import { GameScene, LEVELS } from './GameScene';
 import { readNumber, writeNumber } from '../storage';
 import { SoundManager } from '../audio/SoundManager';
 import { getMainMenuLayout, MainMenuButtonLayout } from './menuLayout';
-import { equipWeapon, getWeaponInventorySnapshot, WeaponDefinition } from '../weapons';
+import { equipWeapon, getWeaponInventorySnapshot, purchaseWeaponUpgrade, WeaponDefinition, WeaponSlot, WeaponUpgradeSnapshot } from '../weapons';
 
 type MenuMode = 'MAIN' | 'LEVEL_SELECT' | 'SETTINGS' | 'ARMORY';
+
+interface MenuButtonSnapshot {
+    label: string;
+    mode: MenuMode;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    enabled: boolean;
+}
 
 export class MenuScene extends Scene {
     private stage: Container;
@@ -15,7 +25,9 @@ export class MenuScene extends Scene {
     private unlockedLevel: number = 1;
     private difficulty: number = 1;
     private soundEnabled: number = 1;
+    private gems: number = 0;
     private mainMenuButtons: MainMenuButtonLayout[] = [];
+    private buttonRegistry: MenuButtonSnapshot[] = [];
 
     constructor(engine: GameEngine) {
         super(engine);
@@ -27,6 +39,7 @@ export class MenuScene extends Scene {
         this.unlockedLevel = Math.max(1, Math.min(LEVELS.length, readNumber('gronk_unlocked_level', 1)));
         this.difficulty = Math.max(0, Math.min(2, readNumber('gronk_difficulty', 1)));
         this.soundEnabled = readNumber('gronk_sound_enabled', 1) ? 1 : 0;
+        this.gems = Math.max(0, readNumber('gronk_gems', 0));
         this.drawMainMenu();
         window.addEventListener('keydown', this.handleKeyDown);
         window.addEventListener('message', this.handleMessage as any);
@@ -36,6 +49,7 @@ export class MenuScene extends Scene {
     private clear(): void {
         this.stage.removeChildren();
         this.stage.removeAllListeners();
+        this.buttonRegistry = [];
     }
 
     private drawBackdrop(): void {
@@ -172,6 +186,7 @@ export class MenuScene extends Scene {
         this.mode = 'ARMORY';
         this.clear();
         this.drawBackdrop();
+        this.gems = Math.max(0, readNumber('gronk_gems', 0));
 
         const title = new Text({ text: 'ARMORY', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
         title.anchor.set(0.5);
@@ -187,15 +202,20 @@ export class MenuScene extends Scene {
         panel.roundRect(panelX, panelY, panelW, panelH, 10).fill(0x101822).stroke({ color: 0xfca5a5, width: 2 });
         this.stage.addChild(panel);
 
+        const gemText = new Text({ text: `GEMS ${this.gems}`, style: new TextStyle({ fill: 0xffd166, fontSize: 18, fontWeight: 'bold' }) });
+        gemText.anchor.set(1, 0);
+        gemText.position.set(panelX + panelW - 24, panelY + 18);
+        this.stage.addChild(gemText);
+
         const columnGap = 18;
         const columnW = (panelW - 52 - columnGap) / 2;
-        this.drawWeaponColumn('MELEE', inventory.melee, inventory.ownedMelee, inventory.equippedMelee, panelX + 22, panelY + 28, columnW);
-        this.drawWeaponColumn('RANGED', inventory.ranged, inventory.ownedRanged, inventory.equippedRanged, panelX + 30 + columnW + columnGap, panelY + 28, columnW);
+        this.drawWeaponColumn('MELEE', 'melee', inventory.melee, inventory.ownedMelee, inventory.equippedMelee, inventory.meleeUpgrade, panelX + 22, panelY + 28, columnW);
+        this.drawWeaponColumn('RANGED', 'ranged', inventory.ranged, inventory.ownedRanged, inventory.equippedRanged, inventory.rangedUpgrade, panelX + 30 + columnW + columnGap, panelY + 28, columnW);
 
         this.addButton(panelX + 22, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
     }
 
-    private drawWeaponColumn(title: string, weapons: WeaponDefinition[], owned: string[], equipped: string, x: number, y: number, w: number): void {
+    private drawWeaponColumn(title: string, slot: WeaponSlot, weapons: WeaponDefinition[], owned: string[], equipped: string, upgrade: WeaponUpgradeSnapshot, x: number, y: number, w: number): void {
         const titleText = new Text({ text: title, style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold' }) });
         titleText.position.set(x, y);
         this.stage.addChild(titleText);
@@ -206,9 +226,7 @@ export class MenuScene extends Scene {
             const isEquipped = equipped === weapon.id;
             const color = isEquipped ? 0x44ff88 : isOwned ? 0x67e8f9 : 0x334155;
             const button = new Container();
-            const bg = new Graphics();
-            bg.roundRect(0, 0, w, 46, 8).fill(color).stroke({ color: 0xffffff, width: 1, alpha: isOwned ? 0.25 : 0.08 });
-            button.addChild(bg);
+            button.addChild(this.drawButtonChrome(w, 46, color, isOwned ? 1 : 0.42));
 
             const label = isEquipped ? `${weapon.name.toUpperCase()}  EQUIPPED` : isOwned ? weapon.name.toUpperCase() : `${weapon.name.toUpperCase()}  LV ${weapon.unlockLevel}`;
             const nameText = new Text({ text: label, style: new TextStyle({ fill: isOwned ? 0x07110b : 0xcbd5e1, fontSize: 13, fontWeight: 'bold' }) });
@@ -227,6 +245,7 @@ export class MenuScene extends Scene {
             button.position.set(x, itemY);
             button.eventMode = isOwned ? 'static' : 'none';
             button.cursor = isOwned ? 'pointer' : 'default';
+            this.registerButton(label, x, itemY, w, 46, isOwned);
             if (isOwned) {
                 button.on('pointerdown', () => {
                     SoundManager.playCue('select');
@@ -236,6 +255,42 @@ export class MenuScene extends Scene {
             }
             this.stage.addChild(button);
         });
+
+        const upgradeCost = upgrade.upgradeCost;
+        const upgradeLabel = upgradeCost == null ? `${title} +${upgrade.level} MAX` : `${title} +${upgrade.level + 1}  ${upgradeCost} GEMS`;
+        const upgradeY = y + 34 + weapons.length * 54 + 10;
+        const canBuy = upgradeCost != null && this.gems >= upgradeCost;
+        const button = new Container();
+        button.addChild(this.drawButtonChrome(w, 48, canBuy ? 0xffd166 : 0x475569, canBuy ? 1 : 0.5));
+        const upgradeText = new Text({
+            text: upgradeLabel,
+            style: new TextStyle({ fill: canBuy ? 0x07110b : 0xcbd5e1, fontSize: 13, fontWeight: 'bold', wordWrap: true, wordWrapWidth: w - 24 }),
+        });
+        upgradeText.anchor.set(0.5);
+        upgradeText.position.set(w / 2, 16);
+        button.addChild(upgradeText);
+        const statText = new Text({
+            text: slot === 'melee'
+                ? `DMG x${upgrade.damageMultiplier}  RANGE BOOST`
+                : `DMG x${upgrade.damageMultiplier}  FASTER SHOTS`,
+            style: new TextStyle({ fill: canBuy ? 0x172033 : 0x94a3b8, fontSize: 10, fontWeight: 'bold' }),
+        });
+        statText.anchor.set(0.5);
+        statText.position.set(w / 2, 34);
+        button.addChild(statText);
+        button.position.set(x, upgradeY);
+        button.eventMode = upgradeCost == null ? 'none' : 'static';
+        button.cursor = upgradeCost == null ? 'default' : 'pointer';
+        this.registerButton(upgradeLabel, x, upgradeY, w, 48, upgradeCost != null);
+        if (upgradeCost != null) {
+            button.on('pointerdown', () => {
+                const result = purchaseWeaponUpgrade(slot, this.gems);
+                this.gems = result.gems;
+                SoundManager.playCue(result.purchased ? 'clear' : 'damage');
+                this.drawArmory();
+            });
+        }
+        this.stage.addChild(button);
     }
 
     private addSettingLabel(x: number, y: number, label: string): void {
@@ -246,9 +301,7 @@ export class MenuScene extends Scene {
 
     private addLevelButton(x: number, y: number, w: number, h: number, id: number, name: string, color: number): void {
         const button = new Container();
-        const bg = new Graphics();
-        bg.roundRect(0, 0, w, h, 8).fill(color).stroke({ color: 0xffffff, width: 1, alpha: 0.25 });
-        button.addChild(bg);
+        button.addChild(this.drawButtonChrome(w, h, color));
 
         const levelText = new Text({ text: `${id}`, style: new TextStyle({ fill: 0x07110b, fontSize: 26, fontWeight: 'bold' }) });
         levelText.position.set(12, 9);
@@ -261,6 +314,7 @@ export class MenuScene extends Scene {
         button.position.set(x, y);
         button.eventMode = 'static';
         button.cursor = 'pointer';
+        this.registerButton(`LEVEL ${id}`, x, y, w, h, true);
         button.on('pointerdown', () => {
             SoundManager.playCue('select');
             GameScene.selectLevel(id);
@@ -271,9 +325,7 @@ export class MenuScene extends Scene {
 
     private addButton(x: number, y: number, w: number, h: number, label: string, color: number, onClick: () => void): void {
         const button = new Container();
-        const bg = new Graphics();
-        bg.roundRect(0, 0, w, h, 10).fill(color);
-        button.addChild(bg);
+        button.addChild(this.drawButtonChrome(w, h, color));
 
         const text = new Text({ text: label, style: new TextStyle({ fill: 0x07110b, fontSize: 20, fontWeight: 'bold' }) });
         text.anchor.set(0.5);
@@ -283,11 +335,35 @@ export class MenuScene extends Scene {
         button.position.set(x, y);
         button.eventMode = 'static';
         button.cursor = 'pointer';
+        this.registerButton(label, x, y, w, h, true);
         button.on('pointerdown', () => {
             SoundManager.playCue('select');
             onClick();
         });
         this.stage.addChild(button);
+    }
+
+    private drawButtonChrome(w: number, h: number, color: number, intensity: number = 1): Graphics {
+        const bg = new Graphics();
+        bg.roundRect(3, 5, w, h, 10).fill({ color: 0x020617, alpha: 0.52 * intensity });
+        bg.roundRect(0, 0, w, h, 10).fill({ color, alpha: 0.92 * intensity }).stroke({ color: 0xffffff, width: 2, alpha: 0.28 * intensity });
+        bg.roundRect(5, 5, w - 10, Math.max(8, h * 0.32), 7).fill({ color: 0xffffff, alpha: 0.16 * intensity });
+        bg.rect(8, h - 7, w - 16, 3).fill({ color: 0x07110b, alpha: 0.22 * intensity });
+        bg.circle(13, h * 0.5, 3).fill({ color: 0x07110b, alpha: 0.25 * intensity });
+        bg.circle(w - 13, h * 0.5, 3).fill({ color: 0x07110b, alpha: 0.25 * intensity });
+        return bg;
+    }
+
+    private registerButton(label: string, x: number, y: number, w: number, h: number, enabled: boolean): void {
+        this.buttonRegistry.push({
+            label,
+            mode: this.mode,
+            x: Math.round(x),
+            y: Math.round(y),
+            w: Math.round(w),
+            h: Math.round(h),
+            enabled,
+        });
     }
 
     private handleKeyDown = (e: KeyboardEvent) => {
@@ -305,6 +381,14 @@ export class MenuScene extends Scene {
         try {
             const rawData = e.data || e;
             const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+            if (data.type === 'backButton') {
+                if (this.mode === 'MAIN') {
+                    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'exitApp' }));
+                } else {
+                    this.drawMainMenu();
+                }
+                return;
+            }
             if (this.mode === 'MAIN' && data.type === 'action' && (data.name === 'jump' || data.name === 'attack')) {
                 this.engine.input.clearActions();
                 GameScene.selectLevel(this.unlockedLevel);
@@ -338,11 +422,13 @@ export class MenuScene extends Scene {
                     h: Math.round(button.h),
                 }))
                 : [],
+            buttons: this.buttonRegistry,
             settings: {
                 difficulty: this.difficulty,
                 sound_enabled: this.soundEnabled === 1,
             },
             armory: getWeaponInventorySnapshot(),
+            gems: this.gems,
             unlocked_level: this.unlockedLevel,
             levels: LEVELS.map((level) => ({
                 id: level.id,

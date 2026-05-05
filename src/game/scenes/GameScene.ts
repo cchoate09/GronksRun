@@ -10,7 +10,7 @@ import { MenuScene } from './MenuScene';
 import { readNumber, writeNumber } from '../storage';
 import { SoundManager } from '../audio/SoundManager';
 import { OBSTACLE_SHEET } from '../assets/spriteData';
-import { getEquippedWeapon, grantWeaponsForLevel, WeaponDefinition } from '../weapons';
+import { getEffectiveWeapon, getWeaponUpgradeSnapshot, grantWeaponsForLevel, WeaponDefinition } from '../weapons';
 
 export type EnemyKind = 'CHASER' | 'RANGED' | 'HEAVY' | 'SERPENT' | 'BOMBER' | 'DIVER' | 'PTERO' | 'GUARDIAN';
 export type TerrainProfile = 'shore-sprint' | 'broken-steps' | 'witchline-crossfire' | 'serpent-lanes' | 'stone-guard' | 'crossfire-ridge' | 'golem-bridge' | 'night-ambush' | 'iron-rush' | 'sky-gauntlet';
@@ -54,7 +54,7 @@ interface TerrainGap {
 }
 
 interface Hazard {
-    type: 'spikes' | 'fireVent';
+    type: 'spikes' | 'fireVent' | 'spellRune';
     x: number;
     y: number;
     w: number;
@@ -71,6 +71,14 @@ interface BombExplosion {
     life: number;
     maxLife: number;
     view: Graphics;
+}
+
+interface OverlayButtonSnapshot {
+    label: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
 }
 
 export const LEVELS: LevelDefinition[] = [
@@ -133,6 +141,7 @@ export class GameScene extends Scene {
     private meleeWeapon: WeaponDefinition;
     private rangedWeapon: WeaponDefinition;
     private lastWeaponUnlocks: WeaponDefinition[] = [];
+    private overlayButtonRegistry: OverlayButtonSnapshot[] = [];
     
     private shakeTimer: number = 0;
     private shakeIntensity: number = 0;
@@ -166,8 +175,8 @@ export class GameScene extends Scene {
         this.stage.addChild(this.obstacleLayer);
 
         this.player = new Player();
-        this.meleeWeapon = getEquippedWeapon('melee');
-        this.rangedWeapon = getEquippedWeapon('ranged');
+        this.meleeWeapon = getEffectiveWeapon('melee');
+        this.rangedWeapon = getEffectiveWeapon('ranged');
         this.player.applyWeaponLoadout(this.meleeWeapon, this.rangedWeapon);
         this.player.setWorldBounds(this.level.levelLength);
         this.hud = new HUD();
@@ -359,13 +368,24 @@ export class GameScene extends Scene {
                         .fill(0xff4d6d)
                         .stroke({ color: 0xffd166, width: 1, alpha: 0.45 });
                 }
-            } else {
+            } else if (hazard.type === 'fireVent') {
                 this.ground.roundRect(hazard.x, this.groundY - 14, hazard.w, 14, 5).fill(0x3b1c12).stroke({ color: 0xffd166, width: 1, alpha: 0.45 });
                 if (hazard.active) {
                     this.ground.rect(hazard.x + 12, hazard.y, Math.max(8, hazard.w - 24), hazard.h).fill({ color: 0xff7a3d, alpha: 0.58 });
                     this.ground.rect(hazard.x + 22, hazard.y + 10, Math.max(4, hazard.w - 44), Math.max(8, hazard.h - 14)).fill({ color: 0xfff1a8, alpha: 0.35 });
                 } else {
                     this.ground.circle(hazard.x + hazard.w * 0.5, this.groundY - 18, 7).fill({ color: 0xff7a3d, alpha: 0.48 });
+                }
+            } else {
+                const cx = hazard.x + hazard.w * 0.5;
+                this.ground.circle(cx, this.groundY - 9, hazard.w * 0.46).fill({ color: 0x26144a, alpha: 0.76 }).stroke({ color: 0xc4b5fd, width: 2, alpha: 0.72 });
+                this.ground.moveTo(cx - hazard.w * 0.26, this.groundY - 10)
+                    .lineTo(cx, this.groundY - 30)
+                    .lineTo(cx + hazard.w * 0.26, this.groundY - 10)
+                    .stroke({ color: 0x91e5ff, width: 3, alpha: 0.72 });
+                if (hazard.active) {
+                    this.ground.circle(cx, hazard.y + hazard.h * 0.32, 12).fill({ color: 0xc4b5fd, alpha: 0.7 });
+                    this.ground.rect(cx - 8, hazard.y + 12, 16, Math.max(24, hazard.h - 22)).fill({ color: 0x91e5ff, alpha: 0.28 });
                 }
             }
         }
@@ -395,7 +415,9 @@ export class GameScene extends Scene {
         for (const hazard of this.hazards) {
             const frame = hazard.type === 'spikes'
                 ? Math.min(3, Math.max(0, Math.round((hazard.w - 56) / 24)))
-                : (hazard.active ? 7 : 4);
+                : hazard.type === 'spellRune'
+                    ? (hazard.active ? 11 : 9)
+                    : (hazard.active ? 7 : 4);
             const sprite = new Sprite(this.getObstacleFrame(frame));
             sprite.anchor.set(0.5, 1);
             sprite.x = hazard.x + hazard.w * 0.5;
@@ -403,9 +425,12 @@ export class GameScene extends Scene {
             if (hazard.type === 'spikes') {
                 sprite.width = Math.max(70, hazard.w * 1.18);
                 sprite.height = 42;
-            } else {
+            } else if (hazard.type === 'fireVent') {
                 sprite.width = Math.max(80, hazard.w * 1.45);
                 sprite.height = hazard.active ? Math.max(105, hazard.h + 24) : 52;
+            } else {
+                sprite.width = Math.max(82, hazard.w * 1.34);
+                sprite.height = hazard.active ? Math.max(92, hazard.h + 18) : 58;
             }
             this.obstacleLayer.addChild(sprite);
         }
@@ -503,8 +528,21 @@ export class GameScene extends Scene {
             if (x > this.level.levelLength - 520) break;
             x = this.pushAwayFromGap(x, 120);
 
-            const fireVent = (i + depth) % 4 === 2 || modifiers.routeStyle === 'hazard-ridge' && i % 3 === 1;
-            if (fireVent) {
+            const spellRune = (i + depth) % 5 === 3 || (modifiers.routeStyle === 'sky-chains' && i % 4 === 1) || (this.level.biome.includes('Moonlit') && i % 3 === 2);
+            const fireVent = !spellRune && ((i + depth) % 4 === 2 || modifiers.routeStyle === 'hazard-ridge' && i % 3 === 1);
+            if (spellRune) {
+                const h = 68 + modifiers.verticality * 34;
+                hazards.push({
+                    type: 'spellRune',
+                    x,
+                    y: this.groundY - h,
+                    w: 72,
+                    h,
+                    damage: 16,
+                    active: (i + depth) % 2 === 1,
+                    phase: i * 0.55 + depth * 0.42,
+                });
+            } else if (fireVent) {
                 const h = 104 + modifiers.hazardDensity * 46;
                 hazards.push({
                     type: 'fireVent',
@@ -669,11 +707,17 @@ export class GameScene extends Scene {
     private updateHazards(dt: number): void {
         let needsRedraw = false;
         for (const hazard of this.hazards) {
-            if (hazard.type !== 'fireVent') continue;
             hazard.phase += dt;
             const wasActive = hazard.active;
-            hazard.active = Math.sin(hazard.phase * 2.45) > -0.12;
-            hazard.h = hazard.active ? 104 + this.level.levelModifiers.hazardDensity * 46 : 24;
+            if (hazard.type === 'fireVent') {
+                hazard.active = Math.sin(hazard.phase * 2.45) > -0.12;
+                hazard.h = hazard.active ? 104 + this.level.levelModifiers.hazardDensity * 46 : 24;
+            } else if (hazard.type === 'spellRune') {
+                hazard.active = Math.sin(hazard.phase * 3.1) > 0.24;
+                hazard.h = hazard.active ? 68 + this.level.levelModifiers.verticality * 34 : 30;
+            } else {
+                continue;
+            }
             hazard.y = this.groundY - hazard.h;
             if (wasActive !== hazard.active) needsRedraw = true;
         }
@@ -1044,10 +1088,12 @@ export class GameScene extends Scene {
         this.state = 'PLAYING';
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');
+        this.overlayButtonRegistry = [];
     }
 
     private drawPauseOverlay(): void {
         this.overlayLayer.removeChildren();
+        this.overlayButtonRegistry = [];
         const shade = new Graphics();
         shade.rect(0, 0, window.innerWidth, window.innerHeight).fill({ color: 0x05070b, alpha: 0.62 });
         this.overlayLayer.addChild(shade);
@@ -1080,9 +1126,7 @@ export class GameScene extends Scene {
 
     private addPauseButton(x: number, y: number, w: number, h: number, label: string, color: number, onClick: () => void): void {
         const button = new Container();
-        const bg = new Graphics();
-        bg.roundRect(0, 0, w, h, 9).fill(color);
-        button.addChild(bg);
+        button.addChild(this.drawOverlayButtonChrome(w, h, color));
 
         const text = new Text({ text: label, style: new TextStyle({ fill: 0x07110b, fontSize: 18, fontWeight: 'bold' }) });
         text.anchor.set(0.5);
@@ -1093,11 +1137,24 @@ export class GameScene extends Scene {
         button.eventMode = 'static';
         button.cursor = 'pointer';
         button.on('pointerdown', onClick);
+        this.overlayButtonRegistry.push({ label, x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) });
         this.overlayLayer.addChild(button);
+    }
+
+    private drawOverlayButtonChrome(w: number, h: number, color: number): Graphics {
+        const bg = new Graphics();
+        bg.roundRect(3, 5, w, h, 9).fill({ color: 0x020617, alpha: 0.58 });
+        bg.roundRect(0, 0, w, h, 9).fill(color).stroke({ color: 0xffffff, width: 2, alpha: 0.34 });
+        bg.roundRect(5, 5, w - 10, Math.max(8, h * 0.34), 6).fill({ color: 0xffffff, alpha: 0.18 });
+        bg.rect(8, h - 7, w - 16, 3).fill({ color: 0x07110b, alpha: 0.24 });
+        bg.circle(13, h * 0.5, 3).fill({ color: 0x07110b, alpha: 0.26 });
+        bg.circle(w - 13, h * 0.5, 3).fill({ color: 0x07110b, alpha: 0.26 });
+        return bg;
     }
 
     private drawResultOverlay(title: string, subtitle: string, cta: string, extraLine: string = ''): void {
         this.overlayLayer.removeChildren();
+        this.overlayButtonRegistry = [];
         const shade = new Graphics();
         shade.rect(0, 0, window.innerWidth, window.innerHeight).fill({ color: 0x05070b, alpha: 0.68 });
         this.overlayLayer.addChild(shade);
@@ -1132,20 +1189,9 @@ export class GameScene extends Scene {
             this.overlayLayer.addChild(extraText);
         }
 
-        const button = new Graphics();
         const buttonY = panelY + (extraLine ? 226 : 190);
-        button.roundRect(panelX + 70, buttonY, panelW - 140, 48, 10).fill(0x44ff88);
-        this.overlayLayer.addChild(button);
-
-        const buttonText = new Text({ text: cta, style: new TextStyle({ fill: 0x07110b, fontSize: 18, fontWeight: 'bold' }) });
-        buttonText.anchor.set(0.5);
-        buttonText.position.set(window.innerWidth / 2, buttonY + 24);
-        this.overlayLayer.addChild(buttonText);
-
-        this.overlayLayer.eventMode = 'static';
-        this.overlayLayer.cursor = 'pointer';
         this.overlayLayer.removeAllListeners('pointerdown');
-        this.overlayLayer.on('pointerdown', () => {
+        this.addPauseButton(panelX + 70, buttonY, panelW - 140, 48, cta, 0x44ff88, () => {
             if (this.state === 'LEVEL_COMPLETE') this.goToNextLevel();
             if (this.state === 'DEAD') this.restartLevel();
         });
@@ -1154,6 +1200,7 @@ export class GameScene extends Scene {
     private drawDeadOverlay(): void {
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');
+        this.overlayButtonRegistry = [];
         const shade = new Graphics();
         shade.rect(0, 0, window.innerWidth, window.innerHeight).fill({ color: 0x05070b, alpha: 0.68 });
         this.overlayLayer.addChild(shade);
@@ -1226,6 +1273,7 @@ export class GameScene extends Scene {
         this.state = 'PLAYING';
         this.overlayLayer.removeChildren();
         this.overlayLayer.removeAllListeners('pointerdown');
+        this.overlayButtonRegistry = [];
         SoundManager.playCue('clear');
         this.updateHUD();
     }
@@ -1298,11 +1346,14 @@ export class GameScene extends Scene {
                 attackId: this.player.attackId,
                 attackMode: this.player.attackMode,
                 attackPhase: this.player.attackPhase,
+                animation_state: this.player.animationState,
+                runningAttackBlend: this.player.runningAttackBlend,
                 attackRange: this.player.attackRange,
                 meleeDamage: this.player.meleeDamage,
                 rangedDamage: this.player.rangedDamage,
                 rangedProjectileSpeed: this.player.rangedProjectileSpeed,
                 slashVisible: this.player.isSlashVisible(),
+                rangedPoseVisible: this.player.isRangedPoseVisible(),
                 rangedShotsFired: this.player.rangedShotsFired,
                 rangedCooldownReady: this.player.rangedCooldownReady(),
                 rangedCooldownRemaining: Number(this.player.rangedCooldownRemaining.toFixed(2)),
@@ -1313,12 +1364,15 @@ export class GameScene extends Scene {
                 melee_name: this.meleeWeapon.name,
                 ranged_name: this.rangedWeapon.name,
                 last_unlocks: this.lastWeaponUnlocks.map((weapon) => weapon.id),
+                melee_upgrade: getWeaponUpgradeSnapshot('melee'),
+                ranged_upgrade: getWeaponUpgradeSnapshot('ranged'),
             },
             ads: {
                 ready: this.adReady,
                 rewarded_continue_used: this.adContinueUsed,
                 continue_offer: this.state === 'DEAD' && this.canOfferRewardedContinue(),
             },
+            overlay_buttons: this.overlayButtonRegistry,
             camera: { x: Math.round(this.cameraX) },
             pacing: {
                 run_up_distance: this.level.runUpDistance,
@@ -1357,6 +1411,7 @@ export class GameScene extends Scene {
                 w: Math.round(hazard.w),
                 h: Math.round(hazard.h),
                 active: hazard.active,
+                damage: hazard.damage,
             })),
             enemies: this.enemies.map((enemy) => ({
                 type: enemy.type,

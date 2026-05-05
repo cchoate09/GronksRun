@@ -80,6 +80,8 @@ class SkeletalSprite extends Container {
 
   setFacingRight() {}
 
+  setRangedAttackCue() {}
+
   update() {}
 }
 

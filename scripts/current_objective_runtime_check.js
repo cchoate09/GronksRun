@@ -76,6 +76,8 @@ class SkeletalSprite extends Container {
 
   setFacingRight() {}
 
+  setRangedAttackCue() {}
+
   update() {}
 }
 
@@ -140,6 +142,15 @@ movingAttacker.update(0.11, new MockInput({ down: ['ArrowRight'] }));
 assert(movingAttacker.body.vx > vxDuringWindup, 'runtime: player should continue accelerating during attack wind-up/active frames');
 assert(movingAttacker.attackPhase === 'ACTIVE', 'runtime: attack should reach an active strike phase while movement remains active');
 assert(movingAttacker.isSlashVisible() === true, 'runtime: active melee should expose visible slash feedback');
+assert(movingAttacker.runningAttackBlend === true, 'runtime: melee should expose running attack blend while movement is held');
+
+const movingShooter = new Player();
+movingShooter.body.onGround = true;
+movingShooter.update(1 / 60, new MockInput({ down: ['ArrowRight'], actions: ['ranged'] }));
+assert(movingShooter.body.vx > 0, 'runtime: ranged attack should allow movement on the same frame');
+assert(movingShooter.attackMode === 'RANGED', 'runtime: ranged action should set RANGED mode');
+assert(movingShooter.isRangedPoseVisible() === true, 'runtime: ranged action should show a ranged attack pose');
+assert(movingShooter.runningAttackBlend === true, 'runtime: ranged action should expose running attack blend while movement is held');
 
 const jumpPlayer = new Player();
 jumpPlayer.body.onGround = true;

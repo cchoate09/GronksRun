@@ -38,8 +38,15 @@ class Container {
 }
 
 class Graphics extends Container {
+  clear() { return this; }
   rect() { return this; }
+  circle() { return this; }
+  ellipse() { return this; }
+  moveTo() { return this; }
+  lineTo() { return this; }
+  quadraticCurveTo() { return this; }
   fill() { return this; }
+  stroke() { return this; }
 }
 
 class Rectangle {

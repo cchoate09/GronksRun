@@ -5,7 +5,7 @@ import openAiObstacles from '../../../assets/spritesheets/openai/obstacles.png';
 import biomePanorama from '../../../assets/backgrounds/biome-panorama.png';
 import { Assets } from 'pixi.js';
 
-export type SpriteState = 'IDLE' | 'RUN' | 'ATTACK' | 'HIT';
+export type SpriteState = 'IDLE' | 'RUN' | 'ATTACK' | 'RANGED_ATTACK' | 'HIT';
 
 export interface SpriteSheetDefinition {
     image: string;
@@ -20,7 +20,7 @@ export interface SpriteSheetDefinition {
     anchorY?: number;
     spriteOffsetX?: number;
     spriteOffsetY?: number;
-    animations: Record<SpriteState, number[]>;
+    animations: Partial<Record<SpriteState, number[]>> & Record<'IDLE' | 'RUN' | 'ATTACK' | 'HIT', number[]>;
 }
 
 export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
@@ -38,6 +38,7 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
             IDLE: [0, 1, 2, 3],
             RUN: [4, 5, 6, 7],
             ATTACK: [8, 9, 10, 11],
+            RANGED_ATTACK: [10, 11, 9, 8],
             HIT: [12, 13, 14, 15],
         },
     },
@@ -55,6 +56,7 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
             IDLE: [0, 1, 2, 3],
             RUN: [4, 5, 6, 7],
             ATTACK: [8, 9, 10, 11],
+            RANGED_ATTACK: [10, 11, 9, 8],
             HIT: [12, 13, 14, 15],
         },
     },
@@ -72,6 +74,7 @@ export const HERO_SHEETS: Record<string, SpriteSheetDefinition> = {
             IDLE: [0, 1, 2, 3],
             RUN: [4, 5, 6, 7],
             ATTACK: [8, 9, 10, 11],
+            RANGED_ATTACK: [10, 11, 9, 8],
             HIT: [12, 13, 14, 15],
         },
     },

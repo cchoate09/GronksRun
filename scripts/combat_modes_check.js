@@ -62,8 +62,8 @@ async function post(page, payload, ms = 100) {
     await post(page, { type: 'action', name: 'attack' }, 40);
     const meleeWindup = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
     let meleeActive = meleeWindup;
-    for (let i = 0; i < 10 && meleeActive.player.attackPhase !== 'ACTIVE'; i++) {
-      await page.evaluate(() => window.advanceTime(25));
+    for (let i = 0; i < 80 && meleeActive.player.attackPhase !== 'ACTIVE'; i++) {
+      await page.evaluate(() => window.advanceTime(12));
       meleeActive = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
     }
     await page.keyboard.up('ArrowRight');

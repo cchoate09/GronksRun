@@ -101,7 +101,7 @@ async function postNativeMessage(page, message, ms = 0) {
       await postNativeMessage(page, {
         type: 'debugSetPlayer',
         x: Math.max(100, Math.min(afterInput.player.x, 360)),
-        y: safeGroundY - 80,
+        y: safeGroundY - 40,
         vx: 0,
         vy: 0,
         onGround: true,

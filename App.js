@@ -107,6 +107,10 @@ function GameApp() {
         setJoystick({ x: 0, y: 0 });
         sendToGame('joystickMove', { x: 0, y: 0 });
       },
+      // Allow simultaneous taps on the action buttons (jump/melee/ranged/pause)
+      // while the joystick is being dragged. Defaults to true on Android, which
+      // absorbs sibling Views' touch events and blocks multi-touch gameplay.
+      onShouldBlockNativeResponder: () => false,
     })
   ).current;
 
@@ -218,10 +222,8 @@ function GameApp() {
         style={[styles.webview, { opacity: webViewLoaded ? 1 : 0 }]}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
         scalesPageToFit={true}
-        originWhitelist={['*']}
+        originWhitelist={['https://gronks-run.local']}
         scrollEnabled={false}
         onMessage={onMessage}
         androidLayerType="hardware"

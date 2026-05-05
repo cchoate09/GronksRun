@@ -118,10 +118,13 @@ android {
             keyPassword 'android'
         }
         release {
+            // Credentials are read from android/gradle.properties (gitignored) or env vars.
+            // Set GRONKSRUN_RELEASE_STORE_PASSWORD / GRONKSRUN_RELEASE_KEY_PASSWORD locally.
+            // To rotate the actual password on the keystore: `keytool -storepasswd -keystore android/app/release.keystore`
             storeFile file('release.keystore')
-            storePassword 'gronksrun2026'
-            keyAlias 'gronksrun'
-            keyPassword 'gronksrun2026'
+            storePassword findProperty('GRONKSRUN_RELEASE_STORE_PASSWORD') ?: System.getenv('GRONKSRUN_RELEASE_STORE_PASSWORD') ?: ''
+            keyAlias findProperty('GRONKSRUN_RELEASE_KEY_ALIAS') ?: System.getenv('GRONKSRUN_RELEASE_KEY_ALIAS') ?: 'gronksrun'
+            keyPassword findProperty('GRONKSRUN_RELEASE_KEY_PASSWORD') ?: System.getenv('GRONKSRUN_RELEASE_KEY_PASSWORD') ?: ''
         }
     }
     buildTypes {

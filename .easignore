@@ -1,19 +1,111 @@
-# Source sprite sheets (already embedded as Base64 in index.html)
+# EAS upload ignore list. Anything not excluded here is shipped to the EAS
+# cloud build context, so keep this aggressive.
+
+# Dependencies / native (EAS resolves / regenerates these itself)
+node_modules/
+.gradle/
+
+# Build output (do NOT ship; EAS rebuilds)
+dist/
+output/
+web-build/
+build/
+.expo/
+.expo-export-check/
+
+# Source sprite sheets — already inlined in assets/gameHtml.js
 assets/spritesheets/
-# Debug output
 assets/spritesheets/enemies/debug/
 assets/spritesheets/enemies/generated/
 assets/spritesheets/enemies/regenerated/debug/
-# Build/helper scripts
+
+# Tooling / one-off scripts (not used at runtime)
 add_all_sprites.js
 add_enemy_sprites.js
 add_sprites.js
 fix_all_sprites.js
 fix_enemy_anims.js
+fix_canvas.js
+fix_analytics.js
+fix_fonts.js
+fix_levelmap.js
+fix_levelcomplete.js
 gen_sprite_sheets.js
+gen_high_res_assets.js
+gen_remaining_sprites.js
+gen_store_assets.js
 implement_regen_sprites.js
+implement_remaining_sprites.js
 diagnose_sprites.js
 diagnose_grids.js
+extract.js
+extract_assets.js
+extract_keys.js
 extract_all_frames.js
-# Node modules handled by EAS
-node_modules/
+patch_assets.js
+patch_physics_bg.js
+process_sprites.js
+restore_blocks.js
+phase1_fix.js
+phase1_visual_overhaul.js
+phase2_patch.js
+phase2_gameplay_feel.js
+phase3_patch.js
+phase4_patch.js
+phase4_daily_missions.js
+make_v126.js
+refine_graphics.js
+cleanup_enemy_sprites.js
+debug_load.js
+split_game_js.js
+test.js
+test2.js
+test_transparency_script.js
+check.js
+check_syntax.js
+_check_escape.js
+_check_gamehtml.js
+__inline_check__.js
+list_keys.js
+inspect_chars.js
+audio_patch.txt
+balance_log.txt
+script_out.txt
+functions_list.txt
+error_log.txt
+error_log_assets.txt
+error_output.txt
+js_error.txt
+js2_error.txt
+js3_error.txt
+missing_sprites.json
+
+# Stray screenshots / images at repo root
+1000006105.jpg
+1000006107.jpg
+1000006109.jpg
+1000006111.jpg
+gronk_check.png
+local_screenshot.png
+test_transparency.png
+web_smoke.png
+webview_smoke.png
+Melee_Animation_Screenshot.png
+Gronks_Run_GDD.docx
+
+# Backups
+index_full_backup.html
+
+# Tooling / IDE / agent state
+.idea/
+.superpowers/
+.codex/
+.gemini/
+.claude/
+
+# Docs (not needed in build)
+docs/
+GAME_DESIGN_DOC.md
+GRAPHICS_ROADMAP.md
+LAUNCH_ROADMAP.md
+progress.md

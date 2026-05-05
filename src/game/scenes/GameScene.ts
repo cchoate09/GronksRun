@@ -133,7 +133,15 @@ export class GameScene extends Scene {
     private kills: number = 0;
     private gems: number = 0;
     private groundY: number;
+    // Static layer: drawn ONCE per scene init / terrain rebuild. Holds ground
+    // segments, gap walls, and platform geometry — none of which animate.
     private ground: Graphics;
+    // Dynamic layer: cleared and redrawn whenever a hazard toggles active.
+    // This used to live inside drawGround(), which forced a full redraw of
+    // up to 76,000px of ground geometry every time any of 24 hazards
+    // toggled at ~2.45rad/s. Splitting cuts the redraw to a few hundred
+    // px of hazard outlines.
+    private hazardOverlay: Graphics;
     private obstacleLayer: Container;
     private obstacleFrames: Texture[] = [];
     private terrainPlatforms: TerrainPlatform[] = [];
@@ -184,9 +192,12 @@ export class GameScene extends Scene {
         this.background = new BackgroundManager(this.stage, this.level.levelLength + window.innerWidth, window.innerHeight, this.level.biome);
         
         this.ground = new Graphics();
+        this.hazardOverlay = new Graphics();
         this.obstacleLayer = new Container();
         this.drawGround();
+        this.drawHazardOverlay();
         this.stage.addChild(this.ground);
+        this.stage.addChild(this.hazardOverlay);
         this.stage.addChild(this.obstacleLayer);
 
         this.player = new Player();
@@ -335,6 +346,8 @@ export class GameScene extends Scene {
         return Math.min(600, Math.max(220, window.innerHeight - 90));
     }
 
+    // Static ground geometry — drawn once on init and on terrain rebuild.
+    // Hazards are NOT drawn here; see drawHazardOverlay().
     private drawGround(): void {
         this.ground.clear();
         const topColor = this.level.id >= 8 ? 0x88e0ff : this.level.id >= 5 ? 0xffb347 : 0x50d6a8;
@@ -373,21 +386,26 @@ export class GameScene extends Scene {
                 this.ground.circle(x, platform.y + 10, 4).fill({ color: 0xffffff, alpha: 0.22 });
             }
         }
+        this.renderObstacleSprites();
+    }
 
+    // Hazard overlay — small, drawn each time a hazard toggles active so we
+    // don't pay for the full ground rebuild.
+    private drawHazardOverlay(): void {
+        this.hazardOverlay.clear();
         for (const hazard of this.hazards) {
             if (hazard.type === 'spikes') {
-                this.ground.roundRect(hazard.x, this.groundY - 8, hazard.w, 8, 4).fill({ color: 0x2d1720, alpha: 0.72 });
-                this.ground.rect(hazard.x + 5, this.groundY - 11, Math.max(0, hazard.w - 10), 3).fill({ color: 0xff4d6d, alpha: 0.22 });
+                this.hazardOverlay.roundRect(hazard.x, this.groundY - 8, hazard.w, 8, 4).fill({ color: 0x2d1720, alpha: 0.72 });
+                this.hazardOverlay.rect(hazard.x + 5, this.groundY - 11, Math.max(0, hazard.w - 10), 3).fill({ color: 0xff4d6d, alpha: 0.22 });
             } else if (hazard.type === 'fireVent') {
-                this.ground.roundRect(hazard.x, this.groundY - 13, hazard.w, 13, 5).fill({ color: 0x3b1c12, alpha: 0.7 }).stroke({ color: 0xffd166, width: 1, alpha: hazard.active ? 0.52 : 0.28 });
-                this.ground.circle(hazard.x + hazard.w * 0.5, this.groundY - 13, hazard.active ? 24 : 10).fill({ color: hazard.active ? 0xff7a3d : 0xffd166, alpha: hazard.active ? 0.16 : 0.12 });
+                this.hazardOverlay.roundRect(hazard.x, this.groundY - 13, hazard.w, 13, 5).fill({ color: 0x3b1c12, alpha: 0.7 }).stroke({ color: 0xffd166, width: 1, alpha: hazard.active ? 0.52 : 0.28 });
+                this.hazardOverlay.circle(hazard.x + hazard.w * 0.5, this.groundY - 13, hazard.active ? 24 : 10).fill({ color: hazard.active ? 0xff7a3d : 0xffd166, alpha: hazard.active ? 0.16 : 0.12 });
             } else {
                 const cx = hazard.x + hazard.w * 0.5;
-                this.ground.circle(cx, this.groundY - 9, hazard.w * 0.42).fill({ color: 0x26144a, alpha: 0.42 }).stroke({ color: 0xc4b5fd, width: 2, alpha: hazard.active ? 0.68 : 0.34 });
-                this.ground.circle(cx, this.groundY - 22, hazard.active ? 18 : 10).fill({ color: 0x91e5ff, alpha: hazard.active ? 0.14 : 0.07 });
+                this.hazardOverlay.circle(cx, this.groundY - 9, hazard.w * 0.42).fill({ color: 0x26144a, alpha: 0.42 }).stroke({ color: 0xc4b5fd, width: 2, alpha: hazard.active ? 0.68 : 0.34 });
+                this.hazardOverlay.circle(cx, this.groundY - 22, hazard.active ? 18 : 10).fill({ color: 0x91e5ff, alpha: hazard.active ? 0.14 : 0.07 });
             }
         }
-        this.renderObstacleSprites();
     }
 
     private getObstacleFrame(index: number): Texture {
@@ -605,6 +623,7 @@ export class GameScene extends Scene {
         for (const platform of this.terrainPlatforms) this.engine.physics.addPlatform(platform);
         this.engine.physics.setGroundGaps(this.terrainGaps);
         this.drawGround();
+        this.drawHazardOverlay();
         this.player.setWorldBounds(this.level.levelLength);
         this.player.body.y = Math.min(this.player.body.y, this.groundY - this.player.body.h);
         for (const enemy of this.enemies) {
@@ -717,7 +736,7 @@ export class GameScene extends Scene {
     }
 
     private updateHazards(dt: number): void {
-        let needsGroundRedraw = false;
+        let needsHazardRedraw = false;
         let needsSpriteRedraw = false;
         for (const hazard of this.hazards) {
             hazard.phase += dt;
@@ -734,10 +753,12 @@ export class GameScene extends Scene {
                 continue;
             }
             hazard.y = this.groundY - hazard.h;
-            if (wasActive !== hazard.active) needsGroundRedraw = true;
+            if (wasActive !== hazard.active) needsHazardRedraw = true;
         }
-        if (needsGroundRedraw) this.drawGround();
-        else if (needsSpriteRedraw) this.renderObstacleSprites();
+        // Was: drawGround() rebuilt the entire 76,000px level on every toggle.
+        // Now: only the hazard overlay (small) is rebuilt; static ground is untouched.
+        if (needsHazardRedraw) this.drawHazardOverlay();
+        if (needsSpriteRedraw) this.renderObstacleSprites();
     }
 
     private updateLastSafePosition(): void {
@@ -943,8 +964,12 @@ export class GameScene extends Scene {
     }
 
     private updateEnemies(dt: number): void {
+        // Snapshot the player target ONCE per frame instead of allocating a
+        // fresh object per enemy per frame. With 5 enemies at 60fps that was
+        // 300 throwaway objects/sec; now it's 60.
+        const targetSnapshot = this.getEnemyTargetSnapshot();
         for (const enemy of this.enemies) {
-            enemy.update(dt, this.getEnemyTargetSnapshot());
+            enemy.update(dt, targetSnapshot);
             if (enemy.isDead) continue;
             this.avoidEnemyGroundGaps(enemy);
 

@@ -18,6 +18,7 @@ const physicsSource = read('src/engine/physics.ts');
 const gameSceneSource = read('src/game/scenes/GameScene.ts');
 const menuSource = read('src/game/scenes/MenuScene.ts');
 const androidBuildSource = read('android/app/build.gradle');
+const preflightSource = read('scripts/qa_environment_preflight.js');
 
 assert(appSource.includes('topControlsContainer'), 'mobile controls: pause button should live in a top controls container');
 assert(/pauseButton:\s*\{[^}]*width:\s*4[0-9][^}]*height:\s*4[0-9]/s.test(appSource), 'mobile controls: pause button should be smaller than combat buttons');
@@ -57,5 +58,12 @@ assert(packageSource.includes('react-native-google-mobile-ads'), 'ads: native Go
 assert(androidBuildSource.includes('generateWebViewBundle'), 'android build: release builds should regenerate the WebView bundle from source');
 assert(androidBuildSource.includes('npmExecutable, "run", "build:webview"'), 'android build: WebView bundle generation should call npm run build:webview');
 assert(androidBuildSource.includes('createBundleReleaseJsAndAssets') || androidBuildSource.includes('bundleReleaseJsAndAssets'), 'android build: WebView bundle generation should run before React Native release JS assets');
+
+assert(preflightSource.includes('puppeteer'), 'visual QA: preflight should detect Puppeteer browser availability for CI/local verification');
+assert(preflightSource.includes('puppeteerLaunch'), 'visual QA: preflight should record a direct Puppeteer launch check');
+assert(fs.existsSync(path.join(projectRoot, '.github', 'workflows', 'android-competitiveness.yml')), 'visual QA: GitHub Actions workflow should run competitiveness verification on PRs');
+const workflowSource = read('.github/workflows/android-competitiveness.yml');
+assert(workflowSource.includes('npm run qa:visual'), 'visual QA: workflow should run the visual QA gate');
+assert(workflowSource.includes('npx puppeteer browsers install'), 'visual QA: workflow should install a Puppeteer-managed browser');
 
 console.log('Android competitiveness contract passed.');

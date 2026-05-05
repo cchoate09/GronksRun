@@ -25,6 +25,15 @@ function readCommittedWebViewHtml() {
   return JSON.parse(match[1]);
 }
 
+async function postNativeMessage(page, message, ms = 0) {
+  await page.evaluate((payload) => {
+    const data = JSON.stringify(payload);
+    window.dispatchEvent(new MessageEvent('message', { data }));
+    document.dispatchEvent(new MessageEvent('message', { data }));
+  }, message);
+  if (ms > 0) await page.evaluate((duration) => window.advanceTime(duration), ms);
+}
+
 (async () => {
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -83,14 +92,8 @@ function readCommittedWebViewHtml() {
       }
 
       const boot = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(async () => {
-        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 1, y: 0 }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(250);
-        window.postMessage(JSON.stringify({ type: 'action', name: 'attack' }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(250);
-      });
+      await postNativeMessage(page, { type: 'joystickMove', x: 1, y: 0 }, 250);
+      await postNativeMessage(page, { type: 'action', name: 'attack' }, 250);
       const afterInput = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       await page.evaluate(() => {
         for (let i = 0; i < 120; i++) {
@@ -100,18 +103,14 @@ function readCommittedWebViewHtml() {
         }
       });
       const beforeJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(async () => {
-        window.postMessage(JSON.stringify({ type: 'action', name: 'jump' }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(120);
-      });
-      const afterJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
-      await page.evaluate(async () => {
-        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 1 }), '*');
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        window.advanceTime(80);
-        window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 0 }), '*');
-      });
+      await postNativeMessage(page, { type: 'action', name: 'jump' });
+      let afterJump = beforeJump;
+      for (let i = 0; i < 12 && !(afterJump.player.vy < 0 || afterJump.player.y < beforeJump.player.y); i++) {
+        await page.evaluate(() => window.advanceTime(25));
+        afterJump = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
+      }
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 1 }, 80);
+      await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 });
       const afterJoystickDown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       await page.evaluate(() => window.advanceTime(1500));
       const settled = await page.evaluate(() => JSON.parse(window.render_game_to_text()));

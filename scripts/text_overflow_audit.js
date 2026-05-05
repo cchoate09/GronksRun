@@ -18,6 +18,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { launchOptions } = require('./puppeteerLaunchOptions');
 
 const projectRoot = process.cwd();
 const outputRoot = path.join(projectRoot, 'output', 'text-overflow');
@@ -269,7 +270,7 @@ function classifyOverflows(records, viewport) {
   fs.mkdirSync(outputRoot, { recursive: true });
   const server = await startServer();
   const port = server.address().port;
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch(launchOptions());
   const page = await browser.newPage();
 
   const allIssues = [];

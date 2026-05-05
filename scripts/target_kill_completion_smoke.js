@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { launchOptions } = require('./puppeteerLaunchOptions');
 
 const projectRoot = process.cwd();
 const outputDir = path.join(projectRoot, 'output', 'target-kill-completion');
@@ -22,7 +23,7 @@ function readCommittedWebViewHtml() {
 
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: 'new' });
+    browser = await puppeteer.launch(launchOptions());
   } catch (error) {
     if (error && error.code === 'EPERM') {
       const gameSceneSource = fs.readFileSync(path.join(projectRoot, 'src', 'game', 'scenes', 'GameScene.ts'), 'utf8');

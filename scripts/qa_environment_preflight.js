@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const puppeteer = require('puppeteer');
+const { launchOptions } = require('./puppeteerLaunchOptions');
 
 const projectRoot = process.cwd();
 const outputDir = path.join(projectRoot, 'output');
@@ -32,7 +33,7 @@ async function puppeteerLaunch() {
   const startedAt = Date.now();
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: 'new', timeout: 15000 });
+    browser = await puppeteer.launch(launchOptions({ timeout: 15000 }));
     return {
       command: 'puppeteer.launch',
       status: 0,

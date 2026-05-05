@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { launchOptions } = require('./puppeteerLaunchOptions');
 
 const projectRoot = process.cwd();
 const outputDir = path.join(projectRoot, 'output', 'systemic-loop');
@@ -20,7 +21,7 @@ function readCommittedWebViewHtml() {
 (async () => {
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch(launchOptions());
   const page = await browser.newPage();
   const pageErrors = [];
 

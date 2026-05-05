@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { launchOptions } = require('./puppeteerLaunchOptions');
 
 const projectRoot = process.cwd();
 const outputDir = path.join(projectRoot, 'output', 'combat-modes');
@@ -31,7 +32,7 @@ async function post(page, payload, ms = 100) {
 
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: 'new' });
+    browser = await puppeteer.launch(launchOptions());
   } catch (error) {
     if (error && error.code === 'EPERM') {
       runSourceContractCheck();

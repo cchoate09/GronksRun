@@ -19,6 +19,7 @@ const gameSceneSource = read('src/game/scenes/GameScene.ts');
 const menuSource = read('src/game/scenes/MenuScene.ts');
 const androidBuildSource = read('android/app/build.gradle');
 const preflightSource = read('scripts/qa_environment_preflight.js');
+const puppeteerLaunchOptionsSource = read('scripts/puppeteerLaunchOptions.js');
 
 assert(appSource.includes('topControlsContainer'), 'mobile controls: pause button should live in a top controls container');
 assert(/pauseButton:\s*\{[^}]*width:\s*4[0-9][^}]*height:\s*4[0-9]/s.test(appSource), 'mobile controls: pause button should be smaller than combat buttons');
@@ -61,6 +62,9 @@ assert(androidBuildSource.includes('createBundleReleaseJsAndAssets') || androidB
 
 assert(preflightSource.includes('puppeteer'), 'visual QA: preflight should detect Puppeteer browser availability for CI/local verification');
 assert(preflightSource.includes('puppeteerLaunch'), 'visual QA: preflight should record a direct Puppeteer launch check');
+assert(preflightSource.includes('launchOptions'), 'visual QA: preflight should share CI-safe Puppeteer launch options');
+assert(puppeteerLaunchOptionsSource.includes('--no-sandbox'), 'visual QA: CI Puppeteer launch options should disable Chromium sandbox when needed');
+assert(puppeteerLaunchOptionsSource.includes('process.env.CI'), 'visual QA: no-sandbox launch flags should be scoped to CI');
 assert(fs.existsSync(path.join(projectRoot, '.github', 'workflows', 'android-competitiveness.yml')), 'visual QA: GitHub Actions workflow should run competitiveness verification on PRs');
 const workflowSource = read('.github/workflows/android-competitiveness.yml');
 assert(workflowSource.includes('npm run qa:visual'), 'visual QA: workflow should run the visual QA gate');

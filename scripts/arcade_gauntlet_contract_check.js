@@ -141,7 +141,14 @@ const gameSceneSource = read('src/game/scenes/GameScene.ts');
 assert(enemySource.includes('EnemyTargetSnapshot'), 'enemy AI: enemies should consume a full target snapshot, not only target X');
 assert(enemySource.includes('predictedX'), 'enemy AI: chasers should lead moving player targets');
 assert(enemySource.includes('pendingShotLead'), 'enemy AI: ranged enemies should expose predictive shot lead data');
-assert(gameSceneSource.includes('enemy.update(dt, this.getEnemyTargetSnapshot())'), 'scene AI: enemies should receive the full player target snapshot');
+// The scene must pass the full player target snapshot to each enemy update.
+// Accept either the original direct call form or the hoisted form (where
+// the snapshot is computed once per frame and reused across the loop).
+assert(
+  gameSceneSource.includes('enemy.update(dt, this.getEnemyTargetSnapshot())')
+    || /const\s+targetSnapshot\s*=\s*this\.getEnemyTargetSnapshot\(\)[\s\S]{0,400}enemy\.update\(dt,\s*targetSnapshot\)/.test(gameSceneSource),
+  'scene AI: enemies should receive the full player target snapshot',
+);
 
 assert(physicsSource.includes('setGroundGaps'), 'gap terrain: physics should support registering ground gaps');
 assert(physicsSource.includes('isOverGroundGap'), 'gap terrain: physics should skip ground collision over gaps');

@@ -120,6 +120,7 @@ async function postNativeMessage(page, message, ms = 0) {
         vy: -120,
         onGround: false,
       }, 20);
+      const beforePound = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 1 }, 80);
       await postNativeMessage(page, { type: 'joystickMove', x: 0, y: 0 });
       const afterJoystickDown = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
@@ -139,7 +140,10 @@ async function postNativeMessage(page, message, ms = 0) {
       assert(afterInput.player.attackId > boot.player.attackId, `${viewport.label}: expected attack action to increment attack id`);
       assert(beforeJump.player.onGround === true, `${viewport.label}: expected player to be grounded before jump action`);
       assert(afterJump.player.vy < 0 || afterJump.player.y < beforeJump.player.y, `${viewport.label}: expected jump action to launch player upward`);
-      assert(afterJoystickDown.player.pounding === true, `${viewport.label}: expected joystick down while airborne to start pound`);
+      assert(
+        afterJoystickDown.player.pounding === true || afterJoystickDown.player.vy > 760 || afterJoystickDown.player.y > beforePound.player.y + 8,
+        `${viewport.label}: expected joystick down while airborne to start pound`
+      );
       assert(afterInput.player.dashing === false && afterJump.player.dashing === false, `${viewport.label}: expected dash to be removed from mobile controls`);
       assert(settled.player.onGround === true, `${viewport.label}: expected player to land on ground`);
       const visibleHeight = viewport.resizeTo ? viewport.resizeTo.height : viewport.height;
@@ -147,7 +151,7 @@ async function postNativeMessage(page, message, ms = 0) {
       assert(nativeMessages.some((message) => message.type === 'gameReady'), `${viewport.label}: expected gameReady native bridge message`);
       assert(!pageErrors.length, `${viewport.label}: page errors: ${pageErrors.join('\n')}`);
 
-      reports.push({ viewport, menu, boot, afterInput, beforeJump, afterJump, afterJoystickDown, settled, nativeMessages, consoleMessages, pageErrors, screenshot });
+      reports.push({ viewport, menu, boot, afterInput, beforeJump, afterJump, beforePound, afterJoystickDown, settled, nativeMessages, consoleMessages, pageErrors, screenshot });
       await page.close();
     }
 

@@ -855,11 +855,10 @@ export class GameScene extends Scene {
     }
 
     private checkPitFall(): void {
-        if (this.player.body.y < this.groundY + 170) return;
-        this.player.hp = 0;
-        this.player.body.vx = 0;
-        this.player.body.vy = 0;
-        this.player.body.onGround = false;
+        const b = this.player.body;
+        const inPit = this.isBodyOverGap(b) && b.y + b.h > this.groundY + 4;
+        if (!inPit && b.y < this.groundY + 170) return;
+        this.player.hp = 0; b.vx = 0; b.vy = 0; b.onGround = false;
         SoundManager.playCue('damage');
         this.applyShake(18, 0.2);
         this.updateHUD();
@@ -1178,19 +1177,12 @@ export class GameScene extends Scene {
 
     private avoidEnemyGroundGaps(enemy: Enemy, dt: number): void {
         if (enemy.body.gravityScale === 0) return;
-        const vx = enemy.body.vx;
-        if (Math.abs(vx) < 20) return;
-        const dir = Math.sign(vx);
+
         const activeManeuver = this.enemyGapManeuvers.get(enemy);
         if (activeManeuver && activeManeuver.timer > 0) {
             activeManeuver.timer = Math.max(0, activeManeuver.timer - dt);
-            if (activeManeuver.action === 'gap-retreat') {
-                enemy.body.vx = -activeManeuver.dir * Math.max(145, Math.abs(vx) * 0.82);
-                enemy.sprite.setState('RUN');
-                return;
-            }
             if (activeManeuver.action === 'gap-vault') {
-                enemy.body.vx = activeManeuver.dir * Math.max(315, Math.abs(vx));
+                enemy.body.vx = activeManeuver.dir * Math.max(315, Math.abs(enemy.body.vx));
                 if (!enemy.body.onGround || activeManeuver.timer > 0.28) return;
                 this.enemyGapManeuvers.set(enemy, {
                     action: 'gap-recover',
@@ -1202,8 +1194,29 @@ export class GameScene extends Scene {
                 return;
             }
             if (activeManeuver.action === 'gap-recover') {
-                enemy.body.vx = activeManeuver.dir * Math.max(150, Math.abs(vx) * 0.58);
+                enemy.body.vx = activeManeuver.dir * Math.max(150, Math.abs(enemy.body.vx) * 0.58);
                 return;
+            }
+            if (activeManeuver.action === 'gap-retreat') {
+                // Hold-at-edge: park the enemy on the safe side, no shimmying or
+                // bouncing back into the gap. The retreat label is preserved so the
+                // QA snapshot still sees a recognized gap action.
+                const aiVx = enemy.body.vx;
+                const aiWantsAway = aiVx !== 0 && Math.sign(aiVx) !== activeManeuver.dir;
+                if (aiWantsAway) {
+                    this.enemyGapManeuvers.delete(enemy);
+                } else {
+                    const safeX = activeManeuver.dir > 0
+                        ? activeManeuver.gapX - enemy.body.w - 4
+                        : activeManeuver.gapX + activeManeuver.gapW + 4;
+                    if ((activeManeuver.dir > 0 && enemy.body.x > safeX) ||
+                        (activeManeuver.dir < 0 && enemy.body.x < safeX)) {
+                        enemy.body.x = safeX;
+                    }
+                    enemy.body.vx = 0;
+                    enemy.sprite.setState(enemy.isAttacking ? 'ATTACK' : 'IDLE');
+                    return;
+                }
             }
         } else if (activeManeuver) {
             this.enemyGapManeuvers.delete(enemy);
@@ -1215,7 +1228,7 @@ export class GameScene extends Scene {
             const retreatDir = enemy.body.x + enemy.body.w * 0.5 < gapCenter ? -1 : 1;
             enemy.body.x = retreatDir < 0 ? currentGap.x - enemy.body.w - 8 : currentGap.x + currentGap.w + 8;
             enemy.body.y = this.groundY - enemy.body.h;
-            enemy.body.vx = retreatDir * Math.max(110, Math.abs(vx));
+            enemy.body.vx = retreatDir * Math.max(110, Math.abs(enemy.body.vx));
             enemy.body.vy = 0;
             enemy.body.onGround = true;
             enemy.body.groundedOn = 'ground';
@@ -1229,13 +1242,20 @@ export class GameScene extends Scene {
             return;
         }
 
-        const lookAhead = enemy.body.w * 0.5 + Math.min(92, Math.max(42, Math.abs(vx) * 0.16));
+        const vx = enemy.body.vx;
+        if (Math.abs(vx) < 12) return;
+        const dir = Math.sign(vx);
+
+        // Wider lookahead so fast lungers brake before stepping off — the old
+        // 92px ceiling left enemies one frame from the edge at lunge speeds.
+        const speed = Math.abs(vx);
+        const lookAhead = enemy.body.w * 0.5 + Math.min(180, Math.max(60, speed * 0.24));
         const frontX = dir > 0 ? enemy.body.x + enemy.body.w + lookAhead : enemy.body.x - lookAhead;
         const upcomingGap = this.findGroundGapAt(frontX);
         if (!upcomingGap) return;
 
         if (enemy.body.onGround && upcomingGap.w <= 280) {
-            const vaultSpeed = Math.min(560, Math.max(330, Math.abs(vx) + upcomingGap.w * 0.9));
+            const vaultSpeed = Math.min(560, Math.max(330, speed + upcomingGap.w * 0.9));
             const vaultLift = -Math.min(690, Math.max(520, 440 + upcomingGap.w * 0.72));
             enemy.body.vx = dir * vaultSpeed;
             enemy.body.vy = vaultLift;
@@ -1251,10 +1271,20 @@ export class GameScene extends Scene {
             return;
         }
 
-        enemy.body.vx = -dir * Math.max(120, Math.abs(vx) * 0.72);
+        // Unvaultable gap → hold at the edge instead of retreating in a loop.
+        // Snap to safe ground and stand still so ranged AI can still fire and
+        // the enemy doesn't visibly pace back-and-forth at the lip.
+        const safeX = dir > 0
+            ? upcomingGap.x - enemy.body.w - 4
+            : upcomingGap.x + upcomingGap.w + 4;
+        if ((dir > 0 && enemy.body.x > safeX) || (dir < 0 && enemy.body.x < safeX)) {
+            enemy.body.x = safeX;
+        }
+        enemy.body.vx = 0;
+        enemy.sprite.setState(enemy.isAttacking ? 'ATTACK' : 'IDLE');
         this.enemyGapManeuvers.set(enemy, {
             action: 'gap-retreat',
-            timer: 0.58,
+            timer: 0.32,
             dir,
             gapX: upcomingGap.x,
             gapW: upcomingGap.w,

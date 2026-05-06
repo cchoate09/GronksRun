@@ -127,11 +127,16 @@ async function advance(page, ms) {
     await page.screenshot({ path: path.join(outputDir, 'near-gap.png') });
     assert(nearGap.gaps.some((gap) => gap.screenX > 80 && gap.screenX < 1200), 'expected a terrain gap to be visible after teleport');
 
+    // Build up running speed for ~220ms before triggering the jump. Pit contact
+    // is now an instant kill, so a stand-still jump no longer "skates" the
+    // player through; they need a real run-up to clear the gap.
     await page.evaluate(() => {
       window.postMessage(JSON.stringify({ type: 'joystickMove', x: 1, y: 0 }), '*');
+    });
+    await advance(page, 220);
+    await page.evaluate(() => {
       window.postMessage(JSON.stringify({ type: 'action', name: 'jump' }), '*');
     });
-    await advance(page, 50);
     await advance(page, 1500);
     await page.evaluate(() => {
       window.postMessage(JSON.stringify({ type: 'joystickMove', x: 0, y: 0 }), '*');

@@ -454,12 +454,33 @@ export class MenuScene extends Scene {
 
     private drawButtonChrome(w: number, h: number, color: number, intensity: number = 1): Graphics {
         const bg = new Graphics();
-        bg.roundRect(3, 5, w, h, 10).fill({ color: 0x020617, alpha: 0.52 * intensity });
-        bg.roundRect(0, 0, w, h, 10).fill({ color, alpha: 0.92 * intensity }).stroke({ color: 0xffffff, width: 2, alpha: 0.28 * intensity });
-        bg.roundRect(5, 5, w - 10, Math.max(8, h * 0.32), 7).fill({ color: 0xffffff, alpha: 0.16 * intensity });
-        bg.rect(8, h - 7, w - 16, 3).fill({ color: 0x07110b, alpha: 0.22 * intensity });
-        bg.circle(13, h * 0.5, 3).fill({ color: 0x07110b, alpha: 0.25 * intensity });
-        bg.circle(w - 13, h * 0.5, 3).fill({ color: 0x07110b, alpha: 0.25 * intensity });
+        const radius = 14;
+        const innerRadius = radius - 3;
+
+        // Soft drop shadow for lift off the menu surface.
+        bg.roundRect(2, 6, w, h, radius).fill({ color: 0x020617, alpha: 0.55 * intensity });
+
+        // Dark frame band: gives every button a crisp silhouette over the busy backdrop.
+        bg.roundRect(-2, -1, w + 4, h + 3, radius + 2).fill({ color: 0x020617, alpha: 0.82 * intensity });
+
+        // Main body fill.
+        bg.roundRect(0, 0, w, h, radius).fill({ color, alpha: 0.96 * intensity });
+
+        // Layered top highlight (two stops) — fakes a glossy gradient without a shader.
+        const highlightH = Math.max(10, h * 0.5);
+        bg.roundRect(3, 3, w - 6, highlightH, innerRadius).fill({ color: 0xffffff, alpha: 0.16 * intensity });
+        bg.roundRect(3, 3, w - 6, Math.max(6, h * 0.22), innerRadius).fill({ color: 0xffffff, alpha: 0.32 * intensity });
+
+        // Bottom shadow band for depth and a subtle "pressable" feel.
+        const shadowH = Math.max(7, h * 0.26);
+        bg.roundRect(3, h - shadowH - 2, w - 6, shadowH, innerRadius).fill({ color: 0x000000, alpha: 0.22 * intensity });
+
+        // Inner light stroke for an embossed edge.
+        bg.roundRect(1.5, 1.5, w - 3, h - 3, radius - 1).stroke({ color: 0xffffff, width: 1.4, alpha: 0.45 * intensity });
+
+        // Outer crisp stroke contains the gloss.
+        bg.roundRect(0, 0, w, h, radius).stroke({ color: 0x020617, width: 2, alpha: 0.6 * intensity });
+
         return bg;
     }
 

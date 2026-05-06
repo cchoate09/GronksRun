@@ -65,6 +65,38 @@ async function advance(page, ms) {
     assert(Array.isArray(boot.hazards) && boot.hazards.length > 0, 'expected level snapshot to expose hazards');
 
     const firstGap = boot.gaps[0];
+    await page.evaluate((gap) => {
+      window.postMessage(JSON.stringify({ type: 'debugClearEnemies' }), '*');
+      window.postMessage(JSON.stringify({
+        type: 'debugSpawnEnemy',
+        kind: 'CHASER',
+        x: gap.x - 90,
+      }), '*');
+      window.postMessage(JSON.stringify({
+        type: 'debugSetPlayer',
+        x: gap.x + gap.w + 240,
+        y: 360,
+        vx: 0,
+        vy: 0,
+        onGround: true,
+      }), '*');
+    }, firstGap);
+    await advance(page, 550);
+    const enemyGapMove = await snapshot(page);
+    const gapEnemy = enemyGapMove.enemies.find((enemy) => enemy.type === 'CHASER');
+    assert(gapEnemy, 'expected debug-spawned chaser near gap');
+    assert(
+      ['gap-vault', 'gap-retreat', 'gap-recover'].includes(gapEnemy.gapAction),
+      `expected enemy to choose an explicit gap maneuver, got ${gapEnemy.gapAction}`,
+    );
+    assert(gapEnemy.y < boot.player.y + 180, `gap-aware enemy should stay playable instead of falling out of the level, got y=${gapEnemy.y}`);
+    await page.screenshot({ path: path.join(outputDir, 'enemy-gap-maneuver.png') });
+
+    await page.evaluate(() => {
+      window.postMessage(JSON.stringify({ type: 'debugClearEnemies' }), '*');
+    });
+    await advance(page, 50);
+
     await page.evaluate((gap, playerY) => {
       window.postMessage(JSON.stringify({
         type: 'debugSetPlayer',

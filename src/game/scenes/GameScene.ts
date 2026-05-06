@@ -53,6 +53,16 @@ interface TerrainGap {
     depth: number;
 }
 
+type EnemyGapAction = 'none' | 'gap-vault' | 'gap-retreat' | 'gap-recover';
+
+interface EnemyGapManeuver {
+    action: EnemyGapAction;
+    timer: number;
+    dir: number;
+    gapX: number;
+    gapW: number;
+}
+
 interface Hazard {
     type: 'spikes' | 'fireVent' | 'spellRune';
     x: number;
@@ -107,6 +117,36 @@ export const LEVELS: LevelDefinition[] = [
     { id: 8, name: 'Night Ambush', biome: 'Glass City', targetKills: 42, maxActive: 4, enemyKinds: ['CHASER', 'SERPENT', 'RANGED', 'DIVER', 'BOMBER'], spawnGap: 0.68, runUpDistance: 980, encounterSpacing: 520, levelLength: 62000, reward: 60, terrainProfile: 'night-ambush', spawnPattern: ['DIVER', 'RANGED', 'BOMBER', 'SERPENT'], levelModifiers: { routeStyle: 'ambush-switchbacks', hazardDensity: 0.42, verticality: 0.54, pressureBias: 'mixed' } },
     { id: 9, name: 'Iron Rush', biome: 'Glass City', targetKills: 46, maxActive: 5, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT', 'GUARDIAN', 'PTERO'], spawnGap: 0.64, runUpDistance: 1000, encounterSpacing: 500, levelLength: 69000, reward: 70, terrainProfile: 'iron-rush', spawnPattern: ['PTERO', 'GUARDIAN', 'SERPENT', 'CHASER', 'HEAVY'], levelModifiers: { routeStyle: 'rush-lanes', hazardDensity: 0.48, verticality: 0.38, pressureBias: 'mixed' } },
     { id: 10, name: 'Gronk Gauntlet', biome: 'Sky Forge', targetKills: 50, maxActive: 5, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.6, runUpDistance: 1040, encounterSpacing: 480, levelLength: 76000, reward: 100, terrainProfile: 'sky-gauntlet', spawnPattern: ['RANGED', 'PTERO', 'GUARDIAN', 'BOMBER', 'DIVER', 'HEAVY'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.52, verticality: 0.72, pressureBias: 'mixed' } },
+    { id: 11, name: 'Ember Causeway', biome: 'Ash Ravine', targetKills: 51, maxActive: 5, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT'], spawnGap: 0.58, runUpDistance: 1040, encounterSpacing: 480, levelLength: 76100, reward: 110, terrainProfile: 'crossfire-ridge', spawnPattern: ['HEAVY', 'RANGED', 'SERPENT', 'CHASER'], levelModifiers: { routeStyle: 'hazard-ridge', hazardDensity: 0.44, verticality: 0.52, pressureBias: 'mixed' } },
+    { id: 12, name: 'Wyrm Stairs', biome: 'Temple Jungle', targetKills: 52, maxActive: 5, enemyKinds: ['CHASER', 'SERPENT', 'DIVER', 'BOMBER'], spawnGap: 0.57, runUpDistance: 1045, encounterSpacing: 478, levelLength: 76180, reward: 115, terrainProfile: 'serpent-lanes', spawnPattern: ['SERPENT', 'DIVER', 'BOMBER', 'SERPENT', 'CHASER'], levelModifiers: { routeStyle: 'low-serpent', hazardDensity: 0.36, verticality: 0.5, pressureBias: 'serpent' } },
+    { id: 13, name: 'Glass Switchback', biome: 'Glass City', targetKills: 53, maxActive: 5, enemyKinds: ['CHASER', 'RANGED', 'DIVER', 'PTERO'], spawnGap: 0.56, runUpDistance: 1050, encounterSpacing: 476, levelLength: 76260, reward: 120, terrainProfile: 'night-ambush', spawnPattern: ['DIVER', 'RANGED', 'PTERO', 'CHASER', 'RANGED'], levelModifiers: { routeStyle: 'ambush-switchbacks', hazardDensity: 0.43, verticality: 0.58, pressureBias: 'ranged' } },
+    { id: 14, name: 'Moonlit Siege', biome: 'Moonlit Road', targetKills: 54, maxActive: 5, enemyKinds: ['CHASER', 'RANGED', 'GUARDIAN', 'BOMBER'], spawnGap: 0.55, runUpDistance: 1055, encounterSpacing: 474, levelLength: 76340, reward: 125, terrainProfile: 'witchline-crossfire', spawnPattern: ['GUARDIAN', 'RANGED', 'BOMBER', 'CHASER', 'RANGED'], levelModifiers: { routeStyle: 'crossfire-steps', hazardDensity: 0.4, verticality: 0.46, pressureBias: 'ranged' } },
+    { id: 15, name: 'Sky Hooks', biome: 'Sky Forge', targetKills: 55, maxActive: 5, enemyKinds: ['CHASER', 'HEAVY', 'PTERO', 'GUARDIAN'], spawnGap: 0.54, runUpDistance: 1060, encounterSpacing: 472, levelLength: 76420, reward: 130, terrainProfile: 'sky-gauntlet', spawnPattern: ['PTERO', 'HEAVY', 'GUARDIAN', 'CHASER', 'PTERO'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.5, verticality: 0.7, pressureBias: 'heavy' } },
+    { id: 16, name: 'Tidebreaker', biome: 'Ruined Coast', targetKills: 56, maxActive: 5, enemyKinds: ['CHASER', 'SERPENT', 'RANGED', 'HEAVY'], spawnGap: 0.54, runUpDistance: 1065, encounterSpacing: 470, levelLength: 76500, reward: 135, terrainProfile: 'broken-steps', spawnPattern: ['CHASER', 'SERPENT', 'HEAVY', 'RANGED', 'SERPENT'], levelModifiers: { routeStyle: 'broken-climb', hazardDensity: 0.32, verticality: 0.48, pressureBias: 'mixed' } },
+    { id: 17, name: 'Obsidian Lanes', biome: 'Ash Ravine', targetKills: 57, maxActive: 5, enemyKinds: ['CHASER', 'RANGED', 'BOMBER', 'DIVER', 'SERPENT'], spawnGap: 0.53, runUpDistance: 1070, encounterSpacing: 468, levelLength: 76580, reward: 140, terrainProfile: 'iron-rush', spawnPattern: ['BOMBER', 'DIVER', 'SERPENT', 'RANGED', 'CHASER'], levelModifiers: { routeStyle: 'rush-lanes', hazardDensity: 0.5, verticality: 0.44, pressureBias: 'mixed' } },
+    { id: 18, name: 'Verdant Knives', biome: 'Temple Jungle', targetKills: 58, maxActive: 5, enemyKinds: ['CHASER', 'SERPENT', 'GUARDIAN', 'PTERO'], spawnGap: 0.52, runUpDistance: 1075, encounterSpacing: 466, levelLength: 76660, reward: 145, terrainProfile: 'stone-guard', spawnPattern: ['SERPENT', 'GUARDIAN', 'PTERO', 'SERPENT', 'CHASER'], levelModifiers: { routeStyle: 'guard-bridges', hazardDensity: 0.34, verticality: 0.6, pressureBias: 'serpent' } },
+    { id: 19, name: 'Neon Breakers', biome: 'Glass City', targetKills: 59, maxActive: 5, enemyKinds: ['CHASER', 'RANGED', 'BOMBER', 'PTERO', 'GUARDIAN'], spawnGap: 0.51, runUpDistance: 1080, encounterSpacing: 464, levelLength: 76740, reward: 150, terrainProfile: 'night-ambush', spawnPattern: ['PTERO', 'RANGED', 'BOMBER', 'GUARDIAN', 'CHASER'], levelModifiers: { routeStyle: 'ambush-switchbacks', hazardDensity: 0.46, verticality: 0.56, pressureBias: 'ranged' } },
+    { id: 20, name: 'Forge Crown', biome: 'Sky Forge', targetKills: 60, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.5, runUpDistance: 1085, encounterSpacing: 462, levelLength: 76820, reward: 160, terrainProfile: 'sky-gauntlet', spawnPattern: ['GUARDIAN', 'PTERO', 'BOMBER', 'HEAVY', 'DIVER', 'RANGED'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.54, verticality: 0.72, pressureBias: 'mixed' } },
+    { id: 21, name: 'Saltwind Trial', biome: 'Ruined Coast', targetKills: 61, maxActive: 6, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT', 'BOMBER'], spawnGap: 0.5, runUpDistance: 1090, encounterSpacing: 460, levelLength: 76880, reward: 165, terrainProfile: 'shore-sprint', spawnPattern: ['HEAVY', 'SERPENT', 'BOMBER', 'CHASER', 'SERPENT'], levelModifiers: { routeStyle: 'flat-pressure', hazardDensity: 0.28, verticality: 0.3, pressureBias: 'heavy' } },
+    { id: 22, name: 'Cinder Switch', biome: 'Ash Ravine', targetKills: 62, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'BOMBER', 'DIVER'], spawnGap: 0.49, runUpDistance: 1090, encounterSpacing: 459, levelLength: 76940, reward: 170, terrainProfile: 'crossfire-ridge', spawnPattern: ['RANGED', 'BOMBER', 'DIVER', 'RANGED', 'CHASER'], levelModifiers: { routeStyle: 'hazard-ridge', hazardDensity: 0.52, verticality: 0.52, pressureBias: 'ranged' } },
+    { id: 23, name: 'Rootfall Vault', biome: 'Temple Jungle', targetKills: 63, maxActive: 6, enemyKinds: ['CHASER', 'SERPENT', 'HEAVY', 'PTERO'], spawnGap: 0.49, runUpDistance: 1090, encounterSpacing: 458, levelLength: 77000, reward: 175, terrainProfile: 'golem-bridge', spawnPattern: ['SERPENT', 'HEAVY', 'PTERO', 'CHASER', 'HEAVY'], levelModifiers: { routeStyle: 'heavy-bridge', hazardDensity: 0.38, verticality: 0.64, pressureBias: 'heavy' } },
+    { id: 24, name: 'Blackglass Run', biome: 'Glass City', targetKills: 64, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'SERPENT', 'GUARDIAN', 'DIVER'], spawnGap: 0.48, runUpDistance: 1090, encounterSpacing: 457, levelLength: 77060, reward: 180, terrainProfile: 'iron-rush', spawnPattern: ['DIVER', 'GUARDIAN', 'SERPENT', 'RANGED', 'CHASER'], levelModifiers: { routeStyle: 'rush-lanes', hazardDensity: 0.5, verticality: 0.48, pressureBias: 'mixed' } },
+    { id: 25, name: 'Starforge Rift', biome: 'Sky Forge', targetKills: 65, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'BOMBER', 'PTERO'], spawnGap: 0.48, runUpDistance: 1090, encounterSpacing: 456, levelLength: 77100, reward: 185, terrainProfile: 'sky-gauntlet', spawnPattern: ['PTERO', 'BOMBER', 'HEAVY', 'RANGED', 'PTERO'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.56, verticality: 0.72, pressureBias: 'mixed' } },
+    { id: 26, name: 'Moonfang Alley', biome: 'Moonlit Road', targetKills: 66, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'SERPENT', 'BOMBER', 'GUARDIAN'], spawnGap: 0.47, runUpDistance: 1095, encounterSpacing: 455, levelLength: 77140, reward: 190, terrainProfile: 'witchline-crossfire', spawnPattern: ['SERPENT', 'RANGED', 'GUARDIAN', 'BOMBER', 'RANGED'], levelModifiers: { routeStyle: 'crossfire-steps', hazardDensity: 0.48, verticality: 0.5, pressureBias: 'ranged' } },
+    { id: 27, name: 'Golem Teeth', biome: 'Ash Ravine', targetKills: 67, maxActive: 6, enemyKinds: ['CHASER', 'HEAVY', 'GUARDIAN', 'DIVER', 'SERPENT'], spawnGap: 0.47, runUpDistance: 1095, encounterSpacing: 454, levelLength: 77180, reward: 195, terrainProfile: 'golem-bridge', spawnPattern: ['HEAVY', 'GUARDIAN', 'DIVER', 'SERPENT', 'HEAVY'], levelModifiers: { routeStyle: 'heavy-bridge', hazardDensity: 0.44, verticality: 0.62, pressureBias: 'heavy' } },
+    { id: 28, name: 'Serpent Crown', biome: 'Temple Jungle', targetKills: 68, maxActive: 6, enemyKinds: ['CHASER', 'SERPENT', 'BOMBER', 'PTERO', 'RANGED'], spawnGap: 0.46, runUpDistance: 1095, encounterSpacing: 453, levelLength: 77220, reward: 200, terrainProfile: 'serpent-lanes', spawnPattern: ['SERPENT', 'PTERO', 'BOMBER', 'SERPENT', 'RANGED'], levelModifiers: { routeStyle: 'low-serpent', hazardDensity: 0.42, verticality: 0.54, pressureBias: 'serpent' } },
+    { id: 29, name: 'Crystal Riot', biome: 'Glass City', targetKills: 69, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.46, runUpDistance: 1095, encounterSpacing: 452, levelLength: 77260, reward: 205, terrainProfile: 'night-ambush', spawnPattern: ['DIVER', 'PTERO', 'RANGED', 'GUARDIAN', 'HEAVY'], levelModifiers: { routeStyle: 'ambush-switchbacks', hazardDensity: 0.52, verticality: 0.6, pressureBias: 'mixed' } },
+    { id: 30, name: 'Storm Anvil', biome: 'Sky Forge', targetKills: 70, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.45, runUpDistance: 1100, encounterSpacing: 451, levelLength: 77300, reward: 215, terrainProfile: 'sky-gauntlet', spawnPattern: ['PTERO', 'GUARDIAN', 'BOMBER', 'DIVER', 'HEAVY', 'SERPENT'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.56, verticality: 0.72, pressureBias: 'mixed' } },
+    { id: 31, name: 'Broken Crown', biome: 'Ruined Coast', targetKills: 70, maxActive: 6, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT', 'GUARDIAN'], spawnGap: 0.45, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77320, reward: 220, terrainProfile: 'broken-steps', spawnPattern: ['GUARDIAN', 'HEAVY', 'SERPENT', 'CHASER', 'HEAVY'], levelModifiers: { routeStyle: 'broken-climb', hazardDensity: 0.4, verticality: 0.56, pressureBias: 'heavy' } },
+    { id: 32, name: 'Ashen Chorus', biome: 'Ash Ravine', targetKills: 71, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'BOMBER', 'DIVER', 'PTERO'], spawnGap: 0.45, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77340, reward: 225, terrainProfile: 'crossfire-ridge', spawnPattern: ['RANGED', 'DIVER', 'BOMBER', 'PTERO', 'RANGED'], levelModifiers: { routeStyle: 'hazard-ridge', hazardDensity: 0.56, verticality: 0.58, pressureBias: 'ranged' } },
+    { id: 33, name: 'Jungle Crucible', biome: 'Temple Jungle', targetKills: 71, maxActive: 6, enemyKinds: ['CHASER', 'SERPENT', 'HEAVY', 'BOMBER', 'GUARDIAN'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77360, reward: 230, terrainProfile: 'stone-guard', spawnPattern: ['SERPENT', 'GUARDIAN', 'BOMBER', 'HEAVY', 'SERPENT'], levelModifiers: { routeStyle: 'guard-bridges', hazardDensity: 0.46, verticality: 0.62, pressureBias: 'mixed' } },
+    { id: 34, name: 'Glassfire Chase', biome: 'Glass City', targetKills: 72, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'SERPENT', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77400, reward: 235, terrainProfile: 'iron-rush', spawnPattern: ['PTERO', 'DIVER', 'SERPENT', 'GUARDIAN', 'RANGED'], levelModifiers: { routeStyle: 'rush-lanes', hazardDensity: 0.54, verticality: 0.52, pressureBias: 'mixed' } },
+    { id: 35, name: 'High Forge War', biome: 'Sky Forge', targetKills: 72, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77400, reward: 240, terrainProfile: 'sky-gauntlet', spawnPattern: ['GUARDIAN', 'PTERO', 'HEAVY', 'BOMBER', 'DIVER', 'SERPENT'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.56, verticality: 0.72, pressureBias: 'mixed' } },
+    { id: 36, name: 'Coastbreaker Elite', biome: 'Ruined Coast', targetKills: 72, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'PTERO'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77400, reward: 245, terrainProfile: 'shore-sprint', spawnPattern: ['CHASER', 'PTERO', 'HEAVY', 'SERPENT', 'RANGED'], levelModifiers: { routeStyle: 'flat-pressure', hazardDensity: 0.34, verticality: 0.36, pressureBias: 'mixed' } },
+    { id: 37, name: 'Witchstorm Apex', biome: 'Moonlit Road', targetKills: 72, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'BOMBER', 'DIVER', 'GUARDIAN'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77400, reward: 250, terrainProfile: 'witchline-crossfire', spawnPattern: ['RANGED', 'GUARDIAN', 'BOMBER', 'DIVER', 'RANGED'], levelModifiers: { routeStyle: 'crossfire-steps', hazardDensity: 0.52, verticality: 0.54, pressureBias: 'ranged' } },
+    { id: 38, name: 'Obsidian Apex', biome: 'Ash Ravine', targetKills: 72, maxActive: 6, enemyKinds: ['CHASER', 'HEAVY', 'SERPENT', 'BOMBER', 'PTERO', 'GUARDIAN'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77400, reward: 260, terrainProfile: 'golem-bridge', spawnPattern: ['HEAVY', 'PTERO', 'GUARDIAN', 'SERPENT', 'BOMBER'], levelModifiers: { routeStyle: 'heavy-bridge', hazardDensity: 0.5, verticality: 0.66, pressureBias: 'heavy' } },
+    { id: 39, name: 'Neon Last Stand', biome: 'Glass City', targetKills: 72, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77400, reward: 275, terrainProfile: 'night-ambush', spawnPattern: ['DIVER', 'PTERO', 'RANGED', 'SERPENT', 'GUARDIAN', 'BOMBER'], levelModifiers: { routeStyle: 'ambush-switchbacks', hazardDensity: 0.56, verticality: 0.62, pressureBias: 'mixed' } },
+    { id: 40, name: 'Gronk Prime', biome: 'Sky Forge', targetKills: 72, maxActive: 6, enemyKinds: ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'], spawnGap: 0.44, runUpDistance: 1100, encounterSpacing: 450, levelLength: 77400, reward: 300, terrainProfile: 'sky-gauntlet', spawnPattern: ['GUARDIAN', 'PTERO', 'SERPENT', 'BOMBER', 'DIVER', 'HEAVY', 'RANGED'], levelModifiers: { routeStyle: 'sky-chains', hazardDensity: 0.56, verticality: 0.72, pressureBias: 'mixed' } },
 ];
 
 export class GameScene extends Scene {
@@ -122,6 +162,7 @@ export class GameScene extends Scene {
     private overlayLayer: Container;
     private player: Player;
     private enemies: Enemy[] = [];
+    private enemyGapManeuvers: WeakMap<Enemy, EnemyGapManeuver> = new WeakMap();
     private projectiles: Projectile[] = [];
     private playerProjectiles: Projectile[] = [];
     private bombExplosions: BombExplosion[] = [];
@@ -330,6 +371,29 @@ export class GameScene extends Scene {
                 this.kills = Math.max(0, Math.floor(Number.isFinite(data.kills) ? data.kills : this.kills));
                 this.updateHUD();
                 this.checkLevelCompletion();
+                return;
+            }
+            if (data.type === 'debugClearEnemies') {
+                for (const enemy of this.enemies) {
+                    this.stage.removeChild(enemy.view);
+                    this.engine.physics.removeBody(enemy.body);
+                    this.enemyGapManeuvers.delete(enemy);
+                }
+                this.enemies = [];
+                return;
+            }
+            if (data.type === 'debugSpawnEnemy') {
+                const kind = this.normalizeEnemyKind(data.kind);
+                const x = Number.isFinite(data.x) ? data.x : this.player.body.x + 520;
+                const enemy = this.createEnemy(kind, x);
+                if (Number.isFinite(data.y)) enemy.body.y = data.y;
+                enemy.body.vx = Number.isFinite(data.vx) ? data.vx : enemy.body.vx;
+                enemy.body.vy = Number.isFinite(data.vy) ? data.vy : enemy.body.vy;
+                enemy.body.onGround = data.onGround !== false && enemy.body.gravityScale !== 0;
+                enemy.body.groundedOn = enemy.body.onGround ? 'ground' : null;
+                this.enemies.push(enemy);
+                this.stage.addChild(enemy.view);
+                this.engine.physics.addBody(enemy.body);
                 return;
             }
             if (data.type !== 'debugSetPlayer') return;
@@ -684,6 +748,11 @@ export class GameScene extends Scene {
         return new Enemy(x, y, 'CHASER');
     }
 
+    private normalizeEnemyKind(kind: unknown): EnemyKind {
+        const kinds: EnemyKind[] = ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN'];
+        return kinds.includes(kind as EnemyKind) ? kind as EnemyKind : 'CHASER';
+    }
+
     private applyShake(intensity: number, duration: number): void {
         this.shakeIntensity = intensity;
         this.shakeTimer = duration;
@@ -993,7 +1062,7 @@ export class GameScene extends Scene {
         for (const enemy of this.enemies) {
             enemy.update(dt, targetSnapshot);
             if (enemy.isDead) continue;
-            this.avoidEnemyGroundGaps(enemy);
+            this.avoidEnemyGroundGaps(enemy, dt);
 
             if ((enemy as any).pendingShot) {
                 (enemy as any).pendingShot = false;
@@ -1082,11 +1151,39 @@ export class GameScene extends Scene {
         };
     }
 
-    private avoidEnemyGroundGaps(enemy: Enemy): void {
+    private avoidEnemyGroundGaps(enemy: Enemy, dt: number): void {
         if (enemy.body.gravityScale === 0) return;
         const vx = enemy.body.vx;
         if (Math.abs(vx) < 20) return;
         const dir = Math.sign(vx);
+        const activeManeuver = this.enemyGapManeuvers.get(enemy);
+        if (activeManeuver && activeManeuver.timer > 0) {
+            activeManeuver.timer = Math.max(0, activeManeuver.timer - dt);
+            if (activeManeuver.action === 'gap-retreat') {
+                enemy.body.vx = -activeManeuver.dir * Math.max(145, Math.abs(vx) * 0.82);
+                enemy.sprite.setState('RUN');
+                return;
+            }
+            if (activeManeuver.action === 'gap-vault') {
+                enemy.body.vx = activeManeuver.dir * Math.max(315, Math.abs(vx));
+                if (!enemy.body.onGround || activeManeuver.timer > 0.28) return;
+                this.enemyGapManeuvers.set(enemy, {
+                    action: 'gap-recover',
+                    timer: 0.22,
+                    dir: activeManeuver.dir,
+                    gapX: activeManeuver.gapX,
+                    gapW: activeManeuver.gapW,
+                });
+                return;
+            }
+            if (activeManeuver.action === 'gap-recover') {
+                enemy.body.vx = activeManeuver.dir * Math.max(150, Math.abs(vx) * 0.58);
+                return;
+            }
+        } else if (activeManeuver) {
+            this.enemyGapManeuvers.delete(enemy);
+        }
+
         const currentGap = this.findGroundGapAt(enemy.body.x + enemy.body.w * 0.5);
         if (currentGap && enemy.body.y + enemy.body.h >= this.groundY - 18) {
             const gapCenter = currentGap.x + currentGap.w * 0.5;
@@ -1097,6 +1194,13 @@ export class GameScene extends Scene {
             enemy.body.vy = 0;
             enemy.body.onGround = true;
             enemy.body.groundedOn = 'ground';
+            this.enemyGapManeuvers.set(enemy, {
+                action: 'gap-recover',
+                timer: 0.28,
+                dir: retreatDir,
+                gapX: currentGap.x,
+                gapW: currentGap.w,
+            });
             return;
         }
 
@@ -1105,15 +1209,31 @@ export class GameScene extends Scene {
         const upcomingGap = this.findGroundGapAt(frontX);
         if (!upcomingGap) return;
 
-        if (enemy.body.onGround && upcomingGap.w <= 238) {
-            enemy.body.vx = dir * Math.max(290, Math.abs(vx));
-            enemy.body.vy = -520;
+        if (enemy.body.onGround && upcomingGap.w <= 380) {
+            const vaultSpeed = Math.min(560, Math.max(330, Math.abs(vx) + upcomingGap.w * 0.9));
+            const vaultLift = -Math.min(690, Math.max(520, 440 + upcomingGap.w * 0.72));
+            enemy.body.vx = dir * vaultSpeed;
+            enemy.body.vy = vaultLift;
             enemy.body.onGround = false;
             enemy.body.groundedOn = null;
+            this.enemyGapManeuvers.set(enemy, {
+                action: 'gap-vault',
+                timer: 0.86,
+                dir,
+                gapX: upcomingGap.x,
+                gapW: upcomingGap.w,
+            });
             return;
         }
 
         enemy.body.vx = -dir * Math.max(120, Math.abs(vx) * 0.72);
+        this.enemyGapManeuvers.set(enemy, {
+            action: 'gap-retreat',
+            timer: 0.58,
+            dir,
+            gapX: upcomingGap.x,
+            gapW: upcomingGap.w,
+        });
     }
 
     private findGroundGapAt(x: number): TerrainGap | null {
@@ -1127,6 +1247,12 @@ export class GameScene extends Scene {
         const frontX = dir > 0 ? enemy.body.x + enemy.body.w + lookAhead : enemy.body.x - lookAhead;
         return this.findGroundGapAt(enemy.body.x + enemy.body.w * 0.5) !== null
             || this.findGroundGapAt(frontX) !== null;
+    }
+
+    private gapAction(enemy: Enemy): EnemyGapAction {
+        const maneuver = this.enemyGapManeuvers.get(enemy);
+        if (!maneuver || maneuver.timer <= 0) return 'none';
+        return maneuver.action;
     }
 
     private registerKill(enemy: Enemy): void {
@@ -1562,6 +1688,7 @@ export class GameScene extends Scene {
                 animation_frame: enemy.sprite.animationFrame,
                 mechanic: enemy.mechanic,
                 enemy_gap_aware: this.isEnemyNearGroundGap(enemy),
+                gapAction: this.gapAction(enemy),
             })),
             player_projectiles: this.playerProjectiles.map((projectile) => ({
                 x: Math.round(projectile.body.x),

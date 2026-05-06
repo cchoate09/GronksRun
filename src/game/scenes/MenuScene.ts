@@ -28,6 +28,7 @@ export class MenuScene extends Scene {
     private gems: number = 0;
     private mainMenuButtons: MainMenuButtonLayout[] = [];
     private buttonRegistry: MenuButtonSnapshot[] = [];
+    private levelSelectPage: number = 0;
 
     constructor(engine: GameEngine) {
         super(engine);
@@ -131,29 +132,52 @@ export class MenuScene extends Scene {
 
         const title = new Text({ text: 'SELECT LEVEL', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
         title.anchor.set(0.5);
-        title.position.set(window.innerWidth / 2, 62);
+        title.position.set(window.innerWidth / 2, window.innerHeight < 430 ? 44 : 62);
         this.stage.addChild(title);
 
         const panel = new Graphics();
         const panelW = Math.min(820, window.innerWidth - 40);
         const panelX = (window.innerWidth - panelW) / 2;
-        panel.roundRect(panelX, 110, panelW, Math.max(260, window.innerHeight - 160), 10).fill(0x101822).stroke({ color: 0x2dd4bf, width: 2 });
+        const panelY = window.innerHeight < 430 ? 82 : 110;
+        const footerY = window.innerHeight - 72;
+        panel.roundRect(panelX, panelY, panelW, Math.max(220, footerY + 58 - panelY), 10).fill(0x101822).stroke({ color: 0x2dd4bf, width: 2 });
         this.stage.addChild(panel);
 
-        const cols = window.innerWidth < 760 ? 2 : 5;
+        const cols = window.innerWidth < 760 ? 4 : 5;
+        const rows = 2;
+        const perPage = cols * rows;
+        const pageCount = Math.max(1, Math.ceil(LEVELS.length / perPage));
+        this.levelSelectPage = Math.max(0, Math.min(pageCount - 1, this.levelSelectPage));
         const gap = 14;
         const buttonW = (panelW - 44 - gap * (cols - 1)) / cols;
-        const buttonH = 74;
-        LEVELS.forEach((level, index) => {
+        const gridY = panelY + 24;
+        const buttonH = Math.min(74, Math.max(48, (footerY - gridY - 18 - gap * (rows - 1)) / rows));
+        const visibleLevels = LEVELS.slice(this.levelSelectPage * perPage, this.levelSelectPage * perPage + perPage);
+        visibleLevels.forEach((level, index) => {
             const col = index % cols;
             const row = Math.floor(index / cols);
             const x = panelX + 22 + col * (buttonW + gap);
-            const y = 134 + row * (buttonH + gap);
+            const y = gridY + row * (buttonH + gap);
             const color = level.id <= this.unlockedLevel ? 0x44ff88 : 0x67e8f9;
             this.addLevelButton(x, y, buttonW, buttonH, level.id, level.name, color);
         });
 
-        this.addButton(panelX + 22, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
+        const pageText = new Text({ text: `${this.levelSelectPage + 1}/${pageCount}`, style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold' }) });
+        pageText.anchor.set(0.5);
+        pageText.position.set(panelX + panelW / 2, window.innerHeight - 50);
+        this.stage.addChild(pageText);
+
+        this.addButton(panelX + 22, window.innerHeight - 72, 120, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
+        if (pageCount > 1) {
+            this.addButton(panelX + panelW - 286, window.innerHeight - 72, 124, 44, 'PREV', 0x67e8f9, () => {
+                this.levelSelectPage = (this.levelSelectPage + pageCount - 1) % pageCount;
+                this.drawLevelSelect();
+            });
+            this.addButton(panelX + panelW - 146, window.innerHeight - 72, 124, 44, 'NEXT', 0x67e8f9, () => {
+                this.levelSelectPage = (this.levelSelectPage + 1) % pageCount;
+                this.drawLevelSelect();
+            });
+        }
     }
 
     private drawSettings(): void {
@@ -316,12 +340,13 @@ export class MenuScene extends Scene {
         const button = new Container();
         button.addChild(this.drawButtonChrome(w, h, color));
 
-        const levelText = new Text({ text: `${id}`, style: new TextStyle({ fill: 0x07110b, fontSize: 26, fontWeight: 'bold' }) });
-        levelText.position.set(12, 9);
+        const compact = h < 66;
+        const levelText = new Text({ text: `${id}`, style: new TextStyle({ fill: 0x07110b, fontSize: compact ? 20 : 26, fontWeight: 'bold' }) });
+        levelText.position.set(12, compact ? 7 : 9);
         button.addChild(levelText);
 
-        const nameText = new Text({ text: name.toUpperCase(), style: new TextStyle({ fill: 0x07110b, fontSize: 12, fontWeight: 'bold', wordWrap: true, wordWrapWidth: w - 20 }) });
-        nameText.position.set(12, 43);
+        const nameText = new Text({ text: name.toUpperCase(), style: new TextStyle({ fill: 0x07110b, fontSize: compact ? 10 : 12, fontWeight: 'bold', wordWrap: true, wordWrapWidth: w - 20 }) });
+        nameText.position.set(12, compact ? 34 : 43);
         button.addChild(nameText);
 
         button.position.set(x, y);
@@ -411,6 +436,13 @@ export class MenuScene extends Scene {
                 } else {
                     this.drawMainMenu();
                 }
+                return;
+            }
+            if (data.type === 'debugStartLevel') {
+                const requestedLevel = Number.isFinite(data.level) ? Math.floor(data.level) : this.unlockedLevel;
+                this.engine.input.clearActions();
+                GameScene.selectLevel(Math.max(1, Math.min(LEVELS.length, requestedLevel)));
+                this.engine.scenes.loadScene(GameScene);
                 return;
             }
             if (this.mode === 'MAIN' && data.type === 'action' && (data.name === 'jump' || data.name === 'attack')) {

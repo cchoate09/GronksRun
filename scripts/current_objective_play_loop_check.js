@@ -83,7 +83,8 @@ function loadMenuLayout() {
 const levels = parseLevels();
 const getMainMenuLayout = loadMenuLayout();
 
-assert(levels.length >= 10, 'play loop contract: campaign should include at least ten authored levels');
+assert(levels.length === 40, `play loop contract: campaign should include exactly 40 authored levels, got ${levels.length}`);
+assert(levels[0].id === 1 && levels[levels.length - 1].id === 40, 'play loop contract: authored level ids should span 1 through 40');
 
 const terrainProfiles = new Set(levels.map((level) => level.terrainProfile));
 const biomes = new Set(levels.map((level) => level.biome));

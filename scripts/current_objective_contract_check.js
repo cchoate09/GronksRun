@@ -68,9 +68,9 @@ assert(menuSource.includes('main_menu_buttons'), 'home menu contract: snapshots 
 
 const terrainProfiles = [...gameSceneSource.matchAll(/terrainProfile:\s*'([^']+)'/g)].map((match) => match[1]);
 const spawnPatterns = [...gameSceneSource.matchAll(/spawnPattern:\s*\[/g)];
-assert(terrainProfiles.length >= 10, 'variety contract: each authored campaign level should declare a terrain profile');
+assert(terrainProfiles.length === 40, `variety contract: each authored campaign level should declare a terrain profile, got ${terrainProfiles.length}`);
 assert(new Set(terrainProfiles).size >= 6, 'variety contract: campaign should use at least six terrain profiles');
-assert(spawnPatterns.length >= 10, 'variety contract: each authored campaign level should declare a spawn pattern');
+assert(spawnPatterns.length === 40, `variety contract: each authored campaign level should declare a spawn pattern, got ${spawnPatterns.length}`);
 assert(gameSceneSource.includes('this.level.spawnPattern'), 'variety contract: spawning should use level-specific spawn patterns');
 assert(gameSceneSource.includes('terrain_profile'), 'snapshot contract: level terrain profile should be visible to automation');
 assert(backgroundSource.includes('biome'), 'variety contract: background rendering should be driven by biome');
@@ -78,5 +78,7 @@ assert(backgroundSource.includes('biome'), 'variety contract: background renderi
 assert(!enemySource.includes('this.speed * 0.35'), 'enemy pressure contract: close enemies should keep pressing instead of slowing to a crawl');
 assert(enemySource.includes('canDealContactDamage()'), 'enemy pressure contract: collision damage gate should remain explicit');
 assert(gameSceneSource.includes('enemy.canDealContactDamage()'), 'enemy pressure contract: scene should respect enemy contact pressure state');
+assert(gameSceneSource.includes('enemyGapManeuvers'), 'enemy gap contract: scene should track per-enemy gap maneuvers instead of frame-by-frame edge stalling');
+assert(gameSceneSource.includes('gapAction'), 'enemy gap contract: snapshots should expose the current gap action for QA');
 
 console.log('Current objective contract passed.');

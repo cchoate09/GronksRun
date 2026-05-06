@@ -12,12 +12,14 @@ function assert(condition, message) {
 }
 
 const appSource = read('App.js');
+const appConfigSource = read('app.json');
 const packageSource = read('package.json');
 const playerSource = read('src/game/entities/Player.ts');
 const physicsSource = read('src/engine/physics.ts');
 const gameSceneSource = read('src/game/scenes/GameScene.ts');
 const menuSource = read('src/game/scenes/MenuScene.ts');
 const androidBuildSource = read('android/app/build.gradle');
+const androidManifestSource = read('android/app/src/main/AndroidManifest.xml');
 const preflightSource = read('scripts/qa_environment_preflight.js');
 const puppeteerLaunchOptionsSource = read('scripts/puppeteerLaunchOptions.js');
 const webGameClientRunnerSource = read('scripts/run_web_game_client_with_server.js');
@@ -58,6 +60,11 @@ assert(gameSceneSource.includes("rewardType: 'continue'"), 'ads: native showAd r
 assert(gameSceneSource.includes('applyRewardedContinue'), 'ads: rewarded callback should revive the player into the run');
 assert(gameSceneSource.includes('adRewarded'), 'ads: scene should handle native rewarded-ad callbacks');
 assert(packageSource.includes('react-native-google-mobile-ads'), 'ads: native Google Mobile Ads dependency should remain installed');
+assert(appSource.includes('TestIds.REWARDED_INTERSTITIAL'), 'ads: development builds should keep Google test rewarded interstitials');
+assert(appSource.includes('ca-app-pub-8879184280264151/6328191159'), 'ads: release builds should keep the production rewarded interstitial ad unit');
+assert(appConfigSource.includes('ca-app-pub-8879184280264151~8722286751'), 'ads: Expo config should keep the production Android AdMob app id');
+assert(androidManifestSource.includes('com.google.android.gms.ads.APPLICATION_ID'), 'ads: Android manifest should keep the AdMob application id metadata');
+assert(androidManifestSource.includes('ca-app-pub-8879184280264151~8722286751'), 'ads: Android manifest should keep the production Android AdMob app id');
 
 assert(androidBuildSource.includes('generateWebViewBundle'), 'android build: release builds should regenerate the WebView bundle from source');
 assert(androidBuildSource.includes('npmExecutable, "run", "build:webview"'), 'android build: WebView bundle generation should call npm run build:webview');

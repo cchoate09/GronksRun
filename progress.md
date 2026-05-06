@@ -404,3 +404,8 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - The AAB timestamp is `2026-05-05 22:22:54`, size `40,421,965` bytes, SHA-256 `4816012AD3239011008FB27C1333C322464F8F88757B311AC4501D55CA2437D0`, and release manifest intermediates show `versionCode=63`, `versionName=1.8.21`.
 - Verification for this release:
   `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, `npm run qa:arcade-gauntlet`, `npm run qa:visual`, `gradlew.bat :app:bundleRelease --no-daemon --stacktrace` from `C:\gronk\android`, `jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab`, and `git diff --check` all exited 0.
+2026-05-06
+- AdMob working note:
+- Playtest confirmed the rewarded continue entry point appears in the installed app (`WATCH AD: CONTINUE` on the death screen), and AdMob reported live request/earnings activity for the app. Treat the rewarded-ad integration as working production wiring, not placeholder UI.
+- Do not remove or casually swap the production Android AdMob app id `ca-app-pub-8879184280264151~8722286751`, the rewarded interstitial unit `ca-app-pub-8879184280264151/6328191159`, or the `adReady` -> `showAd` -> `adRewarded` continue flow without an explicit monetization change request and fresh device/AdMob verification.
+- Strengthened `scripts/android_competitiveness_contract_check.js` so contract tests fail if the production AdMob IDs, dev test-ad fallback, native manifest metadata, or rewarded-continue bridge are removed.

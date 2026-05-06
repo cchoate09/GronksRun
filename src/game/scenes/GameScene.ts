@@ -53,7 +53,7 @@ interface TerrainGap {
     depth: number;
 }
 
-type EnemyGapAction = 'none' | 'gap-vault' | 'gap-retreat' | 'gap-recover';
+type EnemyGapAction = 'none' | 'gap-retreat' | 'gap-recover';
 
 interface EnemyGapManeuver {
     action: EnemyGapAction;
@@ -1181,18 +1181,6 @@ export class GameScene extends Scene {
         const activeManeuver = this.enemyGapManeuvers.get(enemy);
         if (activeManeuver && activeManeuver.timer > 0) {
             activeManeuver.timer = Math.max(0, activeManeuver.timer - dt);
-            if (activeManeuver.action === 'gap-vault') {
-                enemy.body.vx = activeManeuver.dir * Math.max(315, Math.abs(enemy.body.vx));
-                if (!enemy.body.onGround || activeManeuver.timer > 0.28) return;
-                this.enemyGapManeuvers.set(enemy, {
-                    action: 'gap-recover',
-                    timer: 0.22,
-                    dir: activeManeuver.dir,
-                    gapX: activeManeuver.gapX,
-                    gapW: activeManeuver.gapW,
-                });
-                return;
-            }
             if (activeManeuver.action === 'gap-recover') {
                 enemy.body.vx = activeManeuver.dir * Math.max(150, Math.abs(enemy.body.vx) * 0.58);
                 return;
@@ -1254,26 +1242,8 @@ export class GameScene extends Scene {
         const upcomingGap = this.findGroundGapAt(frontX);
         if (!upcomingGap) return;
 
-        if (enemy.body.onGround && upcomingGap.w <= 280) {
-            const vaultSpeed = Math.min(560, Math.max(330, speed + upcomingGap.w * 0.9));
-            const vaultLift = -Math.min(690, Math.max(520, 440 + upcomingGap.w * 0.72));
-            enemy.body.vx = dir * vaultSpeed;
-            enemy.body.vy = vaultLift;
-            enemy.body.onGround = false;
-            enemy.body.groundedOn = null;
-            this.enemyGapManeuvers.set(enemy, {
-                action: 'gap-vault',
-                timer: 0.86,
-                dir,
-                gapX: upcomingGap.x,
-                gapW: upcomingGap.w,
-            });
-            return;
-        }
-
-        // Unvaultable gap → hold at the edge instead of retreating in a loop.
-        // Snap to safe ground and stand still so ranged AI can still fire and
-        // the enemy doesn't visibly pace back-and-forth at the lip.
+        // Hold at the edge instead of jumping gaps autonomously. Player
+        // knockback skips this guard, so attacks can still force pit kills.
         const safeX = dir > 0
             ? upcomingGap.x - enemy.body.w - 4
             : upcomingGap.x + upcomingGap.w + 4;
@@ -1298,7 +1268,7 @@ export class GameScene extends Scene {
     private isEnemyNearGroundGap(enemy: Enemy): boolean {
         if (enemy.body.gravityScale === 0) return false;
         const dir = enemy.body.vx >= 0 ? 1 : -1;
-        const lookAhead = enemy.body.w * 0.5 + Math.min(92, Math.max(42, Math.abs(enemy.body.vx) * 0.16));
+        const lookAhead = enemy.body.w * 0.5 + Math.min(180, Math.max(60, Math.abs(enemy.body.vx) * 0.24));
         const frontX = dir > 0 ? enemy.body.x + enemy.body.w + lookAhead : enemy.body.x - lookAhead;
         return this.findGroundGapAt(enemy.body.x + enemy.body.w * 0.5) !== null
             || this.findGroundGapAt(frontX) !== null;

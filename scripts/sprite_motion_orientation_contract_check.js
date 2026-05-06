@@ -103,7 +103,8 @@ function loadSkeletalSprite() {
 const spriteDataSource = fs.readFileSync(path.join(projectRoot, 'src', 'game', 'assets', 'spriteData.ts'), 'utf8');
 assert(spriteDataSource.includes('facesRight?: boolean'), 'sprite data should declare source-facing metadata');
 assert(/gronk:[\s\S]*facesRight:\s*true/.test(spriteDataSource), 'hero sheet should be marked as right-facing source art');
-for (const kind of ['CHASER', 'RANGED', 'HEAVY', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN']) {
+assert(/HEAVY:[\s\S]*?facesRight:\s*true/.test(spriteDataSource), 'heavy golem sheet should be marked as right-facing source art');
+for (const kind of ['CHASER', 'RANGED', 'SERPENT', 'BOMBER', 'DIVER', 'PTERO', 'GUARDIAN']) {
   assert(new RegExp(`${kind}:[\\s\\S]*?facesRight:\\s*false`).test(spriteDataSource), `${kind} sheet should be marked as left-facing source art`);
 }
 
@@ -137,6 +138,13 @@ assert(sprite.x === 0, `left-facing source art should stay at x=0 when facing le
 sprite.setFacingRight(true, 50);
 assert(sprite.scale.x === -1, `left-facing source art should flip when facing right, got scale.x=${sprite.scale.x}`);
 assert(sprite.x === 50, `flipped sprite should be offset by body width, got x=${sprite.x}`);
+
+const rightFacingSheet = { ...leftFacingSheet, facesRight: true };
+const rightFacingSprite = new SkeletalSprite(0xffffff, rightFacingSheet);
+rightFacingSprite.setFacingRight(true, 50);
+assert(rightFacingSprite.scale.x === 1, `right-facing source art should not flip when facing right, got scale.x=${rightFacingSprite.scale.x}`);
+rightFacingSprite.setFacingRight(false, 50);
+assert(rightFacingSprite.scale.x === -1, `right-facing source art should flip when facing left, got scale.x=${rightFacingSprite.scale.x}`);
 
 sprite.setState('RUN');
 sprite.update(0.12, 2);

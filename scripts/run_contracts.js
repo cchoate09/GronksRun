@@ -44,6 +44,8 @@ const CONTRACTS = [
   'sprite_motion_orientation_contract_check.js',
   'full_art_enemy_roster_contract_check.js',
   'golem_padding_contract_check.js',
+  'obstacle_spike_frame_contract_check.js',
+  'enemy_ledge_guard_contract_check.js',
   'target_kill_completion_smoke.js',
   'android_competitiveness_contract_check.js',
   'polish_pass_contract_check.js',

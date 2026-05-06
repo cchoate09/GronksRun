@@ -202,7 +202,7 @@ export const ENEMY_SHEETS: Record<string, SpriteSheetDefinition> = {
         height: 1024,
         fps: 4,
         scale: 0.44,
-        facesRight: false,
+        facesRight: true,
         spriteOffsetY: 92,
         frameOffsets: {
             8: { x: 0, y: 0 },

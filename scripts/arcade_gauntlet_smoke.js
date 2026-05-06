@@ -100,8 +100,8 @@ async function advance(page, ms) {
     const gapEnemy = enemyGapMove.enemies.find((enemy) => enemy.type === 'CHASER');
     assert(gapEnemy, 'expected debug-spawned chaser near gap');
     assert(
-      ['gap-vault', 'gap-retreat', 'gap-recover'].includes(gapEnemy.gapAction),
-      `expected enemy to choose an explicit gap maneuver, got ${gapEnemy.gapAction}`,
+      ['gap-retreat', 'gap-recover'].includes(gapEnemy.gapAction),
+      `expected enemy to hold or recover at the gap edge, got ${gapEnemy.gapAction}`,
     );
     assert(gapEnemy.y < boot.player.y + 180, `gap-aware enemy should stay playable instead of falling out of the level, got y=${gapEnemy.y}`);
     await page.screenshot({ path: path.join(outputDir, 'enemy-gap-maneuver.png') });

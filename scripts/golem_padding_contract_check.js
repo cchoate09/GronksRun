@@ -96,6 +96,7 @@ function renderedPoint(bounds, offset, scale) {
   const heavy = ENEMY_SHEETS.HEAVY;
   assert(heavy, 'HEAVY sprite sheet should be defined');
   assert(fs.existsSync(heavy.image), `HEAVY image should exist: ${heavy.image}`);
+  assert(heavy.facesRight === true, 'HEAVY source art should be marked right-facing so walking direction matches movement');
   assert(heavy.frameOffsets, 'HEAVY should define frameOffsets');
 
   const frames = Array.from(new Set(Object.values(heavy.animations).flat()));

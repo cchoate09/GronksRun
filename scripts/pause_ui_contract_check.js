@@ -17,6 +17,7 @@ assert(gameSceneSource.includes('drawPauseOverlay'), 'pause contract: pause over
 assert(gameSceneSource.includes("data.name === 'pause'"), 'pause contract: native pause action should be handled');
 assert(gameSceneSource.includes("data.type === 'backButton'"), 'pause contract: Android back button should pause/resume instead of being ignored');
 assert(gameSceneSource.includes("phase: this.state"), 'snapshot contract: pause phase should be visible to automation');
-assert(appSource.includes("handleAction('pause')"), 'native contract: overlay should expose a pause button');
+assert(appSource.includes("{ name: 'pause'"), 'native contract: overlay hit map should expose a pause action');
+assert(appSource.includes('handleControlsTouchStart'), 'native contract: overlay should route touch starts through the multi-touch control handler');
 
 console.log('Pause UI contract passed.');

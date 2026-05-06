@@ -21,6 +21,10 @@ assert(appSource.includes('showGameControls'), 'native controls: App.js should t
 assert(appSource.includes("msg.type === 'gameUiState'"), 'native controls: WebView should be able to publish scene UI state to native');
 assert(appSource.includes('setShowGameControls(msg.controlsVisible === true)'), 'native controls: native overlay should follow gameUiState.controlsVisible');
 assert(appSource.includes('webViewLoaded && showGameControls'), 'native controls: joystick/combat overlay should only render during active gameplay');
+assert(!appSource.includes('PanResponder'), 'native controls: joystick must not use a single PanResponder because it blocks sibling action-button touches during a drag');
+assert(appSource.includes('activeJoystickTouchId'), 'native controls: joystick should track one touch identifier while allowing other touches to hit action buttons');
+assert(appSource.includes('nativeEvent.changedTouches'), 'native controls: overlay should handle changedTouches for multi-touch joystick plus action input');
+assert(appSource.includes('measureControlHit'), 'native controls: action hits should be resolved from touch coordinates independently of joystick ownership');
 
 assert(menuSource.includes('publishNativeUiState(false'), 'menu controls: every menu/submenu should explicitly hide native gameplay controls');
 assert(gameSceneSource.includes('publishNativeUiState(this.state === \'PLAYING\')'), 'game controls: level scenes should publish controls only for PLAYING state');

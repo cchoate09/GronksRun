@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState, Component } from 'react';
-import { View, StyleSheet, BackHandler, Text, Vibration, AppState, Dimensions, PanResponder } from 'react-native';
+import { View, StyleSheet, BackHandler, Text, Vibration, AppState, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -67,6 +67,7 @@ function GameApp() {
   const [webViewLoaded, setWebViewLoaded] = useState(false);
   const [showGameControls, setShowGameControls] = useState(false);
   const [joystick, setJoystick] = useState({ x: 0, y: 0 });
+  const activeJoystickTouchId = useRef(null);
 
   const sendToGame = useCallback((type, data) => {
     if (webViewRef.current) {
@@ -95,32 +96,80 @@ function GameApp() {
     }
   }, []);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (evt, gestureState) => {
-        const dist = Math.sqrt(gestureState.dx ** 2 + gestureState.dy ** 2);
-        const maxDist = 40;
-        const moveX = Math.min(dist, maxDist) * (gestureState.dx / dist || 0);
-        const moveY = Math.min(dist, maxDist) * (gestureState.dy / dist || 0);
-        setJoystick({ x: moveX, y: moveY });
-        sendToGame('joystickMove', { x: moveX / maxDist, y: moveY / maxDist });
-      },
-      onPanResponderRelease: () => {
-        setJoystick({ x: 0, y: 0 });
-        sendToGame('joystickMove', { x: 0, y: 0 });
-      },
-      // Allow simultaneous taps on the action buttons (jump/melee/ranged/pause)
-      // while the joystick is being dragged. Defaults to true on Android, which
-      // absorbs sibling Views' touch events and blocks multi-touch gameplay.
-      onShouldBlockNativeResponder: () => false,
-    })
-  ).current;
-
-  const handleAction = (action) => {
+  const handleAction = useCallback((action) => {
     Vibration.vibrate(10);
     sendToGame('action', { name: action });
-  };
+  }, [sendToGame]);
+
+  const measureControlHit = useCallback((x, y) => {
+    const screen = Dimensions.get('window');
+    const actionGroupW = 174;
+    const actionGroupH = 168;
+    const actionX = screen.width - 26 - actionGroupW;
+    const actionY = screen.height - 32 - actionGroupH;
+    const boxes = [
+      { name: 'pause', x: screen.width - 18 - 52, y: 12, w: 52, h: 52 },
+      { name: 'jump', x: actionX + 51, y: actionY, w: 72, h: 72 },
+      { name: 'ranged', x: actionX, y: actionY + 86, w: 76, h: 76 },
+      { name: 'attack', x: actionX + 86, y: actionY + 80, w: 88, h: 88 },
+      { name: 'joystick', x: 28, y: screen.height - 34 - 150, w: 150, h: 150 },
+    ];
+    return boxes.find((box) => x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) || null;
+  }, []);
+
+  const updateJoystickFromTouch = useCallback((touch) => {
+    const x = Number.isFinite(touch.pageX) ? touch.pageX : 0;
+    const y = Number.isFinite(touch.pageY) ? touch.pageY : 0;
+    const screen = Dimensions.get('window');
+    const centerX = 28 + 75;
+    const centerY = screen.height - 34 - 75;
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const dist = Math.sqrt(dx ** 2 + dy ** 2);
+    const maxDist = 40;
+    const moveX = Math.min(dist, maxDist) * (dx / dist || 0);
+    const moveY = Math.min(dist, maxDist) * (dy / dist || 0);
+    setJoystick({ x: moveX, y: moveY });
+    sendToGame('joystickMove', { x: moveX / maxDist, y: moveY / maxDist });
+  }, [sendToGame]);
+
+  const releaseJoystick = useCallback(() => {
+    activeJoystickTouchId.current = null;
+    setJoystick({ x: 0, y: 0 });
+    sendToGame('joystickMove', { x: 0, y: 0 });
+  }, [sendToGame]);
+
+  const handleControlsTouchStart = useCallback((event) => {
+    for (const touch of event.nativeEvent.changedTouches || []) {
+      const hit = measureControlHit(touch.pageX, touch.pageY);
+      if (!hit) continue;
+      if (hit.name === 'joystick') {
+        if (activeJoystickTouchId.current == null) {
+          activeJoystickTouchId.current = touch.identifier;
+          updateJoystickFromTouch(touch);
+        }
+        continue;
+      }
+      handleAction(hit.name);
+    }
+  }, [handleAction, measureControlHit, updateJoystickFromTouch]);
+
+  const handleControlsTouchMove = useCallback((event) => {
+    for (const touch of event.nativeEvent.changedTouches || []) {
+      if (touch.identifier === activeJoystickTouchId.current) {
+        updateJoystickFromTouch(touch);
+      }
+    }
+  }, [updateJoystickFromTouch]);
+
+  const handleControlsTouchEnd = useCallback((event) => {
+    for (const touch of event.nativeEvent.changedTouches || []) {
+      if (touch.identifier === activeJoystickTouchId.current) {
+        releaseJoystick();
+        return;
+      }
+    }
+  }, [releaseJoystick]);
 
   useEffect(() => {
     void initializeTelemetry();
@@ -280,36 +329,42 @@ function GameApp() {
       )}
 
       {webViewLoaded && showGameControls && (
-        <View style={styles.controlsLayer} pointerEvents="box-none">
+        <View
+          style={styles.controlsLayer}
+          onTouchStart={handleControlsTouchStart}
+          onTouchMove={handleControlsTouchMove}
+          onTouchEnd={handleControlsTouchEnd}
+          onTouchCancel={handleControlsTouchEnd}
+        >
             <View style={styles.topControlsContainer}>
-                <View onTouchStart={() => handleAction('pause')} style={[styles.actionButton, styles.pauseButton]}>
+                <View style={[styles.actionButton, styles.pauseButton]}>
                     <View style={styles.buttonShadow} />
                     <View style={[styles.buttonCore, styles.pauseCore]} />
                     <Text style={[styles.buttonGlyph, styles.pauseText]}>II</Text>
                 </View>
             </View>
 
-            <View style={styles.joystickContainer} {...panResponder.panHandlers}>
+            <View style={styles.joystickContainer}>
                 <View style={styles.joystickBase}>
                     <View style={[styles.joystickStick, { transform: [{ translateX: joystick.x }, { translateY: joystick.y }] }]} />
                 </View>
             </View>
 
             <View style={styles.actionButtonsContainer}>
-                <View onTouchStart={() => handleAction('jump')} style={[styles.actionButton, styles.jumpButton]}>
+                <View style={[styles.actionButton, styles.jumpButton]}>
                     <View style={styles.buttonShadow} />
                     <View style={[styles.buttonCore, styles.jumpCore]} />
                     <Text style={[styles.buttonGlyph, styles.jumpGlyph]}>^</Text>
                     <Text style={[styles.buttonLabel, styles.jumpText]}>JUMP</Text>
                 </View>
                 <View style={styles.combatButtonsRow}>
-                    <View onTouchStart={() => handleAction('ranged')} style={[styles.actionButton, styles.rangedButton]}>
+                    <View style={[styles.actionButton, styles.rangedButton]}>
                         <View style={styles.buttonShadow} />
                         <View style={[styles.buttonCore, styles.rangedCore]} />
                         <Text style={[styles.buttonGlyph, styles.rangedGlyph]}>*</Text>
                         <Text style={[styles.buttonLabel, styles.rangedText]}>RANGED</Text>
                     </View>
-                    <View onTouchStart={() => handleAction('attack')} style={[styles.actionButton, styles.attackButton]}>
+                    <View style={[styles.actionButton, styles.attackButton]}>
                         <View style={styles.buttonShadow} />
                         <View style={[styles.buttonCore, styles.attackCore]} />
                         <Text style={[styles.buttonGlyph, styles.attackGlyph]}>X</Text>

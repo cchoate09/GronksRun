@@ -32,7 +32,8 @@ const gameSceneSource = read('src/game/scenes/GameScene.ts');
 const enemySource = read('src/game/entities/Enemy.ts');
 const backgroundSource = read('src/game/levels/BackgroundManager.ts');
 
-assert(appSource.includes("handleAction('jump')"), 'jump contract: native overlay should send an explicit jump action');
+assert(appSource.includes("{ name: 'jump'"), 'jump contract: native overlay hit map should send an explicit jump action');
+assert(appSource.includes('handleControlsTouchStart'), 'jump contract: native overlay should route touch starts through the multi-touch control handler');
 assert(appSource.includes('jumpButton'), 'jump contract: native overlay should style a dedicated jump button');
 assert(appSource.includes('>JUMP<'), 'jump contract: native overlay should label the restored jump button');
 assert(playerSource.includes("actionJustPressed('jump')"), 'jump contract: player should consume native jump actions');

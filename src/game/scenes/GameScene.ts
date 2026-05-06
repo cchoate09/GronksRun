@@ -1062,7 +1062,9 @@ export class GameScene extends Scene {
         for (const enemy of this.enemies) {
             enemy.update(dt, targetSnapshot);
             if (enemy.isDead) continue;
-            this.avoidEnemyGroundGaps(enemy, dt);
+            this.resolveEnemyPitFall(enemy);
+            if (enemy.isDead) continue;
+            if (!enemy.hasPlayerKnockbackCredit()) this.avoidEnemyGroundGaps(enemy, dt);
 
             if ((enemy as any).pendingShot) {
                 (enemy as any).pendingShot = false;
@@ -1136,6 +1138,36 @@ export class GameScene extends Scene {
             this.stage.removeChild(enemy.view);
             this.engine.physics.removeBody(enemy.body);
             return false;
+        });
+    }
+
+    private resolveEnemyPitFall(enemy: Enemy): void {
+        if (enemy.body.gravityScale === 0) return;
+        if (enemy.body.y <= this.groundY + 120) return;
+        const currentGap = this.findGroundGapAt(enemy.body.x + enemy.body.w * 0.5);
+        if (!currentGap) return;
+
+        if (enemy.hasPlayerKnockbackCredit()) {
+            enemy.isDead = true;
+            this.registerKill(enemy);
+            this.updateHUD();
+            return;
+        }
+
+        const gapCenter = currentGap.x + currentGap.w * 0.5;
+        const retreatDir = enemy.body.x + enemy.body.w * 0.5 < gapCenter ? -1 : 1;
+        enemy.body.x = retreatDir < 0 ? currentGap.x - enemy.body.w - 8 : currentGap.x + currentGap.w + 8;
+        enemy.body.y = this.groundY - enemy.body.h;
+        enemy.body.vx = retreatDir * 120;
+        enemy.body.vy = 0;
+        enemy.body.onGround = true;
+        enemy.body.groundedOn = 'ground';
+        this.enemyGapManeuvers.set(enemy, {
+            action: 'gap-recover',
+            timer: 0.3,
+            dir: retreatDir,
+            gapX: currentGap.x,
+            gapW: currentGap.w,
         });
     }
 

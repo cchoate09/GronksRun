@@ -56,6 +56,15 @@ async function advance(page, ms) {
     await page.setViewport({ width: 1280, height: 720, isMobile: true, hasTouch: true });
     await page.setContent(readCommittedWebViewHtml(), { waitUntil: 'load', timeout: 15000 });
     await page.waitForFunction(() => typeof window.render_game_to_text === 'function', { timeout: 10000 });
+    await page.evaluate(() => {
+      try {
+        window.localStorage.removeItem('gronk_equipped_melee_weapon');
+        window.localStorage.removeItem('gronk_melee_upgrade_level');
+      } catch (_) {
+        // Inline Puppeteer documents can deny localStorage; the game storage
+        // fallback then uses starter weapons, which is the same desired setup.
+      }
+    });
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'PLAYING', { timeout: 10000 });
     await advance(page, 800);
@@ -127,6 +136,47 @@ async function advance(page, ms) {
     assert(afterJump.player.x > firstGap.x + firstGap.w, `expected player to cross first gap, got player=${afterJump.player.x} gapEnd=${firstGap.x + firstGap.w}`);
     assert(afterJump.player.y < boot.player.y + 120, `expected player not to be falling into the pit, got y=${afterJump.player.y}`);
 
+    await page.evaluate((gap, playerY) => {
+      window.postMessage(JSON.stringify({ type: 'debugClearEnemies' }), '*');
+      window.postMessage(JSON.stringify({
+        type: 'debugSpawnEnemy',
+        kind: 'CHASER',
+        x: gap.x - 64,
+        vx: 0,
+        vy: 0,
+        onGround: true,
+      }), '*');
+      window.postMessage(JSON.stringify({
+        type: 'debugSetPlayer',
+        x: gap.x - 226,
+        y: playerY,
+        vx: 0,
+        vy: 0,
+        onGround: true,
+        clearHit: true,
+      }), '*');
+    }, firstGap, boot.player.y);
+    await advance(page, 50);
+    const beforeEnemyPitKill = await snapshot(page);
+    await page.evaluate(() => {
+      window.postMessage(JSON.stringify({ type: 'action', name: 'attack' }), '*');
+    });
+    await advance(page, 140);
+    const afterEnemyKnock = await snapshot(page);
+    const knockedEnemy = afterEnemyKnock.enemies.find((enemy) => enemy.hp > 0 && enemy.hp < 50);
+    await advance(page, 1550);
+    const afterEnemyPitKill = await snapshot(page);
+    await page.screenshot({ path: path.join(outputDir, 'enemy-knock-pit-kill.png') });
+    assert(knockedEnemy, 'enemy should survive the melee hit before pit fall resolves');
+    assert(
+      afterEnemyPitKill.kills === beforeEnemyPitKill.kills + 1,
+      `enemy knocked into a pit should count as a kill, got kills ${beforeEnemyPitKill.kills}->${afterEnemyPitKill.kills}`,
+    );
+    assert(
+      !afterEnemyPitKill.enemies.some((enemy) => enemy.hp > 0 && enemy.hp < 50),
+      'enemy knocked into a pit should be removed from the active enemy list even if the spawn system adds a fresh enemy later',
+    );
+
     const spike = boot.hazards.find((hazard) => hazard.type === 'spikes') || boot.hazards[0];
     await page.evaluate((hazard, playerY) => {
       window.postMessage(JSON.stringify({
@@ -160,7 +210,7 @@ async function advance(page, ms) {
 
     assert(!pageErrors.length, `page errors: ${pageErrors.join('\n')}`);
 
-    fs.writeFileSync(path.join(outputDir, 'arcade-gauntlet.json'), JSON.stringify({ boot, nearGap, afterJump, afterTrap, afterPitFall, pageErrors }, null, 2));
+    fs.writeFileSync(path.join(outputDir, 'arcade-gauntlet.json'), JSON.stringify({ boot, nearGap, afterJump, beforeEnemyPitKill, afterEnemyKnock, afterEnemyPitKill, afterTrap, afterPitFall, pageErrors }, null, 2));
     console.log('Arcade gauntlet smoke passed.');
   } finally {
     await browser.close();

@@ -387,3 +387,20 @@ Original prompt: [@game-studio](plugin://game-studio@openai-curated) This app is
 - Implemented the first pass: expanded `LEVELS` to 40 literal entries, added paginated level select, added debug enemy spawn/clear hooks, and replaced frame-by-frame edge nudging with per-enemy gap maneuvers (`gap-vault`, `gap-retreat`, `gap-recover`) exposed in snapshots.
 - Verification passed for `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, `npm run qa:forty-level-load`, `npm run qa:arcade-gauntlet`, `npm run smoke:mobile-webview`, `npm run qa:web-game-client`, `npm run qa:full-art-roster`, `npm run qa:polish-pass`, `npm run qa:sprite-animation`, and `npm run qa:visual`.
 - Bumped release metadata to `1.8.20` / Android `versionCode` 62. Built the release AAB from short path `C:\gronk` to avoid Windows CMake path limits, then copied it back to `android/app/build/outputs/bundle/release/app-release.aab`. Manifest intermediates show `versionCode=62`, `versionName=1.8.20`; `jarsigner -verify -verbose -certs` verified the bundle, with the expected self-signed certificate warning.
+2026-05-06
+- Fixed follow-up mobile combo input regression:
+- Root cause: native controls still used one `PanResponder` for the joystick. React Native's JS responder is exclusive, so dragging the joystick could starve sibling attack/jump/ranged button touches even with `onShouldBlockNativeResponder: false`.
+- Replaced the joystick PanResponder with explicit multi-touch handling on the controls overlay. One touch identifier owns joystick movement while other simultaneous touches are coordinate-hit-tested to pause/jump/ranged/melee actions.
+- Added contracts that reject the single-PanResponder control path and require the multi-touch action hit map.
+- Fixed enemy pit-kill credit:
+- Player damage now gives enemies a short knockback-credit window. During that window, gap-avoidance steering is skipped so an attack can knock the enemy into a gap; if the enemy falls below the ground while over a gap, it dies, is removed, and counts as a kill. Normal AI movement still uses the existing gap-vault/retreat/recover behavior.
+- Added browser smoke coverage for a melee hit that knocks a surviving enemy into the first gap and verifies the kill count increments.
+- Verification for this pass:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, `npm run qa:arcade-gauntlet`, `npm run smoke:mobile-webview`, `npm run qa:web-game-client`, `npm run qa:polish-pass`, `npm run qa:visual`, and `git diff --check` all exited 0.
+2026-05-06
+- Release build 1.8.21 follow-up:
+- Bumped app release metadata to `1.8.21` and Android `versionCode` to `63` in `package.json`, `package-lock.json`, `app.json`, and `android/app/build.gradle`.
+- Rebuilt the WebView payload and Android release app bundle from short path `C:\gronk`, then copied the final AAB back to `android/app/build/outputs/bundle/release/app-release.aab`.
+- The AAB timestamp is `2026-05-05 22:22:54`, size `40,421,965` bytes, SHA-256 `4816012AD3239011008FB27C1333C322464F8F88757B311AC4501D55CA2437D0`, and release manifest intermediates show `versionCode=63`, `versionName=1.8.21`.
+- Verification for this release:
+  `npx tsc --noEmit`, `npm run build:webview`, `npm run verify:webview-bundle`, `npm run check:gameplay-contracts`, `npm run qa:arcade-gauntlet`, `npm run qa:visual`, `gradlew.bat :app:bundleRelease --no-daemon --stacktrace` from `C:\gronk\android`, `jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab`, and `git diff --check` all exited 0.

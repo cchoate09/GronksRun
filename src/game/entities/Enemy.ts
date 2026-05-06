@@ -67,6 +67,7 @@ export class Enemy {
     public isDead: boolean = false;
     protected facingRight: boolean = false;
     public isAttacking: boolean = false;
+    private playerKnockbackTimer: number = 0;
     protected attackCooldownRemaining: number = 0;
     protected attackTimer: number = 0;
     protected attackCooldown: number = 1.0;
@@ -105,6 +106,7 @@ export class Enemy {
         if (this.isDead) return;
         const targetSnapshot = this.normalizeTarget(target);
 
+        this.playerKnockbackTimer = Math.max(0, this.playerKnockbackTimer - dt);
         this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - dt);
         if (this.attackTimer > 0) {
             this.attackTimer -= dt;
@@ -182,6 +184,10 @@ export class Enemy {
         return this.isAttacking || Math.abs(this.body.vx) > this.speed * 0.7;
     }
 
+    public hasPlayerKnockbackCredit(): boolean {
+        return this.playerKnockbackTimer > 0;
+    }
+
     public takePoundDamage(amount: number, knockbackDir: number): void {
         this.takeDamage(amount, knockbackDir);
     }
@@ -192,6 +198,7 @@ export class Enemy {
         this.hp -= amount;
         this.isHit = true;
         this.hitTimer = 0.2;
+        this.playerKnockbackTimer = 2.0;
         
         this.body.vx = knockbackDir * 500;
         this.body.vy = -200;

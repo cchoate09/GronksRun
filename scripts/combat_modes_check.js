@@ -106,11 +106,13 @@ async function advanceUntilProjectileVisible(page) {
     const meleeWindup = await postAndAdvance(page, { type: 'action', name: 'attack' }, 40);
     const meleeActive = meleeWindup.player.attackPhase === 'ACTIVE' ? meleeWindup : await advanceUntilMeleeActive(page);
     await page.keyboard.up('ArrowRight');
+    await advanceAndRead(page, 450);
+    await postAndAdvance(page, { type: 'debugClearEnemies' }, 0);
 
     const comboStart = await postAndAdvance(page, {
       type: 'debugSetPlayer',
       x: 460,
-      y: boot.player.y,
+      y: 520,
       vx: 0,
       vy: 0,
       onGround: true,
@@ -141,8 +143,9 @@ async function advanceUntilProjectileVisible(page) {
     assert(meleeActive.player.attackPhase === 'ACTIVE', 'melee action should still expose active strike phase');
     assert(meleeActive.player.slashVisible === true, 'melee active phase should show slash feedback');
     assert(comboStart.player.onGround === true, 'jump/attack combo should begin from a grounded player');
+    assert(comboStart.player.attacking === false, 'jump/attack combo should begin after prior melee recovery');
     assert(jumpAttackStart.player.vx > 0, `jump+attack combo should preserve rightward movement, got vx=${jumpAttackStart.player.vx}`);
-    assert(jumpAttackStart.player.vy < 0 || jumpAttackStart.player.onGround === false, `jump+attack combo should launch the player, got vy=${jumpAttackStart.player.vy} onGround=${jumpAttackStart.player.onGround}`);
+    assert(jumpAttackStart.player.vy < 0 && jumpAttackStart.player.onGround === false, `jump+attack combo should launch the player, got vy=${jumpAttackStart.player.vy} onGround=${jumpAttackStart.player.onGround}`);
     assert(jumpAttackStart.player.attackMode === 'MELEE', 'jump+attack combo should start melee attack without canceling jump');
     assert(jumpAttackActive.player.attackPhase === 'ACTIVE', 'jump+attack combo should reach active melee phase while airborne/moving');
     assert(jumpAttackActive.player.vx > 0, `jump+attack active phase should keep rightward movement, got vx=${jumpAttackActive.player.vx}`);

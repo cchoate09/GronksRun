@@ -3,6 +3,7 @@ import openAiEnemiesCore from '../../../assets/spritesheets/openai/enemies-core.
 import openAiEnemiesExtra from '../../../assets/spritesheets/openai/enemies-extra.png';
 import openAiObstacles from '../../../assets/spritesheets/openai/obstacles.png';
 import biomePanorama from '../../../assets/backgrounds/biome-panorama.png';
+import mainMenuHero from '../../../assets/backgrounds/main-menu-hero.png';
 import { Assets } from 'pixi.js';
 
 export type SpriteState = 'IDLE' | 'RUN' | 'ATTACK' | 'RANGED_ATTACK' | 'JUMP' | 'FALL' | 'HIT';
@@ -355,6 +356,7 @@ export async function preloadSpriteSheets(): Promise<void> {
         ...Object.values(ENEMY_SHEETS).map((sheet) => sheet.image),
         OBSTACLE_SHEET.image,
         biomePanorama,
+        mainMenuHero,
     ]));
     await Promise.all(urls.map((url) => Assets.load(url)));
 }

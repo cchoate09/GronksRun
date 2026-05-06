@@ -71,6 +71,20 @@ function findButton(state, labelNeedle) {
   return buttons.find((button) => button.enabled !== false && button.label.includes(labelNeedle));
 }
 
+function assertUiWithinViewport(state, width, height, label) {
+  assert(Array.isArray(state.surfaces), `${label}: scene should expose surface bounds for viewport-fit checks`);
+  const items = [
+    ...(state.surfaces || []).map((surface) => ({ ...surface, kind: 'surface' })),
+    ...(state.buttons || []).map((button) => ({ ...button, kind: 'button' })),
+  ];
+  for (const item of items) {
+    assert(item.x >= 0, `${label}: ${item.kind} ${item.label || item.name || ''} starts off left edge at ${item.x}`);
+    assert(item.y >= 0, `${label}: ${item.kind} ${item.label || item.name || ''} starts above viewport at ${item.y}`);
+    assert(item.x + item.w <= width, `${label}: ${item.kind} ${item.label || item.name || ''} exceeds viewport width (${item.x + item.w} > ${width})`);
+    assert(item.y + item.h <= height, `${label}: ${item.kind} ${item.label || item.name || ''} exceeds viewport height (${item.y + item.h} > ${height})`);
+  }
+}
+
 async function clickButton(page, labelNeedle, ms = 120) {
   const state = await readState(page);
   const button = findButton(state, labelNeedle);
@@ -117,6 +131,23 @@ function runSourceFallback() {
   });
 
   try {
+    await page.setViewport({ width: 720, height: 360, isMobile: true, hasTouch: true });
+    await page.goto(served.url, { waitUntil: 'load', timeout: 15000 });
+    await page.waitForFunction(() => typeof window.render_game_to_text === 'function', { timeout: 10000 });
+    await advance(page, 120);
+    const compactMenu = await readState(page);
+    assert(compactMenu.phase === 'MENU', `expected compact MENU phase, got ${compactMenu.phase}`);
+    assert(compactMenu.visual?.main_menu_backdrop === 'generated-main-menu', 'main menu should use the generated hero backdrop');
+    let compactSettings = await clickButton(page, 'SETTINGS');
+    assert(compactSettings.phase === 'SETTINGS', `expected compact SETTINGS, got ${compactSettings.phase}`);
+    assertUiWithinViewport(compactSettings, 720, 360, 'compact settings');
+    await page.screenshot({ path: path.join(outputDir, 'settings-compact.png') });
+    await clickButton(page, 'BACK');
+    let compactArmory = await clickButton(page, 'ARMORY');
+    assert(compactArmory.phase === 'ARMORY', `expected compact ARMORY, got ${compactArmory.phase}`);
+    assertUiWithinViewport(compactArmory, 720, 360, 'compact armory');
+    await page.screenshot({ path: path.join(outputDir, 'armory-compact.png') });
+
     await page.setViewport({ width: 1280, height: 720, isMobile: true, hasTouch: true });
     await page.goto(served.url, { waitUntil: 'load', timeout: 15000 });
     await page.waitForFunction(() => typeof window.render_game_to_text === 'function', { timeout: 10000 });

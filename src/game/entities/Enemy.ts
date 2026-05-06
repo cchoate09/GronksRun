@@ -188,6 +188,15 @@ export class Enemy {
         return this.playerKnockbackTimer > 0;
     }
 
+    public hasTakenDamage(): boolean {
+        return this.hp < this.maxHp;
+    }
+
+    public setHealthForDebug(hp: number): void {
+        this.hp = Math.max(1, Math.min(this.maxHp, Math.floor(hp)));
+        this.drawHpBar();
+    }
+
     public takePoundDamage(amount: number, knockbackDir: number): void {
         this.takeDamage(amount, knockbackDir);
     }

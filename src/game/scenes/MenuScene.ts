@@ -1,11 +1,12 @@
 import { Scene } from '../../engine/scenes/SceneManager';
 import { GameEngine } from '../../engine/GameEngine';
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js';
 import { GameScene, LEVELS } from './GameScene';
 import { readNumber, writeNumber } from '../storage';
 import { SoundManager } from '../audio/SoundManager';
 import { getMainMenuLayout, MainMenuButtonLayout } from './menuLayout';
 import { equipWeapon, getWeaponInventorySnapshot, purchaseWeaponUpgrade, WeaponDefinition, WeaponSlot, WeaponUpgradeSnapshot } from '../weapons';
+import mainMenuHero from '../../../assets/backgrounds/main-menu-hero.png';
 
 type MenuMode = 'MAIN' | 'LEVEL_SELECT' | 'SETTINGS' | 'ARMORY';
 
@@ -19,6 +20,27 @@ interface MenuButtonSnapshot {
     enabled: boolean;
 }
 
+interface MenuSurfaceSnapshot {
+    name: string;
+    mode: MenuMode;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+interface WeaponColumnLayout {
+    itemH: number;
+    itemGap: number;
+    titleGap: number;
+    upgradeH: number;
+    upgradeGap: number;
+    titleFont: number;
+    nameFont: number;
+    statFont: number;
+    compact: boolean;
+}
+
 export class MenuScene extends Scene {
     private stage: Container;
     private mode: MenuMode = 'MAIN';
@@ -28,6 +50,7 @@ export class MenuScene extends Scene {
     private gems: number = 0;
     private mainMenuButtons: MainMenuButtonLayout[] = [];
     private buttonRegistry: MenuButtonSnapshot[] = [];
+    private surfaceRegistry: MenuSurfaceSnapshot[] = [];
     private levelSelectPage: number = 0;
 
     constructor(engine: GameEngine) {
@@ -51,6 +74,7 @@ export class MenuScene extends Scene {
         this.stage.removeChildren();
         this.stage.removeAllListeners();
         this.buttonRegistry = [];
+        this.surfaceRegistry = [];
     }
 
     // Async by design even though the body is empty today: forces every
@@ -63,15 +87,29 @@ export class MenuScene extends Scene {
     }
 
     private drawBackdrop(): void {
+        const art = Sprite.from(mainMenuHero);
+        const textureW = 1536;
+        const textureH = 864;
+        const scale = Math.max(window.innerWidth / textureW, window.innerHeight / textureH);
+        art.width = textureW * scale;
+        art.height = textureH * scale;
+        art.x = (window.innerWidth - art.width) / 2;
+        art.y = (window.innerHeight - art.height) / 2;
+        art.alpha = 0.92;
+        this.stage.addChild(art);
+
         const bg = new Graphics();
-        bg.rect(0, 0, window.innerWidth, window.innerHeight).fill(0x0a1018);
-        bg.rect(0, window.innerHeight * 0.62, window.innerWidth, window.innerHeight * 0.38).fill(0x111827);
-        for (let i = 0; i < 18; i++) {
+        bg.rect(0, 0, window.innerWidth, window.innerHeight).fill({ color: 0x020617, alpha: 0.18 });
+        bg.rect(0, 0, window.innerWidth * 0.52, window.innerHeight).fill({ color: 0x020617, alpha: 0.38 });
+        bg.rect(0, window.innerHeight * 0.58, window.innerWidth, window.innerHeight * 0.42).fill({ color: 0x05070b, alpha: 0.36 });
+        bg.rect(0, 0, window.innerWidth, 18).fill({ color: 0x91e5ff, alpha: 0.12 });
+        bg.rect(0, window.innerHeight - 20, window.innerWidth, 20).fill({ color: 0xffd166, alpha: 0.13 });
+        for (let i = 0; i < 10; i++) {
             const x = (i * 137) % Math.max(1, window.innerWidth);
-            const h = 60 + ((i * 53) % 150);
-            bg.rect(x, window.innerHeight * 0.62 - h, 58, h).fill(i % 2 ? 0x172033 : 0x1f2937);
-            bg.rect(x + 12, window.innerHeight * 0.62 - h + 24, 8, 12).fill(0x67e8f9);
-            bg.rect(x + 34, window.innerHeight * 0.62 - h + 54, 8, 12).fill(0xffd166);
+            const h = 38 + ((i * 41) % 98);
+            bg.rect(x, window.innerHeight * 0.66 - h, 42, h).fill({ color: i % 2 ? 0x172033 : 0x1f2937, alpha: 0.28 });
+            bg.rect(x + 10, window.innerHeight * 0.66 - h + 20, 6, 10).fill({ color: 0x67e8f9, alpha: 0.44 });
+            bg.rect(x + 26, window.innerHeight * 0.66 - h + 48, 6, 10).fill({ color: 0xffd166, alpha: 0.4 });
         }
         this.stage.addChild(bg);
     }
@@ -83,6 +121,16 @@ export class MenuScene extends Scene {
         this.publishNativeUiState(false);
         const layout = getMainMenuLayout(window.innerWidth, window.innerHeight);
         this.mainMenuButtons = layout.buttons;
+
+        const titlePlate = new Graphics();
+        const plateW = Math.min(560, Math.max(360, window.innerWidth * 0.46));
+        const plateH = Math.max(80, layout.subtitleY - layout.titleY + 70);
+        titlePlate.roundRect(window.innerWidth / 2 - plateW / 2, layout.titleY - plateH * 0.48, plateW, plateH, 12)
+            .fill({ color: 0x031525, alpha: 0.48 })
+            .stroke({ color: 0x91e5ff, width: 2, alpha: 0.28 });
+        titlePlate.rect(window.innerWidth / 2 - plateW * 0.42, layout.subtitleY + 18, plateW * 0.84, 3)
+            .fill({ color: 0xffd166, alpha: 0.72 });
+        this.stage.addChild(titlePlate);
 
         const title = new Text({
             text: 'GRONK RUN',
@@ -186,36 +234,50 @@ export class MenuScene extends Scene {
         this.drawBackdrop();
         this.publishNativeUiState(false);
 
-        const title = new Text({ text: 'SETTINGS', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
+        const compact = window.innerHeight < 430 || window.innerWidth < 760;
+        const title = new Text({ text: 'SETTINGS', style: new TextStyle({ fill: 0xffffff, fontSize: compact ? 30 : 42, fontWeight: 'bold' }) });
         title.anchor.set(0.5);
-        title.position.set(window.innerWidth / 2, 66);
+        title.position.set(window.innerWidth / 2, compact ? 34 : 66);
         this.stage.addChild(title);
 
-        const panelW = Math.min(680, window.innerWidth - 44);
+        const backH = compact ? 38 : 44;
+        const backY = window.innerHeight - (compact ? 48 : 72);
+        const panelW = Math.min(compact ? 640 : 680, window.innerWidth - (compact ? 28 : 44));
         const panelX = (window.innerWidth - panelW) / 2;
-        const panelY = 124;
+        const panelY = compact ? 62 : 124;
+        const panelH = Math.max(compact ? 220 : 270, backY + backH + 10 - panelY);
         const panel = new Graphics();
-        panel.roundRect(panelX, panelY, panelW, Math.max(270, window.innerHeight - 184), 10).fill(0x101822).stroke({ color: 0xc4b5fd, width: 2 });
+        panel.roundRect(panelX, panelY, panelW, panelH, 10).fill({ color: 0x101822, alpha: 0.88 }).stroke({ color: 0xc4b5fd, width: 2 });
         this.stage.addChild(panel);
+        this.registerSurface('settings-panel', panelX, panelY, panelW, panelH);
 
-        this.addSettingLabel(panelX + 32, panelY + 36, 'DIFFICULTY');
+        const pad = compact ? 22 : 32;
+        const buttonH = compact ? 38 : 46;
+        const optionGap = compact ? 10 : 20;
+        const optionW = Math.min(compact ? 150 : 128, (panelW - pad * 2 - optionGap * 2) / 3);
+        const optionGroupW = optionW * 3 + optionGap * 2;
+        const optionX = panelX + (panelW - optionGroupW) / 2;
+        const difficultyLabelY = panelY + (compact ? 18 : 36);
+        const difficultyButtonY = panelY + (compact ? 46 : 70);
+        this.addSettingLabel(panelX + pad, difficultyLabelY, 'DIFFICULTY', compact ? 14 : 18);
         const labels = ['EASY', 'NORMAL', 'HARD'];
         labels.forEach((label, index) => {
-            this.addButton(panelX + 32 + index * 148, panelY + 70, 128, 46, label, this.difficulty === index ? 0x44ff88 : 0x67e8f9, () => {
+            this.addButton(optionX + index * (optionW + optionGap), difficultyButtonY, optionW, buttonH, label, this.difficulty === index ? 0x44ff88 : 0x67e8f9, () => {
                 this.difficulty = index;
                 writeNumber('gronk_difficulty', this.difficulty);
                 this.drawSettings();
             });
         });
 
-        this.addSettingLabel(panelX + 32, panelY + 150, 'SOUND');
-        this.addButton(panelX + 32, panelY + 184, 180, 48, this.soundEnabled ? 'SOUND ON' : 'SOUND OFF', this.soundEnabled ? 0x44ff88 : 0xff7a45, () => {
+        const soundLabelY = difficultyButtonY + buttonH + (compact ? 26 : 34);
+        this.addSettingLabel(panelX + pad, soundLabelY, 'SOUND', compact ? 14 : 18);
+        this.addButton(panelX + pad, soundLabelY + (compact ? 22 : 34), compact ? 160 : 180, compact ? 38 : 48, this.soundEnabled ? 'SOUND ON' : 'SOUND OFF', this.soundEnabled ? 0x44ff88 : 0xff7a45, () => {
             this.soundEnabled = this.soundEnabled ? 0 : 1;
             writeNumber('gronk_sound_enabled', this.soundEnabled);
             this.drawSettings();
         });
 
-        this.addButton(panelX + 32, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
+        this.addButton(panelX + pad, backY, compact ? 132 : 150, backH, 'BACK', 0xffd166, () => this.drawMainMenu());
     }
 
     private drawArmory(): void {
@@ -225,64 +287,73 @@ export class MenuScene extends Scene {
         this.publishNativeUiState(false);
         this.gems = Math.max(0, readNumber('gronk_gems', 0));
 
-        const title = new Text({ text: 'ARMORY', style: new TextStyle({ fill: 0xffffff, fontSize: 42, fontWeight: 'bold' }) });
+        const compact = window.innerHeight < 450 || window.innerWidth < 820;
+        const title = new Text({ text: 'ARMORY', style: new TextStyle({ fill: 0xffffff, fontSize: compact ? 30 : 42, fontWeight: 'bold' }) });
         title.anchor.set(0.5);
-        title.position.set(window.innerWidth / 2, 62);
+        title.position.set(window.innerWidth / 2, compact ? 34 : 62);
         this.stage.addChild(title);
 
         const inventory = getWeaponInventorySnapshot();
-        const panelW = Math.min(860, window.innerWidth - 40);
-        const panelH = Math.max(270, window.innerHeight - 154);
+        const backH = compact ? 38 : 44;
+        const backY = window.innerHeight - (compact ? 48 : 72);
+        const panelW = Math.min(compact ? 700 : 860, window.innerWidth - (compact ? 28 : 40));
+        const panelH = Math.max(compact ? 226 : 270, backY - (compact ? 8 : 10) - (compact ? 58 : 104));
         const panelX = (window.innerWidth - panelW) / 2;
-        const panelY = 104;
+        const panelY = compact ? 58 : 104;
         const panel = new Graphics();
-        panel.roundRect(panelX, panelY, panelW, panelH, 10).fill(0x101822).stroke({ color: 0xfca5a5, width: 2 });
+        panel.roundRect(panelX, panelY, panelW, panelH, 10).fill({ color: 0x101822, alpha: 0.88 }).stroke({ color: 0xfca5a5, width: 2 });
         this.stage.addChild(panel);
+        this.registerSurface('armory-panel', panelX, panelY, panelW, panelH);
 
-        const gemText = new Text({ text: `GEMS ${this.gems}`, style: new TextStyle({ fill: 0xffd166, fontSize: 18, fontWeight: 'bold' }) });
+        const gemText = new Text({ text: `GEMS ${this.gems}`, style: new TextStyle({ fill: 0xffd166, fontSize: compact ? 14 : 18, fontWeight: 'bold' }) });
         gemText.anchor.set(1, 0);
-        gemText.position.set(panelX + panelW - 24, panelY + 18);
+        gemText.position.set(panelX + panelW - (compact ? 18 : 24), panelY + (compact ? 12 : 18));
         this.stage.addChild(gemText);
 
-        const columnGap = 18;
-        const columnW = (panelW - 52 - columnGap) / 2;
-        this.drawWeaponColumn('MELEE', 'melee', inventory.melee, inventory.ownedMelee, inventory.equippedMelee, inventory.meleeUpgrade, panelX + 22, panelY + 28, columnW);
-        this.drawWeaponColumn('RANGED', 'ranged', inventory.ranged, inventory.ownedRanged, inventory.equippedRanged, inventory.rangedUpgrade, panelX + 30 + columnW + columnGap, panelY + 28, columnW);
+        const columnGap = compact ? 12 : 18;
+        const sidePad = compact ? 18 : 22;
+        const columnW = (panelW - sidePad * 2 - columnGap) / 2;
+        const columnLayout: WeaponColumnLayout = compact
+            ? { itemH: 32, itemGap: 4, titleGap: 24, upgradeH: 38, upgradeGap: 6, titleFont: 14, nameFont: 10, statFont: 8, compact: true }
+            : { itemH: 46, itemGap: 8, titleGap: 34, upgradeH: 48, upgradeGap: 10, titleFont: 18, nameFont: 13, statFont: 11, compact: false };
+        const columnY = panelY + (compact ? 18 : 28);
+        this.drawWeaponColumn('MELEE', 'melee', inventory.melee, inventory.ownedMelee, inventory.equippedMelee, inventory.meleeUpgrade, panelX + sidePad, columnY, columnW, columnLayout);
+        this.drawWeaponColumn('RANGED', 'ranged', inventory.ranged, inventory.ownedRanged, inventory.equippedRanged, inventory.rangedUpgrade, panelX + sidePad + columnW + columnGap, columnY, columnW, columnLayout);
 
-        this.addButton(panelX + 22, window.innerHeight - 72, 150, 44, 'BACK', 0xffd166, () => this.drawMainMenu());
+        this.addButton(panelX + sidePad, backY, compact ? 132 : 150, backH, 'BACK', 0xffd166, () => this.drawMainMenu());
     }
 
-    private drawWeaponColumn(title: string, slot: WeaponSlot, weapons: WeaponDefinition[], owned: string[], equipped: string, upgrade: WeaponUpgradeSnapshot, x: number, y: number, w: number): void {
-        const titleText = new Text({ text: title, style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold' }) });
+    private drawWeaponColumn(title: string, slot: WeaponSlot, weapons: WeaponDefinition[], owned: string[], equipped: string, upgrade: WeaponUpgradeSnapshot, x: number, y: number, w: number, layout: WeaponColumnLayout): void {
+        const titleText = new Text({ text: title, style: new TextStyle({ fill: 0x91e5ff, fontSize: layout.titleFont, fontWeight: 'bold' }) });
         titleText.position.set(x, y);
         this.stage.addChild(titleText);
 
         weapons.forEach((weapon, index) => {
-            const itemY = y + 34 + index * 54;
+            const itemY = y + layout.titleGap + index * (layout.itemH + layout.itemGap);
             const isOwned = owned.includes(weapon.id);
             const isEquipped = equipped === weapon.id;
             const color = isEquipped ? 0x44ff88 : isOwned ? 0x67e8f9 : 0x334155;
             const button = new Container();
-            button.addChild(this.drawButtonChrome(w, 46, color, isOwned ? 1 : 0.42));
+            button.addChild(this.drawButtonChrome(w, layout.itemH, color, isOwned ? 1 : 0.42));
 
             const label = isEquipped ? `${weapon.name.toUpperCase()}  EQUIPPED` : isOwned ? weapon.name.toUpperCase() : `${weapon.name.toUpperCase()}  LV ${weapon.unlockLevel}`;
-            const nameText = new Text({ text: label, style: new TextStyle({ fill: isOwned ? 0x07110b : 0xcbd5e1, fontSize: 13, fontWeight: 'bold' }) });
-            nameText.position.set(12, 7);
+            const nameText = new Text({ text: label, style: new TextStyle({ fill: isOwned ? 0x07110b : 0xcbd5e1, fontSize: layout.nameFont, fontWeight: 'bold', wordWrap: true, wordWrapWidth: w - 20 }) });
+            nameText.position.set(10, layout.compact ? 4 : 7);
             button.addChild(nameText);
 
             const statText = new Text({
                 text: title === 'MELEE'
                     ? `DMG ${weapon.damage}  RANGE ${weapon.range}`
                     : `DMG ${weapon.damage}  CD ${weapon.cooldown.toFixed(2)}  SPD ${weapon.projectileSpeed}`,
-                style: new TextStyle({ fill: isOwned ? 0x172033 : 0x94a3b8, fontSize: 11, fontWeight: 'bold' }),
+                style: new TextStyle({ fill: isOwned ? 0x172033 : 0x94a3b8, fontSize: layout.statFont, fontWeight: 'bold' }),
             });
-            statText.position.set(12, 26);
+            statText.position.set(10, layout.compact ? 21 : 26);
             button.addChild(statText);
 
             button.position.set(x, itemY);
             button.eventMode = isOwned ? 'static' : 'none';
             button.cursor = isOwned ? 'pointer' : 'default';
-            this.registerButton(label, x, itemY, w, 46, isOwned);
+            this.registerButton(label, x, itemY, w, layout.itemH, isOwned);
             if (isOwned) {
                 button.on('pointerdown', () => {
                     SoundManager.playCue('select');
@@ -295,30 +366,30 @@ export class MenuScene extends Scene {
 
         const upgradeCost = upgrade.upgradeCost;
         const upgradeLabel = upgradeCost == null ? `${title} +${upgrade.level} MAX` : `${title} +${upgrade.level + 1}  ${upgradeCost} GEMS`;
-        const upgradeY = y + 34 + weapons.length * 54 + 10;
+        const upgradeY = y + layout.titleGap + weapons.length * (layout.itemH + layout.itemGap) + layout.upgradeGap;
         const canBuy = upgradeCost != null && this.gems >= upgradeCost;
         const button = new Container();
-        button.addChild(this.drawButtonChrome(w, 48, canBuy ? 0xffd166 : 0x475569, canBuy ? 1 : 0.5));
+        button.addChild(this.drawButtonChrome(w, layout.upgradeH, canBuy ? 0xffd166 : 0x475569, canBuy ? 1 : 0.5));
         const upgradeText = new Text({
             text: upgradeLabel,
-            style: new TextStyle({ fill: canBuy ? 0x07110b : 0xcbd5e1, fontSize: 13, fontWeight: 'bold', wordWrap: true, wordWrapWidth: w - 24 }),
+            style: new TextStyle({ fill: canBuy ? 0x07110b : 0xcbd5e1, fontSize: layout.compact ? 10 : 13, fontWeight: 'bold', wordWrap: true, wordWrapWidth: w - 24 }),
         });
         upgradeText.anchor.set(0.5);
-        upgradeText.position.set(w / 2, 16);
+        upgradeText.position.set(w / 2, layout.compact ? 13 : 16);
         button.addChild(upgradeText);
         const statText = new Text({
             text: slot === 'melee'
                 ? `DMG x${upgrade.damageMultiplier}  RANGE BOOST`
                 : `DMG x${upgrade.damageMultiplier}  FASTER SHOTS`,
-            style: new TextStyle({ fill: canBuy ? 0x172033 : 0x94a3b8, fontSize: 10, fontWeight: 'bold' }),
+            style: new TextStyle({ fill: canBuy ? 0x172033 : 0x94a3b8, fontSize: layout.compact ? 8 : 10, fontWeight: 'bold' }),
         });
         statText.anchor.set(0.5);
-        statText.position.set(w / 2, 34);
+        statText.position.set(w / 2, layout.compact ? 27 : 34);
         button.addChild(statText);
         button.position.set(x, upgradeY);
         button.eventMode = upgradeCost == null ? 'none' : 'static';
         button.cursor = upgradeCost == null ? 'default' : 'pointer';
-        this.registerButton(upgradeLabel, x, upgradeY, w, 48, upgradeCost != null);
+        this.registerButton(upgradeLabel, x, upgradeY, w, layout.upgradeH, upgradeCost != null);
         if (upgradeCost != null) {
             button.on('pointerdown', () => {
                 const result = purchaseWeaponUpgrade(slot, this.gems);
@@ -330,8 +401,8 @@ export class MenuScene extends Scene {
         this.stage.addChild(button);
     }
 
-    private addSettingLabel(x: number, y: number, label: string): void {
-        const text = new Text({ text: label, style: new TextStyle({ fill: 0x91e5ff, fontSize: 18, fontWeight: 'bold' }) });
+    private addSettingLabel(x: number, y: number, label: string, fontSize: number = 18): void {
+        const text = new Text({ text: label, style: new TextStyle({ fill: 0x91e5ff, fontSize, fontWeight: 'bold' }) });
         text.position.set(x, y);
         this.stage.addChild(text);
     }
@@ -401,6 +472,17 @@ export class MenuScene extends Scene {
             w: Math.round(w),
             h: Math.round(h),
             enabled,
+        });
+    }
+
+    private registerSurface(name: string, x: number, y: number, w: number, h: number): void {
+        this.surfaceRegistry.push({
+            name,
+            mode: this.mode,
+            x: Math.round(x),
+            y: Math.round(y),
+            w: Math.round(w),
+            h: Math.round(h),
         });
     }
 
@@ -479,6 +561,10 @@ export class MenuScene extends Scene {
                 }))
                 : [],
             buttons: this.buttonRegistry,
+            surfaces: this.surfaceRegistry,
+            visual: {
+                main_menu_backdrop: 'generated-main-menu',
+            },
             settings: {
                 difficulty: this.difficulty,
                 sound_enabled: this.soundEnabled === 1,

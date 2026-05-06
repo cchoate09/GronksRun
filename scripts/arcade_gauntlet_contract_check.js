@@ -158,6 +158,10 @@ assert(gameSceneSource.includes('hazards'), 'trap terrain: scene should store ha
 assert(gameSceneSource.includes('buildHazards'), 'trap terrain: scene should build traps per level');
 assert(gameSceneSource.includes('checkHazards'), 'trap terrain: hazards should be able to damage the player');
 assert(/checkPitFall\(\):\s*void\s*\{[\s\S]{0,360}this\.showDead\(\)/.test(gameSceneSource), 'pit terrain: falling below a terrain gap should end the run instead of resetting to safe ground');
+assert(enemySource.includes('hasTakenDamage'), 'enemy pit cleanup: enemies should expose whether they took non-zero player damage');
+assert(gameSceneSource.includes('requestObjectiveReplacementSpawn'), 'enemy pit cleanup: removing enemies in pits should force replacement spawning while objective kills remain');
+assert(/resolveEnemyPitFall\([\s\S]*enemy\.hasTakenDamage\(\)[\s\S]*registerKill/.test(gameSceneSource), 'enemy pit cleanup: damaged enemies that fall into pits should count as kills');
+assert(/resolveEnemyPitFall\([\s\S]*enemy\.isDead = true/.test(gameSceneSource), 'enemy pit cleanup: any grounded enemy that falls into a pit should be removed from active play');
 assert(gameSceneSource.includes('gaps: this.terrainGaps'), 'snapshot: terrain gaps should be exposed for automation');
 assert(gameSceneSource.includes('hazards: this.hazards'), 'snapshot: hazards should be exposed for automation');
 assert(gameSceneSource.includes('OBSTACLE_FRAME_ANCHORS'), 'obstacle art: atlas frames should use per-frame content anchors');

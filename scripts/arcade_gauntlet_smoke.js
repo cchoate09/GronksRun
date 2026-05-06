@@ -23,7 +23,12 @@ async function snapshot(page) {
 }
 
 async function advance(page, ms) {
-  await page.evaluate((duration) => window.advanceTime(duration), ms);
+  let remaining = ms;
+  while (remaining > 0) {
+    const duration = Math.min(500, remaining);
+    await page.evaluate((stepMs) => window.advanceTime(stepMs), duration);
+    remaining -= duration;
+  }
 }
 
 (async () => {
@@ -177,6 +182,59 @@ async function advance(page, ms) {
       'enemy knocked into a pit should be removed from the active enemy list even if the spawn system adds a fresh enemy later',
     );
 
+    await page.evaluate((gap, playerY) => {
+      window.postMessage(JSON.stringify({ type: 'debugClearEnemies' }), '*');
+      window.postMessage(JSON.stringify({
+        type: 'debugSetPlayer',
+        x: gap.x - 260,
+        y: playerY,
+        vx: 0,
+        vy: 0,
+        onGround: true,
+      }), '*');
+      window.postMessage(JSON.stringify({
+        type: 'debugSpawnEnemy',
+        kind: 'CHASER',
+        x: gap.x + gap.w * 0.5 - 25,
+        y: playerY + 260,
+        vx: 0,
+        vy: 1100,
+        onGround: false,
+        hp: 49,
+      }), '*');
+    }, firstGap, boot.player.y);
+    await advance(page, 70);
+    const afterDamagedSelfPit = await snapshot(page);
+    assert(
+      afterDamagedSelfPit.kills === afterEnemyPitKill.kills + 1,
+      `damaged enemy falling into a pit should count as a kill, got kills ${afterEnemyPitKill.kills}->${afterDamagedSelfPit.kills}`,
+    );
+    assert(
+      !afterDamagedSelfPit.enemies.some((enemy) => enemy.hp > 0 && enemy.hp < 50),
+      'damaged pit-fall enemy should disappear from active play',
+    );
+    assert(afterDamagedSelfPit.enemies.length > 0, 'pit-fall cleanup should keep spawning replacements while objective kills remain');
+
+    await page.evaluate((gap, playerY) => {
+      window.postMessage(JSON.stringify({ type: 'debugClearEnemies' }), '*');
+      window.postMessage(JSON.stringify({
+        type: 'debugSpawnEnemy',
+        kind: 'CHASER',
+        x: gap.x + gap.w * 0.5 - 25,
+        y: playerY + 260,
+        vx: 0,
+        vy: 1100,
+        onGround: false,
+      }), '*');
+    }, firstGap, boot.player.y);
+    await advance(page, 70);
+    const afterUndamagedSelfPit = await snapshot(page);
+    assert(
+      afterUndamagedSelfPit.kills === afterDamagedSelfPit.kills,
+      `undamaged enemy falling into a pit should disappear without awarding a kill, got kills ${afterDamagedSelfPit.kills}->${afterUndamagedSelfPit.kills}`,
+    );
+    assert(afterUndamagedSelfPit.enemies.length > 0, 'undamaged pit-fall cleanup should still spawn replacement enemies');
+
     const spike = boot.hazards.find((hazard) => hazard.type === 'spikes') || boot.hazards[0];
     await page.evaluate((hazard, playerY) => {
       window.postMessage(JSON.stringify({
@@ -210,7 +268,7 @@ async function advance(page, ms) {
 
     assert(!pageErrors.length, `page errors: ${pageErrors.join('\n')}`);
 
-    fs.writeFileSync(path.join(outputDir, 'arcade-gauntlet.json'), JSON.stringify({ boot, nearGap, afterJump, beforeEnemyPitKill, afterEnemyKnock, afterEnemyPitKill, afterTrap, afterPitFall, pageErrors }, null, 2));
+    fs.writeFileSync(path.join(outputDir, 'arcade-gauntlet.json'), JSON.stringify({ boot, nearGap, afterJump, beforeEnemyPitKill, afterEnemyKnock, afterEnemyPitKill, afterDamagedSelfPit, afterUndamagedSelfPit, afterTrap, afterPitFall, pageErrors }, null, 2));
     console.log('Arcade gauntlet smoke passed.');
   } finally {
     await browser.close();

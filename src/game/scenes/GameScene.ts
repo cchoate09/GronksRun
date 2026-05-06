@@ -391,6 +391,7 @@ export class GameScene extends Scene {
                 enemy.body.vy = Number.isFinite(data.vy) ? data.vy : enemy.body.vy;
                 enemy.body.onGround = data.onGround !== false && enemy.body.gravityScale !== 0;
                 enemy.body.groundedOn = enemy.body.onGround ? 'ground' : null;
+                if (Number.isFinite(data.hp)) enemy.setHealthForDebug(data.hp);
                 this.enemies.push(enemy);
                 this.stage.addChild(enemy.view);
                 this.engine.physics.addBody(enemy.body);
@@ -1147,28 +1148,20 @@ export class GameScene extends Scene {
         const currentGap = this.findGroundGapAt(enemy.body.x + enemy.body.w * 0.5);
         if (!currentGap) return;
 
-        if (enemy.hasPlayerKnockbackCredit()) {
-            enemy.isDead = true;
+        enemy.isDead = true;
+        this.enemyGapManeuvers.delete(enemy);
+        const shouldCreditKill = enemy.hasPlayerKnockbackCredit() || enemy.hasTakenDamage();
+        if (shouldCreditKill) {
             this.registerKill(enemy);
             this.updateHUD();
-            return;
         }
+        this.requestObjectiveReplacementSpawn();
+    }
 
-        const gapCenter = currentGap.x + currentGap.w * 0.5;
-        const retreatDir = enemy.body.x + enemy.body.w * 0.5 < gapCenter ? -1 : 1;
-        enemy.body.x = retreatDir < 0 ? currentGap.x - enemy.body.w - 8 : currentGap.x + currentGap.w + 8;
-        enemy.body.y = this.groundY - enemy.body.h;
-        enemy.body.vx = retreatDir * 120;
-        enemy.body.vy = 0;
-        enemy.body.onGround = true;
-        enemy.body.groundedOn = 'ground';
-        this.enemyGapManeuvers.set(enemy, {
-            action: 'gap-recover',
-            timer: 0.3,
-            dir: retreatDir,
-            gapX: currentGap.x,
-            gapW: currentGap.w,
-        });
+    private requestObjectiveReplacementSpawn(): void {
+        if (this.hasMetLevelGoal()) return;
+        this.spawnTimer = 0;
+        this.nextSpawnX = Math.min(this.nextSpawnX, this.player.body.x + 320);
     }
 
     private getEnemyTargetSnapshot(): EnemyTargetSnapshot {
@@ -1241,7 +1234,7 @@ export class GameScene extends Scene {
         const upcomingGap = this.findGroundGapAt(frontX);
         if (!upcomingGap) return;
 
-        if (enemy.body.onGround && upcomingGap.w <= 380) {
+        if (enemy.body.onGround && upcomingGap.w <= 280) {
             const vaultSpeed = Math.min(560, Math.max(330, Math.abs(vx) + upcomingGap.w * 0.9));
             const vaultLift = -Math.min(690, Math.max(520, 440 + upcomingGap.w * 0.72));
             enemy.body.vx = dir * vaultSpeed;

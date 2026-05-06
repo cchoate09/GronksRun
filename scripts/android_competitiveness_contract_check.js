@@ -20,6 +20,7 @@ const gameSceneSource = read('src/game/scenes/GameScene.ts');
 const menuSource = read('src/game/scenes/MenuScene.ts');
 const androidBuildSource = read('android/app/build.gradle');
 const androidManifestSource = read('android/app/src/main/AndroidManifest.xml');
+const mainActivitySource = read('android/app/src/main/java/com/gronksrun/app/MainActivity.kt');
 const preflightSource = read('scripts/qa_environment_preflight.js');
 const puppeteerLaunchOptionsSource = read('scripts/puppeteerLaunchOptions.js');
 const webGameClientRunnerSource = read('scripts/run_web_game_client_with_server.js');
@@ -65,6 +66,10 @@ assert(appSource.includes('ca-app-pub-8879184280264151/6328191159'), 'ads: relea
 assert(appConfigSource.includes('ca-app-pub-8879184280264151~8722286751'), 'ads: Expo config should keep the production Android AdMob app id');
 assert(androidManifestSource.includes('com.google.android.gms.ads.APPLICATION_ID'), 'ads: Android manifest should keep the AdMob application id metadata');
 assert(androidManifestSource.includes('ca-app-pub-8879184280264151~8722286751'), 'ads: Android manifest should keep the production Android AdMob app id');
+
+assert(mainActivitySource.includes('hideSystemBars'), 'android immersive: MainActivity should hide Android system bars while the game is open');
+assert(mainActivitySource.includes('WindowInsets.Type.navigationBars'), 'android immersive: navigation bar should be hidden in landscape');
+assert(mainActivitySource.includes('BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE'), 'android immersive: system bars should stay transient and swipe-revealable');
 
 assert(androidBuildSource.includes('generateWebViewBundle'), 'android build: release builds should regenerate the WebView bundle from source');
 assert(androidBuildSource.includes('npmExecutable, "run", "build:webview"'), 'android build: WebView bundle generation should call npm run build:webview');

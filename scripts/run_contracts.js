@@ -43,6 +43,7 @@ const CONTRACTS = [
   'arcade_gauntlet_contract_check.js',
   'sprite_motion_orientation_contract_check.js',
   'full_art_enemy_roster_contract_check.js',
+  'golem_padding_contract_check.js',
   'target_kill_completion_smoke.js',
   'android_competitiveness_contract_check.js',
   'polish_pass_contract_check.js',

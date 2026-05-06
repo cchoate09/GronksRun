@@ -1,6 +1,6 @@
 {
   "name": "gronk-run-app",
-  "version": "1.8.22",
+  "version": "1.8.23",
   "main": "index.js",
   "scripts": {
     "start": "expo start",

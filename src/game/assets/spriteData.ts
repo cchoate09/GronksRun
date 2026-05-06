@@ -205,10 +205,10 @@ export const ENEMY_SHEETS: Record<string, SpriteSheetDefinition> = {
         facesRight: false,
         spriteOffsetY: 92,
         frameOffsets: {
-            8: { x: -8.25, y: 1 },
-            9: { x: 13.75, y: 0 },
-            10: { x: -11, y: 2.25 },
-            11: { x: 8.25, y: 2.75 },
+            8: { x: 0, y: 0 },
+            9: { x: 0, y: 0 },
+            10: { x: 0.25, y: 0 },
+            11: { x: 0, y: 0 },
         },
         animations: {
             IDLE: [8, 9, 10, 11],
